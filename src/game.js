@@ -125,6 +125,7 @@ export function createGame() {
     }
     setProgress(4, LOAD_STEPS[0])
     world.buildWorld()
+    runtime.camera.position.y = 4
     setProgress(18, LOAD_STEPS[1])
     await new Promise(resolve => setTimeout(resolve, 40))
     setProgress(28, LOAD_STEPS[2])

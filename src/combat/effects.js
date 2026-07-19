@@ -18,19 +18,19 @@ export function createEffectsSystem({ scene, state, audio }) {
   function addTracer(origin, end) {
     const geometry = new THREE.BufferGeometry().setFromPoints([origin, end])
     const material = new THREE.LineBasicMaterial({
-      color: 0xffcc66,
+      color: 0xffdd88,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.72,
     })
     const tracer = new THREE.Line(geometry, material)
     scene.add(tracer)
     state.particles.push({
       mesh: tracer,
       type: 'tracer',
-      life: 0.05,
-      maxLife: 0.05,
+      life: 0.06,
+      maxLife: 0.06,
       update: () => {
-        material.opacity *= 0.85
+        material.opacity *= 0.82
       },
     })
   }
@@ -38,34 +38,34 @@ export function createEffectsSystem({ scene, state, audio }) {
   function spawnMuzzleFlash(pos, dir, firstPerson = false) {
     const direction = dir.clone().normalize()
     const core = new THREE.Mesh(
-      new THREE.SphereGeometry(firstPerson ? 0.07 : 0.12, 6, 4),
-      new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.95 })
+      new THREE.SphereGeometry(firstPerson ? 0.065 : 0.11, 7, 5),
+      new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true, opacity: 0.98 })
     )
     core.position.copy(pos).addScaledVector(direction, firstPerson ? 0.04 : 0.08)
     scene.add(core)
     const flare = new THREE.Mesh(
-      new THREE.ConeGeometry(firstPerson ? 0.05 : 0.09, firstPerson ? 0.16 : 0.22, 6, 1, true),
+      new THREE.ConeGeometry(firstPerson ? 0.055 : 0.1, firstPerson ? 0.18 : 0.26, 7, 1, true),
       new THREE.MeshBasicMaterial({
-        color: 0xffa040,
+        color: 0xff9028,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.8,
         side: THREE.DoubleSide,
       })
     )
-    flare.position.copy(pos).addScaledVector(direction, firstPerson ? 0.1 : 0.14)
+    flare.position.copy(pos).addScaledVector(direction, firstPerson ? 0.11 : 0.15)
     flare.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction)
     scene.add(flare)
     const side = new THREE.Mesh(
-      new THREE.SphereGeometry(firstPerson ? 0.045 : 0.07, 5, 3),
-      new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.7 })
+      new THREE.SphereGeometry(firstPerson ? 0.05 : 0.075, 6, 4),
+      new THREE.MeshBasicMaterial({ color: 0xffc45a, transparent: true, opacity: 0.75 })
     )
     side.position.copy(pos).addScaledVector(direction, firstPerson ? 0.02 : 0.05)
-    side.scale.set(1.6, 0.55, 0.55)
+    side.scale.set(1.7, 0.5, 0.5)
     scene.add(side)
-    const light = new THREE.PointLight(0xffaa40, firstPerson ? 2.2 : 3.2, firstPerson ? 4 : 6)
+    const light = new THREE.PointLight(0xffa040, firstPerson ? 2.8 : 4.0, firstPerson ? 5 : 8)
     light.position.copy(pos)
     scene.add(light)
-    const life = firstPerson ? 0.045 : 0.055
+    const life = firstPerson ? 0.05 : 0.06
     state.particles.push({
       mesh: core,
       type: 'flash',
@@ -73,17 +73,17 @@ export function createEffectsSystem({ scene, state, audio }) {
       maxLife: life,
       update: (dt, time) => {
         const progress = 1 - time / life
-        core.material.opacity = progress * 0.95
-        core.scale.setScalar(0.7 + (1 - progress) * 1.8)
-        flare.material.opacity = progress * 0.75
-        flare.scale.setScalar(0.85 + (1 - progress) * 1.4)
-        side.material.opacity = progress * 0.7
+        core.material.opacity = progress * 0.98
+        core.scale.setScalar(0.65 + (1 - progress) * 2.0)
+        flare.material.opacity = progress * 0.8
+        flare.scale.setScalar(0.8 + (1 - progress) * 1.55)
+        side.material.opacity = progress * 0.75
         side.scale.set(
-          1.6 + (1 - progress),
-          0.55 + (1 - progress) * 0.4,
-          0.55 + (1 - progress) * 0.4
+          1.7 + (1 - progress) * 1.1,
+          0.5 + (1 - progress) * 0.45,
+          0.5 + (1 - progress) * 0.45
         )
-        light.intensity = progress * (firstPerson ? 2.2 : 3.2)
+        light.intensity = progress * (firstPerson ? 2.8 : 4.0)
       },
       onComplete: () => {
         scene.remove(light)
@@ -92,29 +92,30 @@ export function createEffectsSystem({ scene, state, audio }) {
       },
     })
 
-    const count = firstPerson ? 2 : 3
+    const count = firstPerson ? 3 : 4
     for (let i = 0; i < count; i++) {
       const puff = new THREE.Mesh(
-        new THREE.SphereGeometry(0.04, 4, 3),
+        new THREE.SphereGeometry(0.045, 5, 4),
         new THREE.MeshBasicMaterial({
-          color: 0xc8b8a8,
+          color: 0xb8a898,
           transparent: true,
-          opacity: firstPerson ? 0.18 : 0.35,
+          opacity: firstPerson ? 0.22 : 0.4,
+          depthWrite: false,
         })
       )
       puff.position.copy(pos).addScaledVector(direction, 0.08 + i * 0.04)
       scene.add(puff)
       const velocity = direction
         .clone()
-        .multiplyScalar(0.6 + Math.random() * 0.4)
+        .multiplyScalar(0.55 + Math.random() * 0.45)
         .add(
           new THREE.Vector3(
-            (Math.random() - 0.5) * 0.35,
-            0.15 + Math.random() * 0.25,
-            (Math.random() - 0.5) * 0.35
+            (Math.random() - 0.5) * 0.4,
+            0.18 + Math.random() * 0.28,
+            (Math.random() - 0.5) * 0.4
           )
         )
-      const maxLife = 0.35 + i * 0.08
+      const maxLife = 0.4 + i * 0.09
       state.particles.push({
         mesh: puff,
         type: 'smoke',
@@ -123,10 +124,10 @@ export function createEffectsSystem({ scene, state, audio }) {
         vel: velocity,
         update: (dt, time, particle) => {
           particle.mesh.position.addScaledVector(particle.vel, dt)
-          particle.vel.multiplyScalar(0.92)
+          particle.vel.multiplyScalar(0.91)
           particle.mesh.material.opacity =
-            (1 - time / particle.maxLife) * (firstPerson ? 0.18 : 0.35)
-          particle.mesh.scale.setScalar(1 + time * 2.4)
+            (1 - time / particle.maxLife) * (firstPerson ? 0.22 : 0.4)
+          particle.mesh.scale.setScalar(1 + time * 2.6)
         },
       })
     }

@@ -227,56 +227,85 @@ export class Bot {
     const helmetMat = isAlly ? this.matLib.helmetAlly : this.matLib.helmetAxis
     const accent = isAlly ? this.matLib.allyAccent : this.matLib.axisAccent
     const teamColor = isAlly ? 0x5ad040 : 0xff5a3a
+    const bootMat = this.matLib.metalDark
+    const packMat = isAlly ? this.matLib.allyUniform : this.matLib.axisUniform
 
-    const legGeometry = new THREE.BoxGeometry(0.18, 0.8, 0.2)
+    const legGeometry = new THREE.BoxGeometry(0.17, 0.72, 0.2)
     this.leftLeg = new THREE.Mesh(legGeometry, uniform)
-    this.leftLeg.position.set(-0.12, 0.4, 0)
+    this.leftLeg.position.set(-0.12, 0.46, 0)
     this.leftLeg.castShadow = true
+    this.leftLeg.receiveShadow = true
     this.group.add(this.leftLeg)
     this.rightLeg = new THREE.Mesh(legGeometry, uniform)
-    this.rightLeg.position.set(0.12, 0.4, 0)
+    this.rightLeg.position.set(0.12, 0.46, 0)
     this.rightLeg.castShadow = true
+    this.rightLeg.receiveShadow = true
     this.group.add(this.rightLeg)
 
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), uniform)
-    torso.position.set(0, 1.15, 0)
+    for (const side of [-1, 1]) {
+      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.28), bootMat)
+      boot.position.set(side * 0.12, 0.08, 0.04)
+      boot.castShadow = true
+      this.group.add(boot)
+    }
+
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.68, 0.28), uniform)
+    torso.position.set(0, 1.16, 0)
     torso.castShadow = true
+    torso.receiveShadow = true
     this.group.add(torso)
-    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.08, 0.32), this.matLib.metalDark)
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.28, 0.3), uniform)
+    chest.position.set(0, 1.35, 0.02)
+    chest.castShadow = true
+    this.group.add(chest)
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.07, 0.3), bootMat)
     belt.position.set(0, 0.86, 0)
     this.group.add(belt)
+    for (const side of [-1, 1]) {
+      const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.08), this.matLib.wood)
+      pouch.position.set(side * 0.16, 0.86, 0.16)
+      this.group.add(pouch)
+    }
 
-    const patchLeft = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.04), accent)
-    patchLeft.position.set(-0.28, 1.35, 0)
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.38, 0.16), packMat)
+    pack.position.set(0, 1.22, 0.2)
+    pack.castShadow = true
+    this.group.add(pack)
+
+    const patchLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.04), accent)
+    patchLeft.position.set(-0.26, 1.34, 0)
     this.group.add(patchLeft)
-    const patchRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.04), accent)
-    patchRight.position.set(0.28, 1.35, 0)
+    const patchRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.04), accent)
+    patchRight.position.set(0.26, 1.34, 0)
     this.group.add(patchRight)
     if (isAlly) {
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.32), accent)
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.07, 0.3), accent)
       stripe.position.set(0, 1.28, 0)
       this.group.add(stripe)
     } else {
-      const sash = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.32), accent)
+      const sash = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.52, 0.3), accent)
       sash.position.set(0.08, 1.18, 0)
       sash.rotation.z = 0.45
       this.group.add(sash)
     }
 
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.28, 0.25), this.matLib.skin)
-    head.position.set(0, 1.65, 0)
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.1, 8), this.matLib.skin)
+    neck.position.set(0, 1.52, 0)
+    this.group.add(neck)
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.26, 0.24), this.matLib.skin)
+    head.position.set(0, 1.66, 0)
     head.castShadow = true
     this.group.add(head)
     if (isAlly) {
       const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(0.18, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        new THREE.SphereGeometry(0.175, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
         helmetMat
       )
       dome.position.set(0, 1.78, 0)
-      dome.scale.set(1.05, 0.85, 1.1)
+      dome.scale.set(1.08, 0.88, 1.12)
       dome.castShadow = true
       this.group.add(dome)
-      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.03, 12), helmetMat)
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.23, 0.03, 14), helmetMat)
       brim.position.set(0, 1.72, 0)
       this.group.add(brim)
       const net = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.08), this.matLib.allyAccent)
@@ -284,16 +313,16 @@ export class Bot {
       this.group.add(net)
     } else {
       const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(0.17, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.58),
+        new THREE.SphereGeometry(0.17, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.58),
         helmetMat
       )
       dome.position.set(0, 1.8, 0)
-      dome.scale.set(1.05, 0.9, 1.15)
+      dome.scale.set(1.08, 0.92, 1.18)
       dome.castShadow = true
       this.group.add(dome)
-      const neck = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.16), helmetMat)
-      neck.position.set(0, 1.72, 0.12)
-      this.group.add(neck)
+      const rear = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.16), helmetMat)
+      rear.position.set(0, 1.72, 0.12)
+      this.group.add(rear)
       for (const side of [-1, 1]) {
         const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.18), helmetMat)
         skirt.position.set(side * 0.16, 1.72, 0.02)
@@ -301,24 +330,36 @@ export class Bot {
       }
     }
 
-    const armGeometry = new THREE.BoxGeometry(0.14, 0.6, 0.16)
+    const armGeometry = new THREE.BoxGeometry(0.13, 0.58, 0.15)
     this.leftArm = new THREE.Mesh(armGeometry, uniform)
-    this.leftArm.position.set(-0.32, 1.15, 0)
+    this.leftArm.position.set(-0.32, 1.16, 0)
     this.leftArm.castShadow = true
     this.group.add(this.leftArm)
     this.rightArm = new THREE.Mesh(armGeometry, uniform)
-    this.rightArm.position.set(0.32, 1.15, 0)
+    this.rightArm.position.set(0.32, 1.16, 0)
     this.rightArm.castShadow = true
     this.group.add(this.rightArm)
+    for (const side of [-1, 1]) {
+      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), this.matLib.skin)
+      hand.position.set(side * 0.32, 0.84, 0.02)
+      this.group.add(hand)
+    }
 
     this.rifle = new THREE.Group()
-    const rifleBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.8), this.matLib.metal)
-    rifleBarrel.position.z = -0.3
+    const rifleBarrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.022, 0.72, 8),
+      this.matLib.metal
+    )
+    rifleBarrel.rotation.x = Math.PI / 2
+    rifleBarrel.position.set(0, 0.02, -0.35)
     this.rifle.add(rifleBarrel)
-    const rifleStock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.3), this.matLib.wood)
-    rifleStock.position.z = 0.2
+    const rifleBody = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.35), this.matLib.metalDark)
+    rifleBody.position.set(0, 0.01, -0.05)
+    this.rifle.add(rifleBody)
+    const rifleStock = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.07, 0.28), this.matLib.wood)
+    rifleStock.position.set(0, -0.01, 0.22)
     this.rifle.add(rifleStock)
-    this.rifle.position.set(0.25, 1.15, -0.2)
+    this.rifle.position.set(0.22, 1.12, -0.18)
     this.group.add(this.rifle)
 
     this.marker = new THREE.Group()

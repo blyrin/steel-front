@@ -435,7 +435,7 @@ export class Player {
       this.camera.updateProjectionMatrix()
     }
     this.sun.target.position.set(this.position.x, 0, this.position.z)
-    this.sun.position.set(this.position.x + 70, 110, this.position.z + 45)
+    this.sun.position.set(this.position.x + 90, 95, this.position.z + 55)
     this.sun.target.updateMatrixWorld()
     this.weapon.update(
       dt,

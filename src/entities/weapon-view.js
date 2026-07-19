@@ -45,12 +45,17 @@ export class WeaponView {
     })
     const brass = new THREE.MeshStandardMaterial({
       color: 0xb08a3a,
-      roughness: 0.45,
-      metalness: 0.7,
+      roughness: 0.42,
+      metalness: 0.78,
+    })
+    const blued = new THREE.MeshStandardMaterial({
+      color: 0x2a3038,
+      roughness: 0.35,
+      metalness: 0.9,
     })
     const add = (mesh, parent = this.group) => {
       mesh.castShadow = false
-      mesh.receiveShadow = false
+      mesh.receiveShadow = true
       parent.add(mesh)
       return mesh
     }
@@ -74,7 +79,7 @@ export class WeaponView {
       sideWood.position.set(side * 0.028, 0.004, -0.36)
     }
 
-    const receiver = add(new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.04, 0.22), metal))
+    const receiver = add(new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.04, 0.22), blued))
     receiver.position.set(0, 0.01, -0.08)
     for (const side of [-1, 1]) {
       const plate = add(new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.038, 0.2), dark))
@@ -86,11 +91,11 @@ export class WeaponView {
     topRear.position.set(0, 0.034, 0)
     const magWell = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.06), dark))
     magWell.position.set(0, -0.012, -0.1)
-    const chamber = add(new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.015, 0.04, 10), metal))
+    const chamber = add(new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.015, 0.04, 10), blued))
     chamber.rotation.x = Math.PI / 2
     chamber.position.set(0, 0.014, -0.2)
 
-    const barrel = add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.72, 10), metal))
+    const barrel = add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.72, 12), blued))
     barrel.rotation.x = Math.PI / 2
     barrel.position.set(0, 0.016, -0.58)
     const gasTube = add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.009, 0.48, 8), dark))
