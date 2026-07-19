@@ -118,6 +118,7 @@ export function createDeploymentSystem({
 
   function showScreen() {
     input.reset()
+    input.updateTouchUi?.()
     if (document.pointerLockElement) document.exitPointerLock()
     dom.crosshair.classList.add('hidden')
     dom.healthWrap.classList.add('hidden')
@@ -233,7 +234,11 @@ export function createDeploymentSystem({
     dom.ammoWrap.classList.remove('hidden')
     dom.lowAmmo.classList.remove('hidden')
     dom.controls.classList.remove('hidden')
-    renderer.domElement.requestPointerLock()
+    if (input.isTouchMode?.()) {
+      input.updateTouchUi?.()
+    } else {
+      renderer.domElement.requestPointerLock()
+    }
   }
 
   function updateScreenCamera() {

@@ -32,6 +32,24 @@ export function createGame() {
   let deployment
   let input
 
+  async function enterMobilePresentation() {
+    // 陀螺仪权限必须尽量在用户手势内先申请
+    await input.enableGyro()
+    const root = document.documentElement
+    try {
+      if (!document.fullscreenElement && root.requestFullscreen) {
+        await root.requestFullscreen({ navigationUI: 'hide' })
+      }
+    } catch {
+      // 部分浏览器/系统会拒绝全屏，保留竖屏提示降级
+    }
+    try {
+      if (screen.orientation?.lock) await screen.orientation.lock('landscape')
+    } catch {
+      // iOS 等环境可能不支持 orientation.lock
+    }
+  }
+
   function togglePause() {
     if (deploy.phase !== 'none') return
     state.paused = !state.paused
@@ -41,12 +59,13 @@ export function createGame() {
       input.reset()
       hud.setScoreboardVisible(false)
       if (document.pointerLockElement) document.exitPointerLock()
-    } else {
+    } else if (!input.isTouchMode()) {
       runtime.renderer.domElement.requestPointerLock()
     }
+    input.updateTouchUi()
   }
 
-  input = createInputSystem({ state, deploy, onPause: togglePause })
+  input = createInputSystem({ state, deploy, onPause: togglePause, dom })
   deployment = createDeploymentSystem({
     dom,
     state,
@@ -199,16 +218,21 @@ export function createGame() {
   applyMasterVolume()
 
   dom.startBtn.addEventListener('click', async () => {
+    if (input.isTouchMode()) await enterMobilePresentation()
     await audio.init()
     applyMasterVolume()
     dom.menu.classList.remove('show')
     state.loading = false
     initGame()
+    input.syncUi()
   })
   dom.resumeBtn.addEventListener('click', togglePause)
   dom.quitBtn.addEventListener('click', () => location.reload())
   dom.restartBtn.addEventListener('click', () => location.reload())
-  window.addEventListener('resize', runtime.resize)
+  window.addEventListener('resize', () => {
+    runtime.resize()
+    input.syncUi()
+  })
 
   return {
     start() {

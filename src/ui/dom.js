@@ -27,6 +27,20 @@ const IDS = [
   'ammoRes',
   'lowAmmo',
   'controls',
+  'touchControls',
+  'touchLookPad',
+  'touchStick',
+  'touchStickBase',
+  'touchStickKnob',
+  'touchFire',
+  'touchAim',
+  'touchJump',
+  'touchCrouch',
+  'touchReload',
+  'touchMelee',
+  'touchScoreboard',
+  'touchPause',
+  'rotateHint',
   'miniCanvas',
   'killFeed',
   'centerMsg',
@@ -51,5 +65,7 @@ const IDS = [
 ]
 
 export function getDom() {
-  return Object.fromEntries(IDS.map(id => [id, document.getElementById(id)]))
+  const dom = Object.fromEntries(IDS.map(id => [id, document.getElementById(id)]))
+  dom.body = document.body
+  return dom
 }

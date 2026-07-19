@@ -112,6 +112,7 @@ export class Player {
     this.reloading = false
     this.weapon.resetActions()
     this.input.reset()
+    this.input.updateTouchUi?.()
     this.weapon.setVisible(false)
     this.audio.pain(0.45)
     this.audio.bodyFall()
@@ -306,7 +307,10 @@ export class Player {
     if (this.input.consumePressed('KeyF')) this.melee()
 
     const aiming = this.input.isMouseDown('right') && !this.weapon.isBusy()
-    const sprintHeld = this.input.isKeyDown('ShiftLeft') || this.input.isKeyDown('ShiftRight')
+    const sprintHeld =
+      this.input.isKeyDown('ShiftLeft') ||
+      this.input.isKeyDown('ShiftRight') ||
+      !!this.input.isStickSprint?.()
     if (sprintHeld && this.crouching && !aiming) this.crouching = false
     this.aiming = aiming
     this.sprinting = sprintHeld && !this.crouching && !this.aiming
@@ -322,13 +326,10 @@ export class Player {
     const targetHeight = this.crouching ? this.crouchHeight : this.standHeight
     this.currentHeight = THREE.MathUtils.lerp(this.currentHeight, targetHeight, dt * 10)
     const speed = this.crouching ? 2.2 : this.sprinting ? 9.5 : 4.5
-    const direction = this._moveDirection.set(0, 0, 0)
-    if (this.input.isKeyDown('KeyW')) direction.z -= 1
-    if (this.input.isKeyDown('KeyS')) direction.z += 1
-    if (this.input.isKeyDown('KeyA')) direction.x -= 1
-    if (this.input.isKeyDown('KeyD')) direction.x += 1
+    const moveAxis = this.input.getMoveAxis()
+    const direction = this._moveDirection.set(moveAxis.x, 0, moveAxis.z)
     if (direction.lengthSq() > 0) {
-      direction.normalize()
+      if (direction.lengthSq() > 1) direction.normalize()
       direction.applyEuler(this._moveRotation.set(0, this.yaw, 0))
       this.velocity.x = direction.x * speed
       this.velocity.z = direction.z * speed
@@ -359,11 +360,9 @@ export class Player {
     this.position.z = Math.max(-half, Math.min(half, this.position.z))
 
     const moving = direction.lengthSq() > 0 && this.onGround
-    const moveAxis = this._moveAxis
-    moveAxis.x =
-      (this.input.isKeyDown('KeyD') ? 1 : 0) - (this.input.isKeyDown('KeyA') ? 1 : 0)
-    moveAxis.z =
-      (this.input.isKeyDown('KeyS') ? 1 : 0) - (this.input.isKeyDown('KeyW') ? 1 : 0)
+    const animAxis = this._moveAxis
+    animAxis.x = moveAxis.x
+    animAxis.z = moveAxis.z
     let headBobY = 0
     let bobPitch = 0
     let bobRoll = 0
@@ -405,7 +404,7 @@ export class Player {
     this.lookSwayYaw += (targetLookYaw - this.lookSwayYaw) * lookEase
     this.lookSwayRoll += (targetLookRoll - this.lookSwayRoll) * lookEase
     const targetLean = THREE.MathUtils.clamp(
-      moveAxis.x * (this.sprinting ? 0.02 : 0.014) * aimMultiplier,
+      animAxis.x * (this.sprinting ? 0.02 : 0.014) * aimMultiplier,
       -0.025,
       0.025
     )
@@ -448,7 +447,7 @@ export class Player {
       this.aiming,
       lookDelta,
       this._bobPhase || 0,
-      moveAxis
+      animAxis
     )
     this.spreadBloom = Math.max(0, this.spreadBloom - dt * 0.035)
     this.currentSpread = this.getSpread()

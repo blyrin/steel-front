@@ -416,7 +416,7 @@ export function createSceneRuntime() {
     stencil: false,
   })
   renderer.setSize(innerWidth, innerHeight)
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25))
+  renderer.setPixelRatio(Math.max(devicePixelRatio, 1))
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping

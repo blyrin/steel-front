@@ -2,7 +2,10 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>钢铁前线 — STEEL FRONT</title>
     <style>
       html,
@@ -230,6 +233,36 @@
         <span><b>左键</b> 射击</span><span><b>R</b> 装弹</span><span><b>右键</b> 瞄准</span
         ><span><b>F</b> 刺刀</span><span><b>TAB</b> 计分板</span
         ><span><b>ESC</b> 暂停</span>
+      </div>
+      <div id="touchControls">
+        <div id="touchLookPad"></div>
+        <div id="touchStick">
+          <div id="touchStickBase">
+            <div id="touchStickKnob"></div>
+          </div>
+        </div>
+        <button type="button" class="touch-btn touch-fire" id="touchFire" data-touch-action>
+          开火
+        </button>
+        <button type="button" class="touch-btn" id="touchAim" data-touch-action>瞄准</button>
+        <button type="button" class="touch-btn" id="touchJump" data-touch-action>跳</button>
+        <button type="button" class="touch-btn" id="touchCrouch" data-touch-action>蹲</button>
+        <button type="button" class="touch-btn" id="touchReload" data-touch-action>装弹</button>
+        <button type="button" class="touch-btn" id="touchMelee" data-touch-action>刺刀</button>
+        <button type="button" class="touch-btn touch-top" id="touchScoreboard" data-touch-action>
+          战况
+        </button>
+        <button type="button" class="touch-btn touch-top" id="touchPause" data-touch-action>
+          暂停
+        </button>
+      </div>
+    </div>
+
+    <div id="rotateHint">
+      <div class="rotate-card">
+        <div class="rotate-icon">⟳</div>
+        <div class="rotate-title">请横屏游玩</div>
+        <div class="rotate-sub">手机模式下将强制全屏与横屏操作</div>
       </div>
     </div>
 
