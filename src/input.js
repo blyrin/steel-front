@@ -98,6 +98,10 @@ export function createInputSystem({ state, deploy, onPause }) {
         if (!event.repeat && state.running && deploy.phase === 'none') onPause()
         return
       }
+      if (event.code === 'Tab') {
+        if (state.running && !state.paused) heldKeys.add('Tab')
+        return
+      }
       if (!canControl() || !CONTROL_KEYS.has(event.code)) return
       event.preventDefault()
       if (!heldKeys.has(event.code)) pressed.add(event.code)

@@ -804,6 +804,147 @@ canvas {
   box-shadow: inset 0 0 180px rgba(0, 0, 0, 0.85);
 }
 
+/* —— 计分板 —— */
+#scoreboard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(960px, 94vw);
+  display: none;
+  flex-direction: column;
+  background: rgba(28, 26, 22, 0.42);
+  border: 1px solid rgba(210, 185, 120, 0.22);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px);
+  z-index: 75;
+  pointer-events: none;
+  overflow: hidden;
+}
+#scoreboard.show {
+  display: flex;
+}
+.sb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px 7px;
+  border-bottom: 1px solid rgba(200, 170, 100, 0.14);
+  background: rgba(255, 250, 235, 0.04);
+}
+.sb-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 100px;
+}
+.sb-team.allies {
+  color: #8fd06a;
+}
+.sb-team.axis {
+  color: #e07a55;
+  justify-content: flex-end;
+}
+.sb-label {
+  font-size: 11px;
+  letter-spacing: 3px;
+  opacity: 0.9;
+}
+.sb-score {
+  font-family: 'Black Ops One', sans-serif;
+  font-size: 22px;
+  line-height: 1;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+.sb-title {
+  font-family:
+    'Black Ops One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    sans-serif;
+  font-size: 15px;
+  letter-spacing: 6px;
+  color: rgba(236, 210, 130, 0.9);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+.sb-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: rgba(200, 170, 100, 0.1);
+}
+.sb-col {
+  background: rgba(40, 36, 28, 0.28);
+  display: flex;
+  flex-direction: column;
+}
+.sb-col-head {
+  display: grid;
+  grid-template-columns: 22px 1fr 36px 36px;
+  gap: 6px;
+  padding: 5px 12px 4px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  opacity: 0.8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.sb-col-head.allies {
+  color: #8fd06a;
+}
+.sb-col-head.axis {
+  color: #e07a55;
+}
+.sb-col-head span:nth-child(3),
+.sb-col-head span:nth-child(4) {
+  text-align: right;
+  color: rgba(200, 180, 140, 0.55);
+  letter-spacing: 1px;
+}
+.sb-rows {
+  overflow: hidden;
+  padding: 2px 0 4px;
+}
+.sb-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 36px 36px;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 12px;
+  font-size: 12px;
+  line-height: 1.25;
+  color: rgba(245, 236, 214, 0.92);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+.sb-row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.sb-row.me {
+  background: rgba(212, 168, 73, 0.18);
+  color: #f4db9a;
+}
+.sb-row.dead {
+  opacity: 0.45;
+}
+.sb-rank {
+  color: rgba(180, 160, 120, 0.5);
+  font-size: 10px;
+  text-align: center;
+}
+.sb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-stat {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: rgba(230, 210, 170, 0.88);
+}
+.sb-row.me .sb-stat {
+  color: #e8c86a;
+}
+
 /* —— 结束 / 暂停 —— */
 #endScreen {
   position: absolute;
@@ -1100,6 +1241,30 @@ canvas {
   }
   #controls {
     display: none;
+  }
+  #scoreboard {
+    width: 96vw;
+  }
+  .sb-head {
+    padding: 6px 10px 5px;
+  }
+  .sb-score {
+    font-size: 18px;
+  }
+  .sb-title {
+    font-size: 12px;
+    letter-spacing: 3px;
+  }
+  .sb-col-head,
+  .sb-row {
+    padding-left: 8px;
+    padding-right: 8px;
+    grid-template-columns: 18px 1fr 30px 30px;
+    font-size: 11px;
+  }
+  .sb-row {
+    padding-top: 1px;
+    padding-bottom: 1px;
   }
   #lowAmmo {
     bottom: 78px;

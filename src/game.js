@@ -39,6 +39,7 @@ export function createGame() {
     audio.setAmbienceMuted(state.paused)
     if (state.paused) {
       input.reset()
+      hud.setScoreboardVisible(false)
       if (document.pointerLockElement) document.exitPointerLock()
     } else {
       runtime.renderer.domElement.requestPointerLock()
@@ -159,6 +160,7 @@ export function createGame() {
       if (deploy.phase === 'none') {
         maps.updateMinimap()
       }
+      hud.setScoreboardVisible(input.isKeyDown('Tab'))
     }
     audio.updateListener()
     runtime.renderer.render(runtime.scene, runtime.camera)

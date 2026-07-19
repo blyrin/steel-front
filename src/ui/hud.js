@@ -159,6 +159,7 @@ export function createHud({ dom, state, deploy, audio }) {
     state.running = false
     if (document.pointerLockElement) document.exitPointerLock()
     dom.deployScreen.classList.remove('show')
+    setScoreboardVisible(false)
     dom.endTitle.textContent = playerWon ? '胜利' : '战败'
     dom.endTitle.className = playerWon ? 'win' : 'lose'
     const stats = [
@@ -177,6 +178,74 @@ export function createHud({ dom, state, deploy, audio }) {
     dom.endScreen.classList.add('show')
   }
 
+  function compareEntries(a, b) {
+    if (b.kills !== a.kills) return b.kills - a.kills
+    return a.deaths - b.deaths
+  }
+
+  function renderRows(container, entries) {
+    container.replaceChildren(
+      ...entries.map((entry, index) => {
+        const row = document.createElement('div')
+        row.className = `sb-row${entry.isPlayer ? ' me' : ''}${entry.alive ? '' : ' dead'}`
+        const rank = document.createElement('span')
+        rank.className = 'sb-rank'
+        rank.textContent = String(index + 1)
+        const name = document.createElement('span')
+        name.className = 'sb-name'
+        name.textContent = entry.name
+        const kills = document.createElement('span')
+        kills.className = 'sb-stat'
+        kills.textContent = String(entry.kills)
+        const deaths = document.createElement('span')
+        deaths.className = 'sb-stat'
+        deaths.textContent = String(entry.deaths)
+        row.append(rank, name, kills, deaths)
+        return row
+      })
+    )
+  }
+
+  function updateScoreboard() {
+    if (!state.player) return
+    const allies = [
+      {
+        name: '你',
+        kills: state.player.kills,
+        deaths: state.player.deaths,
+        alive: state.player.alive,
+        isPlayer: true,
+      },
+    ]
+    const axis = []
+    for (const bot of state.bots) {
+      const entry = {
+        name: bot.name,
+        kills: bot.kills,
+        deaths: bot.deaths,
+        alive: bot.alive,
+        isPlayer: false,
+      }
+      if (bot.team === 'allies') allies.push(entry)
+      else axis.push(entry)
+    }
+    allies.sort(compareEntries)
+    axis.sort(compareEntries)
+    dom.sbAlliesScore.textContent = state.alliesScore
+    dom.sbAxisScore.textContent = state.axisScore
+    renderRows(dom.sbAlliesRows, allies)
+    renderRows(dom.sbAxisRows, axis)
+  }
+
+  function setScoreboardVisible(visible) {
+    if (visible) {
+      updateScoreboard()
+      dom.scoreboard.classList.add('show')
+    } else {
+      dom.scoreboard.classList.remove('show')
+    }
+  }
+
   return {
     updateHealth,
     updateAmmo,
@@ -192,5 +261,7 @@ export function createHud({ dom, state, deploy, audio }) {
     hideDeathScreen,
     addKillFeed,
     showEndScreen,
+    updateScoreboard,
+    setScoreboardVisible,
   }
 }

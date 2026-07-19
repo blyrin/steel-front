@@ -108,7 +108,7 @@
         </div>
         <div>
           <span>左键</span> 射击　<span>R</span> 装弹　<span>右键</span> 瞄准　<span>F</span>
-          刺刀　<span>ESC</span> 暂停
+          刺刀　<span>TAB</span> 计分板　<span>ESC</span> 暂停
         </div>
         <div class="battle-info">盟军部队与轴心国部队在法国北部村庄激战</div>
       </div>
@@ -178,6 +178,33 @@
         <h2>阵亡</h2>
         <div class="killer-info" id="killerInfo"></div>
       </div>
+      <div id="scoreboard">
+        <div class="sb-head">
+          <div class="sb-team allies">
+            <span class="sb-label">盟军</span>
+            <span class="sb-score" id="sbAlliesScore">0</span>
+          </div>
+          <div class="sb-title">战况</div>
+          <div class="sb-team axis">
+            <span class="sb-score" id="sbAxisScore">0</span>
+            <span class="sb-label">轴心</span>
+          </div>
+        </div>
+        <div class="sb-body">
+          <div class="sb-col">
+            <div class="sb-col-head allies">
+              <span>#</span><span>盟军</span><span>K</span><span>D</span>
+            </div>
+            <div class="sb-rows" id="sbAlliesRows"></div>
+          </div>
+          <div class="sb-col">
+            <div class="sb-col-head axis">
+              <span>#</span><span>轴心</span><span>K</span><span>D</span>
+            </div>
+            <div class="sb-rows" id="sbAxisRows"></div>
+          </div>
+        </div>
+      </div>
       <div id="pauseScreen">
         <h2>已暂停</h2>
         <div class="settings">
@@ -201,7 +228,8 @@
       <div id="controls">
         <span><b>WASD</b> 移动</span><span><b>SHIFT</b> 冲刺</span><span><b>C</b> 切换下蹲</span>
         <span><b>左键</b> 射击</span><span><b>R</b> 装弹</span><span><b>右键</b> 瞄准</span
-        ><span><b>F</b> 刺刀</span><span><b>ESC</b> 暂停</span>
+        ><span><b>F</b> 刺刀</span><span><b>TAB</b> 计分板</span
+        ><span><b>ESC</b> 暂停</span>
       </div>
     </div>
 
