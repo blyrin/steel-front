@@ -410,13 +410,17 @@ export function createSceneRuntime() {
   const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.04, 1200)
   scene.add(camera)
 
+  const touchDevice =
+    window.matchMedia('(pointer: coarse)').matches ||
+    (navigator.maxTouchPoints > 0 && window.matchMedia('(hover: none)').matches)
+  const pixelRatio = () => Math.min(Math.max(devicePixelRatio, 1), touchDevice ? 2 : 1.25)
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     powerPreference: 'high-performance',
     stencil: false,
   })
   renderer.setSize(innerWidth, innerHeight)
-  renderer.setPixelRatio(Math.max(devicePixelRatio, 1))
+  renderer.setPixelRatio(pixelRatio())
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -459,7 +463,7 @@ export function createSceneRuntime() {
     camera.aspect = innerWidth / innerHeight
     camera.updateProjectionMatrix()
     renderer.setSize(innerWidth, innerHeight)
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25))
+    renderer.setPixelRatio(pixelRatio())
   }
 
   return { scene, camera, renderer, sun, hemi, fill, rim, matLib, resize }

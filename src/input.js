@@ -1,3 +1,5 @@
+import * as THREE from 'three'
+
 const BLOCKED_CTRL_KEYS = [
   'KeyW',
   'KeyT',
@@ -63,21 +65,23 @@ const TOUCH_PRESS_CODES = {
 
 // 触摸像素位移相对鼠标 movement 更“钝”，放大后再乘设置灵敏度
 const TOUCH_LOOK_SCALE = 5
-// 陀螺仪角度变化（度）→ lookDelta，最终仍乘菜单灵敏度
-const GYRO_LOOK_SCALE = 20
-const GYRO_DEADZONE = 0.28
+// 陀螺仪相对姿态（弧度）→ lookDelta，最终仍乘菜单灵敏度
+const GYRO_LOOK_SCALE = 500
+const GYRO_DEADZONE = 0.0015
+const GYRO_SMOOTHING = 0.3
+const GYRO_MAX_STEP = 0.08
+const GYRO_SCREEN_AXIS = new THREE.Vector3(0, 0, 1)
+const GYRO_CAMERA_QUATERNION = new THREE.Quaternion(
+  -Math.SQRT1_2,
+  0,
+  0,
+  Math.SQRT1_2
+)
 
 function detectTouchMode() {
   if (typeof window === 'undefined') return false
   if (window.matchMedia('(pointer: coarse)').matches) return true
   return navigator.maxTouchPoints > 0 && window.matchMedia('(hover: none)').matches
-}
-
-function shortestDeg(delta) {
-  let value = delta
-  while (value > 180) value -= 360
-  while (value < -180) value += 360
-  return value
 }
 
 function screenAngle() {
@@ -92,6 +96,10 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
   const mouseDown = { left: false, right: false }
   let mouseDeltaX = 0
   let mouseDeltaY = 0
+  let gyroPendingX = 0
+  let gyroPendingY = 0
+  let gyroSmoothX = 0
+  let gyroSmoothY = 0
   let touchMode = detectTouchMode()
   let moveAxisX = 0
   let moveAxisZ = 0
@@ -100,9 +108,13 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
   let landscapeOk = true
   let gyroEnabled = false
   let gyroListening = false
-  let lastOrientAlpha = null
-  let lastOrientBeta = null
-  let lastOrientGamma = null
+  let gyroHasPrevious = false
+
+  const gyroEuler = new THREE.Euler()
+  const gyroCurrent = new THREE.Quaternion()
+  const gyroPrevious = new THREE.Quaternion()
+  const gyroDelta = new THREE.Quaternion()
+  const gyroScreen = new THREE.Quaternion()
 
   const activePointers = new Map()
   let stickPointerId = null
@@ -154,9 +166,11 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
   }
 
   function resetGyroBaseline() {
-    lastOrientAlpha = null
-    lastOrientBeta = null
-    lastOrientGamma = null
+    gyroHasPrevious = false
+    gyroPendingX = 0
+    gyroPendingY = 0
+    gyroSmoothX = 0
+    gyroSmoothY = 0
   }
 
   function reset() {
@@ -170,42 +184,42 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
     resetGyroBaseline()
   }
 
-  function applyGyroLook(yawDeg, pitchDeg) {
+  function applyGyroLook(yaw, pitch) {
     if (!canControl()) return
-    const yaw = Math.abs(yawDeg) < GYRO_DEADZONE ? 0 : yawDeg
-    const pitch = Math.abs(pitchDeg) < GYRO_DEADZONE ? 0 : pitchDeg
-    if (yaw === 0 && pitch === 0) return
-    mouseDeltaX += yaw * GYRO_LOOK_SCALE
-    mouseDeltaY += pitch * GYRO_LOOK_SCALE
-  }
-
-  function mapGyroAxes(dAlpha, dBeta, dGamma) {
-    const angle = ((screenAngle() % 360) + 360) % 360
-    // 横屏主场景：左右转头用 gamma，上下抬头用 beta
-    if (angle >= 45 && angle < 135) return { yaw: -dGamma, pitch: -dBeta }
-    if (angle >= 225 && angle < 315) return { yaw: dGamma, pitch: dBeta }
-    if (angle >= 135 && angle < 225) return { yaw: dAlpha, pitch: dBeta }
-    return { yaw: -dAlpha, pitch: -dBeta }
+    if (Math.abs(yaw) < GYRO_DEADZONE && Math.abs(pitch) < GYRO_DEADZONE) return
+    gyroPendingX += THREE.MathUtils.clamp(yaw, -GYRO_MAX_STEP, GYRO_MAX_STEP) * GYRO_LOOK_SCALE
+    gyroPendingY += THREE.MathUtils.clamp(pitch, -GYRO_MAX_STEP, GYRO_MAX_STEP) * GYRO_LOOK_SCALE
   }
 
   function onDeviceOrientation(event) {
     if (!gyroEnabled || !touchMode) return
     if (event.alpha == null || event.beta == null || event.gamma == null) return
-    if (lastOrientAlpha == null) {
-      lastOrientAlpha = event.alpha
-      lastOrientBeta = event.beta
-      lastOrientGamma = event.gamma
+
+    gyroEuler.set(
+      THREE.MathUtils.degToRad(event.beta),
+      THREE.MathUtils.degToRad(event.alpha),
+      THREE.MathUtils.degToRad(-event.gamma),
+      'YXZ'
+    )
+    gyroCurrent.setFromEuler(gyroEuler)
+    gyroCurrent.multiply(GYRO_CAMERA_QUATERNION)
+    gyroScreen.setFromAxisAngle(GYRO_SCREEN_AXIS, -THREE.MathUtils.degToRad(screenAngle()))
+    gyroCurrent.multiply(gyroScreen)
+
+    if (!gyroHasPrevious) {
+      gyroPrevious.copy(gyroCurrent)
+      gyroHasPrevious = true
       return
     }
-    const dAlpha = shortestDeg(event.alpha - lastOrientAlpha)
-    const dBeta = shortestDeg(event.beta - lastOrientBeta)
-    const dGamma = shortestDeg(event.gamma - lastOrientGamma)
-    lastOrientAlpha = event.alpha
-    lastOrientBeta = event.beta
-    lastOrientGamma = event.gamma
-    if (!canControl()) return
-    const mapped = mapGyroAxes(dAlpha, dBeta, dGamma)
-    applyGyroLook(mapped.yaw, mapped.pitch)
+    if (!canControl()) {
+      gyroPrevious.copy(gyroCurrent)
+      return
+    }
+
+    gyroDelta.copy(gyroPrevious).invert().multiply(gyroCurrent)
+    gyroPrevious.copy(gyroCurrent)
+    const deltaEuler = gyroEuler.setFromQuaternion(gyroDelta, 'YXZ')
+    applyGyroLook(-deltaEuler.y, -deltaEuler.x)
   }
 
   function bindGyroListeners() {
@@ -556,9 +570,15 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
       return pressed.delete(code)
     },
     consumeLookDelta() {
-      const delta = { x: mouseDeltaX, y: mouseDeltaY }
+      gyroSmoothX += (gyroPendingX - gyroSmoothX) * GYRO_SMOOTHING
+      gyroSmoothY += (gyroPendingY - gyroSmoothY) * GYRO_SMOOTHING
+      const delta = { x: mouseDeltaX + gyroSmoothX, y: mouseDeltaY + gyroSmoothY }
       mouseDeltaX = 0
       mouseDeltaY = 0
+      gyroPendingX = 0
+      gyroPendingY = 0
+      if (Math.abs(gyroSmoothX) < 0.001) gyroSmoothX = 0
+      if (Math.abs(gyroSmoothY) < 0.001) gyroSmoothY = 0
       return delta
     },
     getMoveAxis() {
