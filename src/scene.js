@@ -316,7 +316,7 @@ function createMatLib(anisotropy) {
       metalness: 0,
     }),
     grass: new THREE.MeshStandardMaterial({
-      color: 0xa8b878,
+      color: 0x8c9a6c,
       map: grassMap,
       roughness: 0.97,
       metalness: 0,
@@ -395,7 +395,7 @@ function createMatLib(anisotropy) {
       metalness: 0,
     }),
     treeFoliage: new THREE.MeshStandardMaterial({
-      color: 0x4c492d,
+      color: 0x596044,
       roughness: 1,
       flatShading: true,
     }),
@@ -404,8 +404,8 @@ function createMatLib(anisotropy) {
 
 export function createSceneRuntime() {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0xa0a898)
-  scene.fog = new THREE.FogExp2(0xb0b4a4, 0.0022)
+  scene.background = new THREE.Color(0x9eb2c0)
+  scene.fog = new THREE.FogExp2(0xc0c7c2, 0.0018)
 
   const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.04, 1200)
   scene.add(camera)
@@ -424,7 +424,7 @@ export function createSceneRuntime() {
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1
+  renderer.toneMappingExposure = 1.08
   renderer.outputColorSpace = THREE.SRGBColorSpace
   document.body.appendChild(renderer.domElement)
 

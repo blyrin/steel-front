@@ -203,10 +203,10 @@ export function createWorldSystem({ scene, matLib, state, config }) {
   function createSky() {
     const skyMat = new THREE.ShaderMaterial({
       uniforms: {
-        topColor: { value: new THREE.Color(0x8aa4c0) },
-        midColor: { value: new THREE.Color(0xe0d0b0) },
-        botColor: { value: new THREE.Color(0x8a7a58) },
-        hazeColor: { value: new THREE.Color(0xc8c0a8) },
+        topColor: { value: new THREE.Color(0x7895ad) },
+        midColor: { value: new THREE.Color(0xc4c9c6) },
+        botColor: { value: new THREE.Color(0x9c9888) },
+        hazeColor: { value: new THREE.Color(0xc7c9c1) },
       },
       vertexShader: `
         varying vec3 vWorldPos;
@@ -242,9 +242,9 @@ export function createWorldSystem({ scene, matLib, state, config }) {
 
     // 体积感云层
     const cloudMat = new THREE.MeshBasicMaterial({
-      color: 0xd8d0c0,
+      color: 0xd4d4cf,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.24,
       depthWrite: false,
     })
     for (let i = 0; i < 18; i++) {
