@@ -74,6 +74,9 @@ export class Player {
     this.standHeight = 1.7
     this.crouchHeight = 1.1
     this.currentHeight = 1.7
+    this._moveDirection = new THREE.Vector3()
+    this._moveRotation = new THREE.Euler()
+    this._moveAxis = { x: 0, z: 0 }
     camera.position.copy(this.position)
     camera.rotation.order = 'YXZ'
   }
@@ -319,14 +322,14 @@ export class Player {
     const targetHeight = this.crouching ? this.crouchHeight : this.standHeight
     this.currentHeight = THREE.MathUtils.lerp(this.currentHeight, targetHeight, dt * 10)
     const speed = this.crouching ? 2.2 : this.sprinting ? 9.5 : 4.5
-    const direction = new THREE.Vector3()
+    const direction = this._moveDirection.set(0, 0, 0)
     if (this.input.isKeyDown('KeyW')) direction.z -= 1
     if (this.input.isKeyDown('KeyS')) direction.z += 1
     if (this.input.isKeyDown('KeyA')) direction.x -= 1
     if (this.input.isKeyDown('KeyD')) direction.x += 1
     if (direction.lengthSq() > 0) {
       direction.normalize()
-      direction.applyEuler(new THREE.Euler(0, this.yaw, 0))
+      direction.applyEuler(this._moveRotation.set(0, this.yaw, 0))
       this.velocity.x = direction.x * speed
       this.velocity.z = direction.z * speed
     } else {
@@ -356,10 +359,11 @@ export class Player {
     this.position.z = Math.max(-half, Math.min(half, this.position.z))
 
     const moving = direction.lengthSq() > 0 && this.onGround
-    const moveAxis = {
-      x: (this.input.isKeyDown('KeyD') ? 1 : 0) - (this.input.isKeyDown('KeyA') ? 1 : 0),
-      z: (this.input.isKeyDown('KeyS') ? 1 : 0) - (this.input.isKeyDown('KeyW') ? 1 : 0),
-    }
+    const moveAxis = this._moveAxis
+    moveAxis.x =
+      (this.input.isKeyDown('KeyD') ? 1 : 0) - (this.input.isKeyDown('KeyA') ? 1 : 0)
+    moveAxis.z =
+      (this.input.isKeyDown('KeyS') ? 1 : 0) - (this.input.isKeyDown('KeyW') ? 1 : 0)
     let headBobY = 0
     let bobPitch = 0
     let bobRoll = 0

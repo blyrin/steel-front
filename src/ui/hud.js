@@ -10,31 +10,83 @@ const MULTI_TITLES = [
 ]
 
 export function createHud({ dom, state, deploy, audio }) {
+  let healthWidth = ''
+  let healthText = ''
+  let healthLow = null
+  let ammoCurrent = null
+  let ammoReserve = null
+  let lowAmmoVisible = null
+  let crosshairAiming = null
+  let crosshairGap = ''
+  let crosshairSize = ''
+  let crosshairLengthSet = false
+  let scoreboardVisible = false
+  let scoreboardAlliesScore = null
+  let scoreboardAxisScore = null
+  let scoreboardPlayerKills = null
+  let scoreboardPlayerDeaths = null
+  let scoreboardPlayerAlive = null
+  const scoreboardBotStats = []
+
   function updateHealth() {
     const player = state.player
-    dom.healthFill.style.width = `${(player.health / player.maxHealth) * 100}%`
-    dom.healthText.textContent = `${Math.ceil(player.health)} / ${player.maxHealth}`
-    dom.healthFill.classList.toggle('low', player.health < 30)
+    const width = `${(player.health / player.maxHealth) * 100}%`
+    const text = `${Math.ceil(player.health)} / ${player.maxHealth}`
+    const low = player.health < 30
+    if (width !== healthWidth) {
+      healthWidth = width
+      dom.healthFill.style.width = width
+    }
+    if (text !== healthText) {
+      healthText = text
+      dom.healthText.textContent = text
+    }
+    if (low !== healthLow) {
+      healthLow = low
+      dom.healthFill.classList.toggle('low', low)
+    }
   }
 
   function updateAmmo() {
     const player = state.player
-    dom.ammoCur.textContent = player.ammo
-    dom.ammoRes.textContent = player.reserveAmmo
-    dom.lowAmmo.classList.toggle('show', player.ammo <= 2 && !player.reloading)
+    const lowAmmoVisibleNow = player.ammo <= 2 && !player.reloading
+    if (player.ammo !== ammoCurrent) {
+      ammoCurrent = player.ammo
+      dom.ammoCur.textContent = player.ammo
+    }
+    if (player.reserveAmmo !== ammoReserve) {
+      ammoReserve = player.reserveAmmo
+      dom.ammoRes.textContent = player.reserveAmmo
+    }
+    if (lowAmmoVisibleNow !== lowAmmoVisible) {
+      lowAmmoVisible = lowAmmoVisibleNow
+      dom.lowAmmo.classList.toggle('show', lowAmmoVisibleNow)
+    }
   }
 
   function updateCrosshair() {
     if (!state.player || deploy.phase !== 'none') return
     const aiming = !!state.player.aiming
-    dom.crosshair.classList.toggle('aiming', aiming)
+    if (aiming !== crosshairAiming) {
+      crosshairAiming = aiming
+      dom.crosshair.classList.toggle('aiming', aiming)
+    }
     if (aiming) return
     const spread = state.player.currentSpread || state.player.getSpread()
-    const gap = 4 + spread * 520
-    const size = 22 + gap * 2
-    dom.crosshair.style.setProperty('--ch-gap', `${gap.toFixed(1)}px`)
-    dom.crosshair.style.setProperty('--ch-size', `${size.toFixed(1)}px`)
-    dom.crosshair.style.setProperty('--ch-len', '8px')
+    const gap = `${(4 + spread * 520).toFixed(1)}px`
+    const size = `${(22 + 2 * (4 + spread * 520)).toFixed(1)}px`
+    if (gap !== crosshairGap) {
+      crosshairGap = gap
+      dom.crosshair.style.setProperty('--ch-gap', gap)
+    }
+    if (size !== crosshairSize) {
+      crosshairSize = size
+      dom.crosshair.style.setProperty('--ch-size', size)
+    }
+    if (!crosshairLengthSet) {
+      crosshairLengthSet = true
+      dom.crosshair.style.setProperty('--ch-len', '8px')
+    }
   }
 
   function updateScores() {
@@ -155,7 +207,7 @@ export function createHud({ dom, state, deploy, audio }) {
     while (dom.killFeed.children.length > 6) dom.killFeed.lastChild.remove()
   }
 
-  function showEndScreen(playerWon, config) {
+  function showEndScreen(playerWon) {
     state.running = false
     if (document.pointerLockElement) document.exitPointerLock()
     dom.deployScreen.classList.remove('show')
@@ -208,6 +260,35 @@ export function createHud({ dom, state, deploy, audio }) {
 
   function updateScoreboard() {
     if (!state.player) return
+    let changed =
+      state.alliesScore !== scoreboardAlliesScore ||
+      state.axisScore !== scoreboardAxisScore ||
+      state.player.kills !== scoreboardPlayerKills ||
+      state.player.deaths !== scoreboardPlayerDeaths ||
+      state.player.alive !== scoreboardPlayerAlive ||
+      scoreboardBotStats.length !== state.bots.length * 3
+    for (let i = 0; i < state.bots.length && !changed; i++) {
+      const bot = state.bots[i]
+      const offset = i * 3
+      changed =
+        bot.kills !== scoreboardBotStats[offset] ||
+        bot.deaths !== scoreboardBotStats[offset + 1] ||
+        bot.alive !== scoreboardBotStats[offset + 2]
+    }
+    if (!changed) return
+    scoreboardAlliesScore = state.alliesScore
+    scoreboardAxisScore = state.axisScore
+    scoreboardPlayerKills = state.player.kills
+    scoreboardPlayerDeaths = state.player.deaths
+    scoreboardPlayerAlive = state.player.alive
+    scoreboardBotStats.length = state.bots.length * 3
+    for (let i = 0; i < state.bots.length; i++) {
+      const bot = state.bots[i]
+      const offset = i * 3
+      scoreboardBotStats[offset] = bot.kills
+      scoreboardBotStats[offset + 1] = bot.deaths
+      scoreboardBotStats[offset + 2] = bot.alive
+    }
     const allies = [
       {
         name: '你',
@@ -238,12 +319,10 @@ export function createHud({ dom, state, deploy, audio }) {
   }
 
   function setScoreboardVisible(visible) {
-    if (visible) {
-      updateScoreboard()
-      dom.scoreboard.classList.add('show')
-    } else {
-      dom.scoreboard.classList.remove('show')
-    }
+    if (visible) updateScoreboard()
+    if (visible === scoreboardVisible) return
+    scoreboardVisible = visible
+    dom.scoreboard.classList.toggle('show', visible)
   }
 
   return {
@@ -261,7 +340,6 @@ export function createHud({ dom, state, deploy, audio }) {
     hideDeathScreen,
     addKillFeed,
     showEndScreen,
-    updateScoreboard,
     setScoreboardVisible,
   }
 }

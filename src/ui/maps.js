@@ -1,33 +1,49 @@
 export function createMapSystem({ dom, state, config }) {
+  const width = 180
+  const height = 180
+  const scale = width / config.mapSize
+  const centerX = width / 2
+  const centerY = height / 2
   const miniCtx = dom.miniCanvas.getContext('2d')
+  const staticCanvas = document.createElement('canvas')
+  const staticCtx = staticCanvas.getContext('2d')
+  let staticLayerReady = false
+  staticCanvas.width = width
+  staticCanvas.height = height
 
-  function updateMinimap() {
-    const width = 180
-    const height = 180
-    const scale = width / config.mapSize
-    const centerX = width / 2
-    const centerY = height / 2
-    miniCtx.clearRect(0, 0, width, height)
-    const gradient = miniCtx.createRadialGradient(centerX, centerY, 10, centerX, centerY, 90)
+  function drawStaticLayer() {
+    const gradient = staticCtx.createRadialGradient(centerX, centerY, 10, centerX, centerY, 90)
     gradient.addColorStop(0, 'rgba(48,38,24,0.75)')
     gradient.addColorStop(1, 'rgba(14,11,8,0.95)')
-    miniCtx.fillStyle = gradient
-    miniCtx.fillRect(0, 0, width, height)
-    miniCtx.strokeStyle = 'rgba(120,100,60,0.22)'
-    miniCtx.lineWidth = 1
-    miniCtx.beginPath()
-    miniCtx.moveTo(centerX, 8)
-    miniCtx.lineTo(centerX, height - 8)
-    miniCtx.moveTo(8, centerY)
-    miniCtx.lineTo(width - 8, centerY)
-    miniCtx.stroke()
+    staticCtx.fillStyle = gradient
+    staticCtx.fillRect(0, 0, width, height)
+    staticCtx.strokeStyle = 'rgba(120,100,60,0.22)'
+    staticCtx.lineWidth = 1
+    staticCtx.beginPath()
+    staticCtx.moveTo(centerX, 8)
+    staticCtx.lineTo(centerX, height - 8)
+    staticCtx.moveTo(8, centerY)
+    staticCtx.lineTo(width - 8, centerY)
+    staticCtx.stroke()
     for (const obstacle of state.obstacles) {
       if (obstacle.x === undefined) continue
-      if (!['building', 'tank', 'sandbag'].includes(obstacle.type)) continue
-      miniCtx.fillStyle =
+      if (
+        obstacle.type !== 'building' &&
+        obstacle.type !== 'tank' &&
+        obstacle.type !== 'sandbag'
+      )
+        continue
+      staticCtx.fillStyle =
         obstacle.type === 'building' ? 'rgba(130,110,75,0.65)' : 'rgba(100,85,55,0.55)'
-      miniCtx.fillRect(centerX + obstacle.x * scale - 2, centerY + obstacle.z * scale - 2, 4, 4)
+      staticCtx.fillRect(centerX + obstacle.x * scale - 2, centerY + obstacle.z * scale - 2, 4, 4)
     }
+    staticLayerReady = true
+  }
+
+  function updateMinimap() {
+    if (!staticLayerReady) drawStaticLayer()
+    miniCtx.clearRect(0, 0, width, height)
+    miniCtx.drawImage(staticCanvas, 0, 0)
     for (const bot of state.bots) {
       if (!bot.alive) continue
       const x = centerX + bot.position.x * scale

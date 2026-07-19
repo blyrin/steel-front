@@ -1,6 +1,45 @@
 import * as THREE from 'three'
 
 export function createEffectsSystem({ scene, state, audio }) {
+  const pools = {
+    tracer: [],
+    core: [],
+    flare: [],
+    side: [],
+    smoke: [],
+    shell: [],
+    spark: [],
+    dust: [],
+    blood: [],
+    light: [],
+  }
+
+  const geometry = {
+    core: new THREE.SphereGeometry(1, 6, 4),
+    flare: new THREE.ConeGeometry(1, 1, 5, 1, true),
+    side: new THREE.SphereGeometry(1, 6, 4),
+    smoke: new THREE.SphereGeometry(1, 5, 3),
+    shell: new THREE.CylinderGeometry(1, 1, 1, 6),
+    spark: new THREE.SphereGeometry(1, 4, 3),
+    dust: new THREE.SphereGeometry(1, 4, 3),
+    blood: new THREE.SphereGeometry(1, 4, 3),
+  }
+
+  function take(type, create) {
+    return pools[type].pop() || create()
+  }
+
+  function release(type, object) {
+    object.visible = false
+    pools[type].push(object)
+  }
+
+  function addParticle(particle) {
+    particle.mesh.visible = true
+    scene.add(particle.mesh)
+    state.particles.push(particle)
+  }
+
   function update(dt) {
     for (let i = state.particles.length - 1; i >= 0; i--) {
       const particle = state.particles[i]
@@ -8,6 +47,7 @@ export function createEffectsSystem({ scene, state, audio }) {
       if (particle.life <= 0) {
         scene.remove(particle.mesh)
         particle.onComplete?.()
+        if (particle.poolType) release(particle.poolType, particle.mesh)
         state.particles.splice(i, 1)
       } else {
         particle.update?.(dt, particle.maxLife - particle.life, particle)
@@ -15,96 +55,153 @@ export function createEffectsSystem({ scene, state, audio }) {
     }
   }
 
+  function createTracer() {
+    const tracer = new THREE.Line(
+      new THREE.BufferGeometry().setAttribute(
+        'position',
+        new THREE.BufferAttribute(new Float32Array(6), 3)
+      ),
+      new THREE.LineBasicMaterial({
+        color: 0xffdd88,
+        transparent: true,
+        opacity: 0.72,
+        depthWrite: false,
+      })
+    )
+    tracer.frustumCulled = true
+    return tracer
+  }
+
   function addTracer(origin, end) {
-    const geometry = new THREE.BufferGeometry().setFromPoints([origin, end])
-    const material = new THREE.LineBasicMaterial({
-      color: 0xffdd88,
-      transparent: true,
-      opacity: 0.72,
-    })
-    const tracer = new THREE.Line(geometry, material)
-    scene.add(tracer)
-    state.particles.push({
+    const tracer = take('tracer', createTracer)
+    const positions = tracer.geometry.attributes.position
+    positions.setXYZ(0, origin.x, origin.y, origin.z)
+    positions.setXYZ(1, end.x, end.y, end.z)
+    positions.needsUpdate = true
+    tracer.geometry.computeBoundingSphere()
+    tracer.material.opacity = 0.72
+    addParticle({
       mesh: tracer,
+      poolType: 'tracer',
       type: 'tracer',
       life: 0.06,
       maxLife: 0.06,
       update: () => {
-        material.opacity *= 0.82
+        tracer.material.opacity *= 0.82
       },
     })
   }
 
+  function createMesh(type, material) {
+    return new THREE.Mesh(geometry[type], material)
+  }
+
   function spawnMuzzleFlash(pos, dir, firstPerson = false) {
     const direction = dir.clone().normalize()
-    const core = new THREE.Mesh(
-      new THREE.SphereGeometry(firstPerson ? 0.065 : 0.11, 7, 5),
-      new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true, opacity: 0.98 })
+    const core = take(
+      'core',
+      () => createMesh('core', new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true }))
     )
     core.position.copy(pos).addScaledVector(direction, firstPerson ? 0.04 : 0.08)
-    scene.add(core)
-    const flare = new THREE.Mesh(
-      new THREE.ConeGeometry(firstPerson ? 0.055 : 0.1, firstPerson ? 0.18 : 0.26, 7, 1, true),
-      new THREE.MeshBasicMaterial({
-        color: 0xff9028,
-        transparent: true,
-        opacity: 0.8,
-        side: THREE.DoubleSide,
-      })
+    core.scale.setScalar(firstPerson ? 0.065 : 0.11)
+    core.material.opacity = 0.98
+
+    const flare = take(
+      'flare',
+      () =>
+        createMesh(
+          'flare',
+          new THREE.MeshBasicMaterial({
+            color: 0xff9028,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          })
+        )
     )
     flare.position.copy(pos).addScaledVector(direction, firstPerson ? 0.11 : 0.15)
     flare.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction)
-    scene.add(flare)
-    const side = new THREE.Mesh(
-      new THREE.SphereGeometry(firstPerson ? 0.05 : 0.075, 6, 4),
-      new THREE.MeshBasicMaterial({ color: 0xffc45a, transparent: true, opacity: 0.75 })
+    const flareRadius = firstPerson ? 0.055 : 0.1
+    const flareHeight = firstPerson ? 0.18 : 0.26
+    flare.scale.set(flareRadius, flareHeight, flareRadius)
+
+    const side = take(
+      'side',
+      () => createMesh('side', new THREE.MeshBasicMaterial({ color: 0xffc45a, transparent: true }))
     )
     side.position.copy(pos).addScaledVector(direction, firstPerson ? 0.02 : 0.05)
-    side.scale.set(1.7, 0.5, 0.5)
+    side.scale.set(firstPerson ? 0.085 : 0.128, firstPerson ? 0.025 : 0.037, firstPerson ? 0.025 : 0.037)
+    side.material.opacity = 0.75
+
+    const light = firstPerson
+      ? take('light', () => new THREE.PointLight(0xffa040, 0, 8))
+      : null
+    if (light) {
+      light.visible = true
+      light.position.copy(pos)
+      light.distance = 5
+      light.intensity = 2.8
+    }
+    flare.visible = true
+    side.visible = true
+    scene.add(flare)
     scene.add(side)
-    const light = new THREE.PointLight(0xffa040, firstPerson ? 2.8 : 4.0, firstPerson ? 5 : 8)
-    light.position.copy(pos)
-    scene.add(light)
+    if (light) scene.add(light)
+
     const life = firstPerson ? 0.05 : 0.06
-    state.particles.push({
+    addParticle({
       mesh: core,
+      poolType: 'core',
       type: 'flash',
       life,
       maxLife: life,
       update: (dt, time) => {
         const progress = 1 - time / life
         core.material.opacity = progress * 0.98
-        core.scale.setScalar(0.65 + (1 - progress) * 2.0)
+        core.scale.setScalar((firstPerson ? 0.065 : 0.11) * (0.65 + (1 - progress) * 2.0))
         flare.material.opacity = progress * 0.8
-        flare.scale.setScalar(0.8 + (1 - progress) * 1.55)
+        flare.scale.set(
+          flareRadius * (0.8 + (1 - progress) * 1.55),
+          flareHeight * (0.8 + (1 - progress) * 1.55),
+          flareRadius * (0.8 + (1 - progress) * 1.55)
+        )
         side.material.opacity = progress * 0.75
         side.scale.set(
-          1.7 + (1 - progress) * 1.1,
-          0.5 + (1 - progress) * 0.45,
-          0.5 + (1 - progress) * 0.45
+          (firstPerson ? 0.085 : 0.128) * (1.7 + (1 - progress) * 1.1),
+          (firstPerson ? 0.025 : 0.037) * (0.5 + (1 - progress) * 0.45),
+          (firstPerson ? 0.025 : 0.037) * (0.5 + (1 - progress) * 0.45)
         )
-        light.intensity = progress * (firstPerson ? 2.8 : 4.0)
+        light && (light.intensity = progress * 2.8)
       },
       onComplete: () => {
-        scene.remove(light)
         scene.remove(flare)
         scene.remove(side)
+        release('flare', flare)
+        release('side', side)
+        if (light) {
+          scene.remove(light)
+          release('light', light)
+        }
       },
     })
 
-    const count = firstPerson ? 3 : 4
+    const count = firstPerson ? 2 : 3
     for (let i = 0; i < count; i++) {
-      const puff = new THREE.Mesh(
-        new THREE.SphereGeometry(0.045, 5, 4),
-        new THREE.MeshBasicMaterial({
-          color: 0xb8a898,
-          transparent: true,
-          opacity: firstPerson ? 0.22 : 0.4,
-          depthWrite: false,
-        })
+      const puff = take(
+        'smoke',
+        () =>
+          createMesh(
+            'smoke',
+            new THREE.MeshBasicMaterial({
+              color: 0xb8a898,
+              transparent: true,
+              depthWrite: false,
+            })
+          )
       )
       puff.position.copy(pos).addScaledVector(direction, 0.08 + i * 0.04)
-      scene.add(puff)
+      puff.scale.setScalar(0.045)
+      puff.material.opacity = firstPerson ? 0.22 : 0.4
       const velocity = direction
         .clone()
         .multiplyScalar(0.55 + Math.random() * 0.45)
@@ -116,8 +213,9 @@ export function createEffectsSystem({ scene, state, audio }) {
           )
         )
       const maxLife = 0.4 + i * 0.09
-      state.particles.push({
+      addParticle({
         mesh: puff,
+        poolType: 'smoke',
         type: 'smoke',
         life: maxLife,
         maxLife,
@@ -125,22 +223,25 @@ export function createEffectsSystem({ scene, state, audio }) {
         update: (dt, time, particle) => {
           particle.mesh.position.addScaledVector(particle.vel, dt)
           particle.vel.multiplyScalar(0.91)
-          particle.mesh.material.opacity =
-            (1 - time / particle.maxLife) * (firstPerson ? 0.22 : 0.4)
-          particle.mesh.scale.setScalar(1 + time * 2.6)
+          particle.mesh.material.opacity = (1 - time / particle.maxLife) * (firstPerson ? 0.22 : 0.4)
+          particle.mesh.scale.setScalar(0.045 * (1 + time * 2.6))
         },
       })
     }
   }
 
   function spawnShell(pos, right = null, up = null) {
-    const shell = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.006, 0.007, 0.028, 6),
-      new THREE.MeshStandardMaterial({ color: 0xc0a040, metalness: 0.85, roughness: 0.28 })
+    const shell = take(
+      'shell',
+      () =>
+        createMesh(
+          'shell',
+          new THREE.MeshStandardMaterial({ color: 0xc0a040, metalness: 0.85, roughness: 0.28 })
+        )
     )
     shell.position.copy(pos)
+    shell.scale.set(0.0065, 0.028, 0.0065)
     shell.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI)
-    scene.add(shell)
     const rightAxis = right ? right.clone().normalize() : new THREE.Vector3(1, 0, 0)
     const upAxis = up ? up.clone().normalize() : new THREE.Vector3(0, 1, 0)
     const forward = new THREE.Vector3().crossVectors(upAxis, rightAxis).normalize()
@@ -149,17 +250,14 @@ export function createEffectsSystem({ scene, state, audio }) {
       .addScaledVector(upAxis, 1.4 + Math.random() * 0.7)
       .addScaledVector(forward, -0.3 + Math.random() * 0.4)
     let landed = false
-    state.particles.push({
+    addParticle({
       mesh: shell,
+      poolType: 'shell',
       type: 'shell',
       life: 1.4,
       maxLife: 1.4,
       vel: velocity,
-      rotVel: new THREE.Vector3(
-        8 + Math.random() * 10,
-        6 + Math.random() * 8,
-        4 + Math.random() * 6
-      ),
+      rotVel: new THREE.Vector3(8 + Math.random() * 10, 6 + Math.random() * 8, 4 + Math.random() * 6),
       update: (dt, time, particle) => {
         particle.vel.y -= 9.8 * dt
         particle.mesh.position.addScaledVector(particle.vel, dt)
@@ -182,33 +280,40 @@ export function createEffectsSystem({ scene, state, audio }) {
   }
 
   function spawnSmokePuff(pos) {
-    const puff = new THREE.Mesh(
-      new THREE.SphereGeometry(0.06, 4, 3),
-      new THREE.MeshBasicMaterial({ color: 0xb0a090, transparent: true, opacity: 0.12 })
+    const puff = take(
+      'smoke',
+      () =>
+        createMesh(
+          'smoke',
+          new THREE.MeshBasicMaterial({ color: 0xb0a090, transparent: true, depthWrite: false })
+        )
     )
     puff.position.copy(pos)
-    scene.add(puff)
-    state.particles.push({
+    puff.scale.setScalar(0.06)
+    puff.material.opacity = 0.12
+    addParticle({
       mesh: puff,
+      poolType: 'smoke',
       type: 'smoke',
       life: 0.55,
       maxLife: 0.55,
       update: (dt, time, particle) => {
         particle.mesh.material.opacity = (1 - time / 0.55) * 0.12
-        particle.mesh.scale.setScalar(1 + time * 2.6)
+        particle.mesh.scale.setScalar(0.06 * (1 + time * 2.6))
         particle.mesh.position.y += dt * 0.18
       },
     })
   }
 
   function spawnSpark(pos, dir) {
-    for (let i = 0; i < 6; i++) {
-      const spark = new THREE.Mesh(
-        new THREE.SphereGeometry(0.015, 4, 3),
-        new THREE.MeshBasicMaterial({ color: 0xffaa30, transparent: true })
+    for (let i = 0; i < 4; i++) {
+      const spark = take(
+        'spark',
+        () => createMesh('spark', new THREE.MeshBasicMaterial({ color: 0xffaa30, transparent: true }))
       )
       spark.position.copy(pos)
-      scene.add(spark)
+      spark.scale.setScalar(0.015)
+      spark.material.opacity = 1
       const velocity = dir
         .clone()
         .multiplyScalar(-1)
@@ -216,8 +321,9 @@ export function createEffectsSystem({ scene, state, audio }) {
           new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2)
         )
         .multiplyScalar(2)
-      state.particles.push({
+      addParticle({
         mesh: spark,
+        poolType: 'spark',
         type: 'spark',
         life: 0.3,
         maxLife: 0.3,
@@ -229,39 +335,42 @@ export function createEffectsSystem({ scene, state, audio }) {
         },
       })
     }
-    const dust = new THREE.Mesh(
-      new THREE.SphereGeometry(0.1, 4, 3),
-      new THREE.MeshBasicMaterial({ color: 0xa09080, transparent: true, opacity: 0.5 })
+    const dust = take(
+      'dust',
+      () => createMesh('dust', new THREE.MeshBasicMaterial({ color: 0xa09080, transparent: true }))
     )
     dust.position.copy(pos)
-    scene.add(dust)
-    state.particles.push({
+    dust.scale.setScalar(0.1)
+    dust.material.opacity = 0.5
+    addParticle({
       mesh: dust,
+      poolType: 'dust',
       type: 'dust',
       life: 0.5,
       maxLife: 0.5,
       update: (dt, time, particle) => {
         particle.mesh.material.opacity = (1 - time / 0.5) * 0.5
-        particle.mesh.scale.setScalar(1 + time * 4)
+        particle.mesh.scale.setScalar(0.1 * (1 + time * 4))
       },
     })
   }
 
   function spawnBlood(pos) {
-    for (let i = 0; i < 10; i++) {
-      const blood = new THREE.Mesh(
-        new THREE.SphereGeometry(0.025, 4, 3),
-        new THREE.MeshBasicMaterial({ color: 0x8a1010 })
+    for (let i = 0; i < 6; i++) {
+      const blood = take(
+        'blood',
+        () => createMesh('blood', new THREE.MeshBasicMaterial({ color: 0x8a1010 }))
       )
       blood.position.copy(pos)
-      scene.add(blood)
+      blood.scale.setScalar(0.025)
       const velocity = new THREE.Vector3(
         (Math.random() - 0.5) * 3,
         Math.random() * 2,
         (Math.random() - 0.5) * 3
       )
-      state.particles.push({
+      addParticle({
         mesh: blood,
+        poolType: 'blood',
         type: 'blood',
         life: 0.8,
         maxLife: 0.8,

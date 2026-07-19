@@ -384,6 +384,21 @@ function createMatLib(anisotropy) {
       roughness: 0.95,
       metalness: 0.02,
     }),
+    treeTrunk: new THREE.MeshStandardMaterial({
+      color: 0x3a2818,
+      roughness: 0.95,
+      metalness: 0,
+    }),
+    treeBranch: new THREE.MeshStandardMaterial({
+      color: 0x2e2014,
+      roughness: 0.95,
+      metalness: 0,
+    }),
+    treeFoliage: new THREE.MeshStandardMaterial({
+      color: 0x4c492d,
+      roughness: 1,
+      flatShading: true,
+    }),
   }
 }
 
@@ -401,25 +416,25 @@ export function createSceneRuntime() {
     stencil: false,
   })
   renderer.setSize(innerWidth, innerHeight)
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75))
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25))
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.35
+  renderer.toneMappingExposure = 1
   renderer.outputColorSpace = THREE.SRGBColorSpace
   document.body.appendChild(renderer.domElement)
 
   const maxAniso = renderer.capabilities.getMaxAnisotropy()
-  const matLib = createMatLib(Math.min(8, maxAniso))
+  const matLib = createMatLib(Math.min(2, maxAniso))
 
-  scene.add(new THREE.AmbientLight(0x8a9088, 0.48))
-  const hemi = new THREE.HemisphereLight(0xd8e4f0, 0x6a5840, 0.95)
+  scene.add(new THREE.AmbientLight(0x8a9088, 1.0))
+  const hemi = new THREE.HemisphereLight(0xd8e4f0, 0x6a5840, 1.0)
   scene.add(hemi)
 
-  const sun = new THREE.DirectionalLight(0xffe2b8, 2.15)
+  const sun = new THREE.DirectionalLight(0xffe2b8, 3)
   sun.position.set(90, 95, 55)
   sun.castShadow = true
-  sun.shadow.mapSize.set(3072, 3072)
+  sun.shadow.mapSize.set(2048, 2048)
   sun.shadow.camera.left = -120
   sun.shadow.camera.right = 120
   sun.shadow.camera.top = 120
@@ -428,7 +443,7 @@ export function createSceneRuntime() {
   sun.shadow.camera.far = 300
   sun.shadow.bias = -0.00018
   sun.shadow.normalBias = 0.028
-  sun.shadow.radius = 3.2
+  sun.shadow.radius = 1
   scene.add(sun)
   scene.add(sun.target)
 
@@ -444,7 +459,7 @@ export function createSceneRuntime() {
     camera.aspect = innerWidth / innerHeight
     camera.updateProjectionMatrix()
     renderer.setSize(innerWidth, innerHeight)
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75))
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25))
   }
 
   return { scene, camera, renderer, sun, hemi, fill, rim, matLib, resize }

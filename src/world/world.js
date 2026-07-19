@@ -1,11 +1,22 @@
 import * as THREE from 'three'
 
 export function createWorldSystem({ scene, matLib, state, config }) {
-  function pushBoxObstacle({ mesh, type, x, z, w, d, h, rot }) {
+  const sharedGeometry = {
+    sandbag: new THREE.CapsuleGeometry(0.28, 0.35, 4, 8),
+    root: new THREE.BoxGeometry(0.15, 0.12, 0.7),
+    wirePost: new THREE.CylinderGeometry(0.07, 0.1, 1.55, 6),
+    wire: new THREE.CylinderGeometry(0.015, 0.015, 3.2, 5),
+    coil: new THREE.TorusGeometry(0.22, 0.025, 5, 12),
+    craterMound: new THREE.SphereGeometry(1, 6, 4),
+    trunk: new THREE.CylinderGeometry(1, 1, 1, 7),
+    branch: new THREE.CylinderGeometry(1, 1, 1, 5),
+    foliage: new THREE.IcosahedronGeometry(1, 0),
+  }
+
+  function pushBoxObstacle({ type, x, z, w, d, h, rot }) {
     const cos = Math.cos(rot)
     const sin = Math.sin(rot)
     state.obstacles.push({
-      mesh,
       type,
       shape: 'box',
       x,
@@ -30,7 +41,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
 
   function buildWorld() {
     const half = config.mapSize / 2
-    const groundGeo = new THREE.PlaneGeometry(config.mapSize * 2, config.mapSize * 2, 128, 128)
+    const groundGeo = new THREE.PlaneGeometry(config.mapSize * 2, config.mapSize * 2, 64, 64)
     const positions = groundGeo.attributes.position
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i)
@@ -309,13 +320,14 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     for (let i = 0; i < 10; i++) {
       const angle = (i / 10) * Math.PI * 2 + Math.random() * 0.3
       const dist = radius * 0.9 + Math.random() * 0.8
+      const moundRadius = 0.35 + Math.random() * 0.35
       const mound = enableShadow(
-        new THREE.Mesh(new THREE.SphereGeometry(0.35 + Math.random() * 0.35, 7, 5), matLib.dirt),
-        true,
+        new THREE.Mesh(sharedGeometry.craterMound, matLib.dirt),
+        false,
         true
       )
       mound.position.set(x + Math.cos(angle) * dist, 0.12, z + Math.sin(angle) * dist)
-      mound.scale.set(1.2, 0.45, 1)
+      mound.scale.set(moundRadius * 1.2, moundRadius * 0.45, moundRadius)
       scene.add(mound)
     }
     state.coverPoints.push({ x, z, r: radius + 0.5, type: 'crater' })
@@ -496,7 +508,6 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     scene.add(group)
     // 基座/屋顶略外扩，高度覆盖人字屋顶
     pushBoxObstacle({
-      mesh: group,
       type: 'building',
       x,
       z,
@@ -516,7 +527,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     for (let row = 0; row < 3; row++) {
       for (let i = -2; i <= 2; i++) {
         const bag = enableShadow(
-          new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.35, 4, 8), matLib.sandbag),
+          new THREE.Mesh(sharedGeometry.sandbag, matLib.sandbag),
           true,
           true
         )
@@ -539,7 +550,6 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     scene.add(group)
     // 胶囊横放：两端约 ±1.62，厚度含错层与木板
     pushBoxObstacle({
-      mesh: group,
       type: 'sandbag',
       x,
       z,
@@ -592,7 +602,6 @@ export function createWorldSystem({ scene, matLib, state, config }) {
 
     scene.add(group)
     pushBoxObstacle({
-      mesh: group,
       type: 'crate',
       x,
       z,
@@ -712,7 +721,6 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     scene.add(group)
     // 车体+履带+侧裙；炮管细长不单独扩深
     pushBoxObstacle({
-      mesh: group,
       type: 'tank',
       x,
       z,
@@ -730,8 +738,8 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     group.rotation.y = rotation
     for (let i = -1.5; i <= 1.5; i += 1.5) {
       const post = enableShadow(
-        new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 1.55, 6), matLib.wood),
-        true,
+        new THREE.Mesh(sharedGeometry.wirePost, matLib.wood),
+        false,
         true
       )
       post.position.set(i, 0.78, 0)
@@ -739,10 +747,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       group.add(post)
     }
     for (let i = 0; i < 4; i++) {
-      const wire = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.015, 0.015, 3.2, 5),
-        matLib.metalDark
-      )
+      const wire = new THREE.Mesh(sharedGeometry.wire, matLib.metalDark)
       wire.rotation.z = Math.PI / 2
       wire.position.set(0, 0.4 + i * 0.32, (Math.random() - 0.5) * 0.05)
       wire.rotation.x = (Math.random() - 0.5) * 0.1
@@ -750,10 +755,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     }
     // 铁丝卷
     for (let i = -1; i <= 1; i++) {
-      const coil = new THREE.Mesh(
-        new THREE.TorusGeometry(0.22, 0.025, 5, 12),
-        matLib.metalDark
-      )
+      const coil = new THREE.Mesh(sharedGeometry.coil, matLib.metalDark)
       coil.position.set(i * 1.1, 0.35, 0.15)
       coil.rotation.y = Math.PI / 2
       group.add(coil)
@@ -761,7 +763,6 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     scene.add(group)
     // 桩距 ±1.5，铁丝长 3.2，卷丝略前伸
     pushBoxObstacle({
-      mesh: group,
       type: 'wire',
       x,
       z,
@@ -777,14 +778,13 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     group.position.set(x, 0, z)
     const dead = Math.random() > 0.55
     const trunkH = dead ? 3.5 + Math.random() * 2.5 : 4.5 + Math.random() * 2
+    const trunkRadius = 0.32 + Math.random() * 0.15
     const trunk = enableShadow(
-      new THREE.Mesh(
-        new THREE.CylinderGeometry(0.18 + Math.random() * 0.12, 0.32 + Math.random() * 0.15, trunkH, 7),
-        new THREE.MeshStandardMaterial({ color: 0x3a2818, roughness: 0.95, metalness: 0 })
-      ),
-      true,
+      new THREE.Mesh(sharedGeometry.trunk, matLib.treeTrunk),
+      false,
       true
     )
+    trunk.scale.set(trunkRadius, trunkH, trunkRadius)
     trunk.position.y = trunkH / 2
     trunk.rotation.z = (Math.random() - 0.5) * 0.12
     trunk.rotation.x = (Math.random() - 0.5) * 0.08
@@ -792,14 +792,13 @@ export function createWorldSystem({ scene, matLib, state, config }) {
 
     if (dead) {
       for (let i = 0; i < 3; i++) {
+        const branchLength = 1.2 + Math.random()
         const branch = enableShadow(
-          new THREE.Mesh(
-            new THREE.CylinderGeometry(0.04, 0.08, 1.2 + Math.random(), 5),
-            new THREE.MeshStandardMaterial({ color: 0x2e2014, roughness: 0.95 })
-          ),
-          true,
+          new THREE.Mesh(sharedGeometry.branch, matLib.treeBranch),
+          false,
           true
         )
+        branch.scale.set(0.08, branchLength, 0.08)
         branch.position.set(
           (Math.random() - 0.5) * 0.4,
           trunkH * (0.55 + Math.random() * 0.3),
@@ -810,18 +809,10 @@ export function createWorldSystem({ scene, matLib, state, config }) {
         group.add(branch)
       }
     } else {
-      const foliageColor = new THREE.Color().setHSL(0.12 + Math.random() * 0.08, 0.35, 0.28 + Math.random() * 0.1)
       for (let i = 0; i < 5; i++) {
         const foliage = enableShadow(
-          new THREE.Mesh(
-            new THREE.IcosahedronGeometry(1.2 + Math.random() * 0.7, 0),
-            new THREE.MeshStandardMaterial({
-              color: foliageColor.clone().offsetHSL(0, 0, (Math.random() - 0.5) * 0.08),
-              roughness: 1,
-              flatShading: true,
-            })
-          ),
-          true,
+          new THREE.Mesh(sharedGeometry.foliage, matLib.treeFoliage),
+          false,
           true
         )
         foliage.position.set(
@@ -829,7 +820,12 @@ export function createWorldSystem({ scene, matLib, state, config }) {
           trunkH * 0.75 + Math.random() * 1.4,
           (Math.random() - 0.5) * 1.4
         )
-        foliage.scale.set(1 + Math.random() * 0.3, 0.75 + Math.random() * 0.3, 1 + Math.random() * 0.3)
+        const foliageRadius = 1.2 + Math.random() * 0.7
+        foliage.scale.set(
+          foliageRadius * (1 + Math.random() * 0.3),
+          foliageRadius * (0.75 + Math.random() * 0.3),
+          foliageRadius * (1 + Math.random() * 0.3)
+        )
         group.add(foliage)
       }
     }
@@ -837,7 +833,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     // 树根
     for (let i = 0; i < 3; i++) {
       const root = enableShadow(
-        new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.12, 0.7), matLib.dirt),
+        new THREE.Mesh(sharedGeometry.root, matLib.dirt),
         false,
         true
       )
@@ -850,7 +846,6 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     scene.add(group)
     // 树干底径约 0.32~0.47，碰撞取躯干
     state.obstacles.push({
-      mesh: group,
       type: 'tree',
       shape: 'circle',
       x,

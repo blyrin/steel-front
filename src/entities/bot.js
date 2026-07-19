@@ -1,6 +1,44 @@
 import * as THREE from 'three'
 import { rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
 
+const BOT_GEOMETRY = {
+  leg: new THREE.BoxGeometry(0.17, 0.72, 0.2),
+  boot: new THREE.BoxGeometry(0.16, 0.14, 0.28),
+  torso: new THREE.BoxGeometry(0.48, 0.68, 0.28),
+  chest: new THREE.BoxGeometry(0.46, 0.28, 0.3),
+  belt: new THREE.BoxGeometry(0.5, 0.07, 0.3),
+  pouch: new THREE.BoxGeometry(0.1, 0.12, 0.08),
+  pack: new THREE.BoxGeometry(0.34, 0.38, 0.16),
+  patch: new THREE.BoxGeometry(0.1, 0.16, 0.04),
+  stripe: new THREE.BoxGeometry(0.26, 0.07, 0.3),
+  sash: new THREE.BoxGeometry(0.1, 0.52, 0.3),
+  neck: new THREE.CylinderGeometry(0.07, 0.08, 0.1, 8),
+  head: new THREE.BoxGeometry(0.24, 0.26, 0.24),
+  allyHelmet: new THREE.SphereGeometry(0.175, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.55),
+  axisHelmet: new THREE.SphereGeometry(0.17, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.58),
+  allyBrim: new THREE.CylinderGeometry(0.2, 0.23, 0.03, 10),
+  allyNet: new THREE.BoxGeometry(0.08, 0.04, 0.08),
+  axisRear: new THREE.BoxGeometry(0.28, 0.08, 0.16),
+  axisSkirt: new THREE.BoxGeometry(0.06, 0.12, 0.18),
+  arm: new THREE.BoxGeometry(0.13, 0.58, 0.15),
+  hand: new THREE.BoxGeometry(0.1, 0.1, 0.1),
+  rifleBarrel: new THREE.CylinderGeometry(0.018, 0.022, 0.72, 8),
+  rifleBody: new THREE.BoxGeometry(0.045, 0.05, 0.35),
+  rifleStock: new THREE.BoxGeometry(0.055, 0.07, 0.28),
+  markerPole: new THREE.CylinderGeometry(0.02, 0.02, 0.28, 6),
+  markerPlate: new THREE.BoxGeometry(0.22, 0.22, 0.04),
+  markerCore: new THREE.BoxGeometry(0.1, 0.1, 0.05),
+  markerTriangle: new THREE.ConeGeometry(0.14, 0.22, 3),
+  markerDot: new THREE.SphereGeometry(0.045, 6, 4),
+}
+
+const BOT_MARKER_MATERIALS = {
+  allies: new THREE.MeshBasicMaterial({ color: 0x5ad040 }),
+  axis: new THREE.MeshBasicMaterial({ color: 0xff5a3a }),
+  alliesCore: new THREE.MeshBasicMaterial({ color: 0xd8f0c8 }),
+  axisCore: new THREE.MeshBasicMaterial({ color: 0xffe0c0 }),
+}
+
 export class Bot {
   constructor(team, spawnPosition, services) {
     Object.assign(this, services)
@@ -33,6 +71,12 @@ export class Bot {
     this.kills = 0
     this.deaths = 0
     this.radius = 0.4
+    this._seeOrigin = new THREE.Vector3()
+    this._seeDir = new THREE.Vector3()
+    this._moveDirection = new THREE.Vector3()
+    this._forwardDirection = new THREE.Vector3()
+    this._coverTarget = new THREE.Vector3()
+    this.targetVisible = false
     this.name = this.generateName()
     this.buildModel()
     this.scene.add(this.group)
@@ -226,11 +270,12 @@ export class Bot {
     const uniform = isAlly ? this.matLib.allyUniform : this.matLib.axisUniform
     const helmetMat = isAlly ? this.matLib.helmetAlly : this.matLib.helmetAxis
     const accent = isAlly ? this.matLib.allyAccent : this.matLib.axisAccent
-    const teamColor = isAlly ? 0x5ad040 : 0xff5a3a
+    const markerMat = isAlly ? BOT_MARKER_MATERIALS.allies : BOT_MARKER_MATERIALS.axis
+    const markerCoreMat = isAlly ? BOT_MARKER_MATERIALS.alliesCore : BOT_MARKER_MATERIALS.axisCore
     const bootMat = this.matLib.metalDark
     const packMat = isAlly ? this.matLib.allyUniform : this.matLib.axisUniform
 
-    const legGeometry = new THREE.BoxGeometry(0.17, 0.72, 0.2)
+    const legGeometry = BOT_GEOMETRY.leg
     this.leftLeg = new THREE.Mesh(legGeometry, uniform)
     this.leftLeg.position.set(-0.12, 0.46, 0)
     this.leftLeg.castShadow = true
@@ -243,120 +288,120 @@ export class Bot {
     this.group.add(this.rightLeg)
 
     for (const side of [-1, 1]) {
-      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.28), bootMat)
+      const boot = new THREE.Mesh(BOT_GEOMETRY.boot, bootMat)
       boot.position.set(side * 0.12, 0.08, 0.04)
-      boot.castShadow = true
+      boot.castShadow = false
       this.group.add(boot)
     }
 
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.68, 0.28), uniform)
+    const torso = new THREE.Mesh(BOT_GEOMETRY.torso, uniform)
     torso.position.set(0, 1.16, 0)
     torso.castShadow = true
     torso.receiveShadow = true
     this.group.add(torso)
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.28, 0.3), uniform)
+    const chest = new THREE.Mesh(BOT_GEOMETRY.chest, uniform)
     chest.position.set(0, 1.35, 0.02)
-    chest.castShadow = true
+    chest.castShadow = false
     this.group.add(chest)
-    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.07, 0.3), bootMat)
+    const belt = new THREE.Mesh(BOT_GEOMETRY.belt, bootMat)
     belt.position.set(0, 0.86, 0)
     this.group.add(belt)
     for (const side of [-1, 1]) {
-      const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.08), this.matLib.wood)
+      const pouch = new THREE.Mesh(BOT_GEOMETRY.pouch, this.matLib.wood)
       pouch.position.set(side * 0.16, 0.86, 0.16)
       this.group.add(pouch)
     }
 
-    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.38, 0.16), packMat)
+    const pack = new THREE.Mesh(BOT_GEOMETRY.pack, packMat)
     pack.position.set(0, 1.22, 0.2)
     pack.castShadow = true
     this.group.add(pack)
 
-    const patchLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.04), accent)
+    const patchLeft = new THREE.Mesh(BOT_GEOMETRY.patch, accent)
     patchLeft.position.set(-0.26, 1.34, 0)
     this.group.add(patchLeft)
-    const patchRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.04), accent)
+    const patchRight = new THREE.Mesh(BOT_GEOMETRY.patch, accent)
     patchRight.position.set(0.26, 1.34, 0)
     this.group.add(patchRight)
     if (isAlly) {
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.07, 0.3), accent)
+      const stripe = new THREE.Mesh(BOT_GEOMETRY.stripe, accent)
       stripe.position.set(0, 1.28, 0)
       this.group.add(stripe)
     } else {
-      const sash = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.52, 0.3), accent)
+      const sash = new THREE.Mesh(BOT_GEOMETRY.sash, accent)
       sash.position.set(0.08, 1.18, 0)
       sash.rotation.z = 0.45
       this.group.add(sash)
     }
 
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.1, 8), this.matLib.skin)
+    const neck = new THREE.Mesh(BOT_GEOMETRY.neck, this.matLib.skin)
     neck.position.set(0, 1.52, 0)
     this.group.add(neck)
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.26, 0.24), this.matLib.skin)
+    const head = new THREE.Mesh(BOT_GEOMETRY.head, this.matLib.skin)
     head.position.set(0, 1.66, 0)
     head.castShadow = true
     this.group.add(head)
     if (isAlly) {
       const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(0.175, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        BOT_GEOMETRY.allyHelmet,
         helmetMat
       )
       dome.position.set(0, 1.78, 0)
       dome.scale.set(1.08, 0.88, 1.12)
       dome.castShadow = true
       this.group.add(dome)
-      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.23, 0.03, 14), helmetMat)
+      const brim = new THREE.Mesh(BOT_GEOMETRY.allyBrim, helmetMat)
       brim.position.set(0, 1.72, 0)
       this.group.add(brim)
-      const net = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.08), this.matLib.allyAccent)
+      const net = new THREE.Mesh(BOT_GEOMETRY.allyNet, this.matLib.allyAccent)
       net.position.set(0, 1.9, 0)
       this.group.add(net)
     } else {
       const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(0.17, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.58),
+        BOT_GEOMETRY.axisHelmet,
         helmetMat
       )
       dome.position.set(0, 1.8, 0)
       dome.scale.set(1.08, 0.92, 1.18)
       dome.castShadow = true
       this.group.add(dome)
-      const rear = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.16), helmetMat)
+      const rear = new THREE.Mesh(BOT_GEOMETRY.axisRear, helmetMat)
       rear.position.set(0, 1.72, 0.12)
       this.group.add(rear)
       for (const side of [-1, 1]) {
-        const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.18), helmetMat)
+        const skirt = new THREE.Mesh(BOT_GEOMETRY.axisSkirt, helmetMat)
         skirt.position.set(side * 0.16, 1.72, 0.02)
         this.group.add(skirt)
       }
     }
 
-    const armGeometry = new THREE.BoxGeometry(0.13, 0.58, 0.15)
+    const armGeometry = BOT_GEOMETRY.arm
     this.leftArm = new THREE.Mesh(armGeometry, uniform)
     this.leftArm.position.set(-0.32, 1.16, 0)
-    this.leftArm.castShadow = true
+    this.leftArm.castShadow = false
     this.group.add(this.leftArm)
     this.rightArm = new THREE.Mesh(armGeometry, uniform)
     this.rightArm.position.set(0.32, 1.16, 0)
-    this.rightArm.castShadow = true
+    this.rightArm.castShadow = false
     this.group.add(this.rightArm)
     for (const side of [-1, 1]) {
-      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), this.matLib.skin)
+      const hand = new THREE.Mesh(BOT_GEOMETRY.hand, this.matLib.skin)
       hand.position.set(side * 0.32, 0.84, 0.02)
       this.group.add(hand)
     }
 
     this.rifle = new THREE.Group()
     const rifleBarrel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.018, 0.022, 0.72, 8),
+      BOT_GEOMETRY.rifleBarrel,
       this.matLib.metal
     )
     rifleBarrel.rotation.x = Math.PI / 2
     rifleBarrel.position.set(0, 0.02, -0.35)
     this.rifle.add(rifleBarrel)
-    const rifleBody = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.35), this.matLib.metalDark)
+    const rifleBody = new THREE.Mesh(BOT_GEOMETRY.rifleBody, this.matLib.metalDark)
     rifleBody.position.set(0, 0.01, -0.05)
     this.rifle.add(rifleBody)
-    const rifleStock = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.07, 0.28), this.matLib.wood)
+    const rifleStock = new THREE.Mesh(BOT_GEOMETRY.rifleStock, this.matLib.wood)
     rifleStock.position.set(0, -0.01, 0.22)
     this.rifle.add(rifleStock)
     this.rifle.position.set(0.22, 1.12, -0.18)
@@ -364,37 +409,37 @@ export class Bot {
 
     this.marker = new THREE.Group()
     const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.02, 0.02, 0.28, 6),
-      new THREE.MeshBasicMaterial({ color: teamColor })
+      BOT_GEOMETRY.markerPole,
+      markerMat
     )
     pole.position.y = 0.1
     this.marker.add(pole)
     if (isAlly) {
       const plate = new THREE.Mesh(
-        new THREE.BoxGeometry(0.22, 0.22, 0.04),
-        new THREE.MeshBasicMaterial({ color: teamColor })
+        BOT_GEOMETRY.markerPlate,
+        markerMat
       )
       plate.position.y = 0.32
       plate.rotation.z = Math.PI / 4
       this.marker.add(plate)
       const core = new THREE.Mesh(
-        new THREE.BoxGeometry(0.1, 0.1, 0.05),
-        new THREE.MeshBasicMaterial({ color: 0xd8f0c8 })
+        BOT_GEOMETRY.markerCore,
+        markerCoreMat
       )
       core.position.y = 0.32
       core.rotation.z = Math.PI / 4
       this.marker.add(core)
     } else {
       const triangle = new THREE.Mesh(
-        new THREE.ConeGeometry(0.14, 0.22, 3),
-        new THREE.MeshBasicMaterial({ color: teamColor })
+        BOT_GEOMETRY.markerTriangle,
+        markerMat
       )
       triangle.position.y = 0.34
       triangle.rotation.y = Math.PI / 6
       this.marker.add(triangle)
       const core = new THREE.Mesh(
-        new THREE.SphereGeometry(0.045, 6, 4),
-        new THREE.MeshBasicMaterial({ color: 0xffe0c0 })
+        BOT_GEOMETRY.markerDot,
+        markerCoreMat
       )
       core.position.y = 0.3
       this.marker.add(core)
@@ -424,9 +469,8 @@ export class Bot {
       const forwardX = -Math.sin(this.yaw)
       const forwardZ = -Math.cos(this.yaw)
       if (forwardX * dirX + forwardZ * dirZ < 0.3 && distance > 5) return false
-      // 复用临时向量，避免每帧分配
-      const origin = this._seeOrigin || (this._seeOrigin = new THREE.Vector3())
-      const direction = this._seeDir || (this._seeDir = new THREE.Vector3())
+      const origin = this._seeOrigin
+      const direction = this._seeDir
       origin.set(this.position.x, 1.6, this.position.z)
       direction.set(dirX, 0, dirZ)
       for (const obstacle of this.gameState.obstacles) {
@@ -440,19 +484,19 @@ export class Bot {
 
   findNearestEnemy() {
     let nearest = null
-    let minDistance = Infinity
+    let minDistanceSq = Infinity
     for (const bot of this.gameState.bots) {
       if (bot.team === this.team || !bot.alive) continue
-      const distance = this.position.distanceTo(bot.position)
-      if (distance < minDistance && this.canSee(bot)) {
-        minDistance = distance
+      const distanceSq = this.position.distanceToSquared(bot.position)
+      if (distanceSq < minDistanceSq && this.canSee(bot)) {
+        minDistanceSq = distanceSq
         nearest = bot
       }
     }
     const player = this.gameState.player
     if (player.alive && player.team !== this.team) {
-      const distance = this.position.distanceTo(player.position)
-      if (distance < minDistance && this.canSee(player)) nearest = player
+      const distanceSq = this.position.distanceToSquared(player.position)
+      if (distanceSq < minDistanceSq && this.canSee(player)) nearest = player
     }
     return nearest
   }
@@ -488,13 +532,18 @@ export class Bot {
         this.target = enemy
         this.reactionTimer = this.config.botReactionTime * (1.5 - this.botSkill)
       }
-      this.lastSeenTarget = enemy.position.clone()
+      if (!this.lastSeenTarget) this.lastSeenTarget = new THREE.Vector3()
+      this.lastSeenTarget.copy(enemy.position)
       this.lastSeenTime = this.stateTimer
+      this.targetVisible = true
       if (this.stateName !== 'engage' && this.reactionTimer <= 0) this.stateName = 'engage'
-    } else if (this.stateName === 'engage' && this.stateTimer - this.lastSeenTime > 3) {
-      this.stateName = 'alert'
-      this.searchPos = this.lastSeenTarget?.clone() || null
-      this.stateTimer = 0
+    } else {
+      this.targetVisible = false
+      if (this.stateName === 'engage' && this.stateTimer - this.lastSeenTime > 3) {
+        this.stateName = 'alert'
+        this.searchPos = this.lastSeenTarget?.clone() || null
+        this.stateTimer = 0
+      }
     }
     if (this.reactionTimer > 0) this.reactionTimer -= dt
     if (this.stateName === 'patrol') {
@@ -579,21 +628,18 @@ export class Bot {
     }
     if (distance > 50) this.moveToward(this.target.position, 4.5)
     else if (distance < 14) {
-      const away = new THREE.Vector3()
-        .subVectors(this.position, this.target.position)
-        .setY(0)
-        .normalize()
+      const away = this._moveDirection.subVectors(this.position, this.target.position).setY(0).normalize()
       this.velocity.x = away.x * 4
       this.velocity.z = away.z * 4
     } else {
-      const side = new THREE.Vector3(-deltaZ, 0, deltaX).normalize()
+      const side = this._moveDirection.set(-deltaZ, 0, deltaX).normalize()
       const sideDirection = Math.sin(this.stateTimer * 0.8) > 0 ? 1 : -1
       this.velocity.x = side.x * 3 * sideDirection
       this.velocity.z = side.z * 3 * sideDirection
     }
     if (
       this.reactionTimer <= 0 &&
-      this.canSee(this.target) &&
+      this.targetVisible &&
       !this.reloading &&
       this.fireTimer > 0.7 + (1 - this.botSkill) * 0.9
     ) {
@@ -607,7 +653,7 @@ export class Bot {
       this.stateName = 'engage'
       return
     }
-    const target = new THREE.Vector3(this.coverPos.x, 0, this.coverPos.z)
+    const target = this._coverTarget.set(this.coverPos.x, 0, this.coverPos.z)
     if (this.position.distanceTo(target) < 1.5) {
       this.stateName = 'engage'
       this.stateTimer = 0
@@ -621,7 +667,7 @@ export class Bot {
     this.moveToward(target, 4.5)
     if (
       this.target &&
-      this.canSee(this.target) &&
+      this.targetVisible &&
       this.reactionTimer <= 0 &&
       !this.reloading &&
       this.fireTimer > 1.0
@@ -638,12 +684,12 @@ export class Bot {
     }
     const deltaX = this.target.position.x - this.position.x
     const deltaZ = this.target.position.z - this.position.z
-    const side = new THREE.Vector3(-deltaZ, 0, deltaX).normalize().multiplyScalar(this.flankDir)
-    const forward = new THREE.Vector3(deltaX, 0, deltaZ).normalize().multiplyScalar(-0.3)
+    const side = this._moveDirection.set(-deltaZ, 0, deltaX).normalize().multiplyScalar(this.flankDir)
+    const forward = this._forwardDirection.set(deltaX, 0, deltaZ).normalize().multiplyScalar(-0.3)
     this.velocity.x = (side.x + forward.x) * 4
     this.velocity.z = (side.z + forward.z) * 4
     if (
-      this.canSee(this.target) &&
+      this.targetVisible &&
       this.reactionTimer <= 0 &&
       !this.reloading &&
       this.fireTimer > 0.85
@@ -708,7 +754,8 @@ export class Bot {
     this.health -= amount
     if (this.stateName === 'patrol' && attacker) {
       this.target = attacker
-      this.lastSeenTarget = attacker.position.clone()
+      if (!this.lastSeenTarget) this.lastSeenTarget = new THREE.Vector3()
+      this.lastSeenTarget.copy(attacker.position)
       this.lastSeenTime = this.stateTimer
       this.stateName = 'engage'
       this.reactionTimer = this.config.botReactionTime * 0.5
@@ -773,7 +820,7 @@ export class Bot {
 
   handleCollisions() {
     for (const obstacle of this.gameState.obstacles) {
-      if (['ground', 'crater', 'wire'].includes(obstacle.type)) continue
+      if (obstacle.type === 'ground' || obstacle.type === 'crater' || obstacle.type === 'wire') continue
       resolveObstacleCollision(this.position, this.radius, obstacle)
     }
   }

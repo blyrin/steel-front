@@ -72,8 +72,8 @@ export function createGame() {
   }
 
   function checkVictory() {
-    if (state.alliesScore >= CFG.killTarget) hud.showEndScreen(true, CFG)
-    else if (state.axisScore >= CFG.killTarget) hud.showEndScreen(false, CFG)
+    if (state.alliesScore >= CFG.killTarget) hud.showEndScreen(true)
+    else if (state.axisScore >= CFG.killTarget) hud.showEndScreen(false)
   }
 
   function initGame() {
