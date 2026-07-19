@@ -1,0 +1,1162 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  cursor: default;
+  font-family:
+    'Russo One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    system-ui,
+    sans-serif;
+  color: #ece6d6;
+}
+
+canvas {
+  display: block;
+}
+
+/* —— 共享按钮 —— */
+.btn {
+  padding: 12px 44px;
+  font-family: 'Russo One', sans-serif;
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: #f0d78a;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(212, 168, 73, 0.45);
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    transform 0.18s,
+    box-shadow 0.18s;
+  min-width: 220px;
+}
+.btn:hover {
+  background: rgba(212, 168, 73, 0.14);
+  border-color: rgba(232, 200, 106, 0.85);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.quit-btn {
+  margin-top: 10px;
+  color: #c8b89a;
+  border-color: rgba(160, 140, 110, 0.35);
+  min-width: 220px;
+}
+.quit-btn:hover {
+  color: #ece6d6;
+  border-color: rgba(200, 180, 140, 0.55);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* —— 加载 —— */
+#loader {
+  position: fixed;
+  inset: 0;
+  background: #070706;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  transition: opacity 0.8s;
+}
+#loader h1 {
+  font-family:
+    'Black Ops One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    sans-serif;
+  font-size: 56px;
+  color: #e0c06a;
+  letter-spacing: 8px;
+  margin-bottom: 6px;
+}
+#loader h2 {
+  font-size: 12px;
+  color: rgba(200, 180, 140, 0.45);
+  letter-spacing: 8px;
+  margin-bottom: 40px;
+}
+.bar-wrap {
+  width: min(320px, 70vw);
+  height: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  border-radius: 1px;
+}
+#bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #a07830, #e8c86a);
+  transition: width 0.2s;
+}
+#loadStatus {
+  margin-top: 14px;
+  font-size: 11px;
+  color: rgba(180, 160, 120, 0.45);
+  letter-spacing: 2px;
+}
+.cog {
+  width: 36px;
+  height: 36px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-top-color: #d4a849;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 28px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* —— 主菜单 —— */
+#menu {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 150;
+  backdrop-filter: blur(6px);
+}
+#menu.show {
+  display: flex;
+}
+#menu h1 {
+  font-family:
+    'Black Ops One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    sans-serif;
+  font-size: 84px;
+  color: #e8c86a;
+  letter-spacing: 10px;
+  text-shadow: 0 2px 40px rgba(212, 168, 73, 0.25);
+  margin-bottom: 4px;
+}
+#menu .sub {
+  font-size: 13px;
+  color: rgba(200, 180, 140, 0.5);
+  letter-spacing: 10px;
+  margin-bottom: 44px;
+}
+#menu .btn {
+  min-width: 260px;
+}
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(320px, 80vw);
+  margin: 28px 0 0;
+}
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: rgba(200, 180, 140, 0.75);
+  font-size: 11px;
+  letter-spacing: 2px;
+  pointer-events: auto;
+}
+.setting span {
+  text-transform: uppercase;
+}
+.setting input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(180, 150, 90, 0.25);
+  outline: none;
+  cursor: pointer;
+}
+.setting input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e8c86a;
+  box-shadow: 0 0 10px rgba(232, 200, 106, 0.35);
+  cursor: pointer;
+}
+.setting input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: #e8c86a;
+  box-shadow: 0 0 10px rgba(232, 200, 106, 0.35);
+  cursor: pointer;
+}
+#menu .info {
+  margin-top: 36px;
+  color: rgba(180, 165, 135, 0.55);
+  font-size: 11px;
+  line-height: 2;
+  text-align: center;
+  letter-spacing: 1px;
+  max-width: 640px;
+}
+#menu .info span {
+  color: rgba(232, 200, 106, 0.9);
+}
+#menu .battle-info {
+  margin-top: 12px;
+  color: rgba(160, 145, 115, 0.4);
+}
+
+/* —— HUD 壳 —— */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  display: none;
+}
+#hud.show {
+  display: block;
+}
+
+/* —— 顶部分数 —— */
+#topBar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 300px;
+  padding: 8px 20px 10px;
+}
+.team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.allies {
+  color: #8fd06a;
+}
+.axis {
+  color: #e07a55;
+}
+.vs {
+  color: rgba(180, 160, 120, 0.35);
+  font-size: 10px;
+  letter-spacing: 4px;
+}
+.score {
+  font-family: 'Black Ops One', sans-serif;
+  font-size: 30px;
+  min-width: 48px;
+  text-align: center;
+  line-height: 1;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.75);
+}
+.score-target,
+.axis-score {
+  text-align: center;
+}
+.axis-score {
+  text-align: right;
+}
+.team-name {
+  font-size: 11px;
+  letter-spacing: 2px;
+  margin-top: 2px;
+  opacity: 0.85;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+.allies-name {
+  color: #8fd06a;
+}
+.axis-name {
+  color: #e07a55;
+}
+#targetKill {
+  color: rgba(200, 180, 140, 0.45);
+  font-size: 10px;
+  letter-spacing: 1px;
+  margin-top: 3px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+
+/* —— 生命 —— */
+#healthWrap {
+  position: absolute;
+  left: 22px;
+  bottom: 22px;
+  width: 260px;
+}
+.label {
+  font-size: 10px;
+  color: rgba(200, 180, 140, 0.45);
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+#healthBar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+#healthFill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #8a1828, #e85a4a);
+  border-radius: 1px;
+  transition: width 0.25s ease-out;
+  box-shadow: 0 0 10px rgba(200, 50, 40, 0.25);
+}
+#healthFill.low {
+  background: linear-gradient(90deg, #6a0a0a, #ff3030);
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+#healthText {
+  position: static;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 1px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+
+/* —— 弹药 —— */
+#ammoWrap {
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
+  min-width: 140px;
+  text-align: right;
+}
+#weaponName {
+  font-size: 11px;
+  color: rgba(232, 200, 106, 0.85);
+  letter-spacing: 2px;
+  margin-bottom: 2px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+}
+#ammoDisplay {
+  font-family: 'Black Ops One', sans-serif;
+  font-size: 46px;
+  color: #f4ecd8;
+  line-height: 1;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.85);
+}
+#ammoDisplay .reserve {
+  font-size: 18px;
+  color: rgba(200, 180, 140, 0.45);
+}
+#fireMode {
+  font-size: 10px;
+  color: rgba(180, 160, 120, 0.4);
+  letter-spacing: 1px;
+  margin-top: 2px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+#lowAmmo {
+  position: absolute;
+  bottom: 110px;
+  right: 22px;
+  color: #ff8a55;
+  font-size: 11px;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  text-align: right;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+#lowAmmo.show {
+  opacity: 1;
+  animation: blink 1s infinite;
+}
+
+/* —— 准星 / 命中 —— */
+#crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--ch-size, 36px);
+  height: var(--ch-size, 36px);
+  --ch-gap: 8px;
+  --ch-len: 7px;
+  --ch-thick: 2px;
+  transition:
+    width 0.08s linear,
+    height 0.08s linear,
+    opacity 0.2s;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+.ch {
+  position: absolute;
+  background: rgba(240, 230, 190, 0.92);
+  opacity: 0.95;
+}
+.ch-t {
+  top: calc(50% - var(--ch-gap) - var(--ch-len));
+  left: 50%;
+  width: var(--ch-thick);
+  height: var(--ch-len);
+  transform: translateX(-50%);
+}
+.ch-b {
+  top: calc(50% + var(--ch-gap));
+  left: 50%;
+  width: var(--ch-thick);
+  height: var(--ch-len);
+  transform: translateX(-50%);
+}
+.ch-l {
+  left: calc(50% - var(--ch-gap) - var(--ch-len));
+  top: 50%;
+  width: var(--ch-len);
+  height: var(--ch-thick);
+  transform: translateY(-50%);
+}
+.ch-r {
+  left: calc(50% + var(--ch-gap));
+  top: 50%;
+  width: var(--ch-len);
+  height: var(--ch-thick);
+  transform: translateY(-50%);
+}
+.ch-c {
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.95);
+}
+#crosshair.aiming,
+#crosshair.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+#crosshair.hidden {
+  transition: opacity 0.3s;
+}
+#healthWrap.hidden,
+#ammoWrap.hidden,
+#lowAmmo.hidden,
+#controls.hidden {
+  display: none;
+}
+#hitMarker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+}
+#hitMarker::before,
+#hitMarker::after {
+  content: '';
+  position: absolute;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+}
+#hitMarker::before {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  transform: translateY(-50%);
+}
+#hitMarker::after {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+}
+#hitMarker.show {
+  animation: hit 0.28s;
+}
+@keyframes hit {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(45deg) scale(1.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(45deg) scale(0.7);
+  }
+}
+
+/* —— 小地图 —— */
+#minimap {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 148px;
+  height: 148px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+#minimap canvas {
+  width: 100%;
+  height: 100%;
+}
+#minimap::before {
+  content: 'N';
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  font-size: 9px;
+  color: rgba(232, 200, 106, 0.75);
+  letter-spacing: 1px;
+  text-shadow: 0 1px 4px #000;
+  pointer-events: none;
+}
+#minimap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, transparent 62%, rgba(0, 0, 0, 0.4));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* —— 击杀播报 —— */
+#killFeed {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.kill-msg {
+  background: rgba(0, 0, 0, 0.32);
+  border-left: 2px solid rgba(212, 168, 73, 0.55);
+  padding: 5px 10px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  animation: slideIn 0.22s ease-out;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+.kill-msg.player {
+  border-left-color: #ff7a45;
+  background: rgba(40, 12, 6, 0.4);
+}
+.kill-msg .me {
+  color: #ff9a6a;
+}
+.kill-msg .ally {
+  color: #8fd06a;
+}
+.kill-msg .enemy {
+  color: #e07a55;
+}
+@keyframes slideIn {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* —— 受击效果 —— */
+#damageVignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 200px rgba(180, 20, 20, 0);
+  transition: box-shadow 0.4s;
+}
+#damageVignette.hit {
+  box-shadow: inset 0 0 180px rgba(180, 20, 20, 0.65);
+}
+#dirDamage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 380px;
+  height: 380px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#dirDamage.show {
+  opacity: 1;
+}
+.dir-arrow {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 22px solid rgba(220, 40, 40, 0.8);
+  filter: drop-shadow(0 0 8px rgba(220, 40, 40, 0.5));
+}
+
+/* —— 中央提示 —— */
+#centerMsg {
+  position: absolute;
+  top: 48%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  font-size: 14px;
+  color: rgba(232, 200, 106, 0.95);
+  letter-spacing: 3px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#centerMsg.show {
+  opacity: 1;
+}
+#centerMsg .big {
+  font-family:
+    'Black Ops One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    sans-serif;
+  font-size: 30px;
+  color: #ff8a55;
+  display: block;
+  margin-bottom: 4px;
+  letter-spacing: 3px;
+}
+
+/* —— 死亡 —— */
+#deathScreen {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 65;
+  backdrop-filter: blur(2px);
+}
+#deathScreen.show {
+  display: flex;
+  animation: fadeIn 0.35s;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+#deathScreen h2 {
+  font-family:
+    'Black Ops One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    sans-serif;
+  font-size: 48px;
+  color: #e04050;
+  letter-spacing: 8px;
+  text-shadow: 0 0 28px rgba(196, 30, 58, 0.4);
+  margin-bottom: 12px;
+}
+.killer-info {
+  font-size: 14px;
+  color: rgba(200, 185, 155, 0.75);
+  margin-bottom: 6px;
+  letter-spacing: 2px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+.killer-info .kname {
+  color: #e07a55;
+}
+
+/* —— 部署界面 —— */
+#deployScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: none;
+  pointer-events: none;
+}
+#deployScreen.show {
+  display: block;
+}
+#spawnMarkers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.spawn-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 72px;
+  padding: 8px 10px 7px;
+  border: 1px solid rgba(212, 168, 73, 0.75);
+  border-radius: 3px;
+  background: rgba(8, 7, 5, 0.78);
+  color: #e8c86a;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+}
+.spawn-marker:hover {
+  background: rgba(30, 24, 12, 0.9);
+  border-color: rgba(232, 200, 106, 0.95);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  z-index: 2;
+}
+.spawn-marker.contested {
+  border-color: rgba(224, 90, 70, 0.85);
+  color: #f0b090;
+}
+.spawn-marker.contested .spawn-marker-id {
+  color: #e07a55;
+}
+.spawn-marker.contested .spawn-marker-status {
+  color: #e07a55;
+}
+.spawn-marker-id {
+  font-family: 'Black Ops One', sans-serif;
+  font-size: 20px;
+  line-height: 1;
+  color: #d4a849;
+}
+.spawn-marker-name {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: rgba(230, 215, 180, 0.9);
+  white-space: nowrap;
+}
+.spawn-marker-status {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: rgba(122, 184, 90, 0.9);
+}
+
+/* —— 部署过渡 —— */
+#deployVignette {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 rgba(0, 0, 0, 0);
+  transition: box-shadow 0.5s;
+}
+#deployVignette.landing {
+  box-shadow: inset 0 0 180px rgba(0, 0, 0, 0.85);
+}
+
+/* —— 结束 / 暂停 —— */
+#endScreen {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 95;
+  backdrop-filter: blur(8px);
+}
+#endScreen.show {
+  display: flex;
+}
+#endScreen h2 {
+  font-family:
+    'Black Ops One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    sans-serif;
+  font-size: 64px;
+  letter-spacing: 10px;
+  margin-bottom: 24px;
+}
+#endScreen h2.win {
+  color: #6ec85a;
+  text-shadow: 0 0 28px rgba(90, 180, 80, 0.35);
+}
+#endScreen h2.lose {
+  color: #e04050;
+  text-shadow: 0 0 28px rgba(196, 30, 58, 0.35);
+}
+#endStats {
+  padding: 18px 36px;
+  margin-bottom: 24px;
+  font-size: 13px;
+  line-height: 2.1;
+  color: rgba(200, 185, 155, 0.7);
+  letter-spacing: 1px;
+  text-align: center;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+#endStats .val {
+  color: #e0c06a;
+  font-family: 'Black Ops One', sans-serif;
+}
+#pauseScreen {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  backdrop-filter: blur(8px);
+}
+#pauseScreen.show {
+  display: flex;
+}
+#pauseScreen h2 {
+  font-family:
+    'Black Ops One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    sans-serif;
+  font-size: 42px;
+  color: #e0c06a;
+  letter-spacing: 8px;
+  margin-bottom: 12px;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.6);
+}
+#pauseScreen .settings {
+  margin: 0 0 24px;
+}
+#pauseScreen .btn,
+#endScreen .btn {
+  pointer-events: auto;
+}
+
+/* —— 底部操作提示 —— */
+#controls {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: 90%;
+  font-size: 9px;
+  color: rgba(180, 160, 120, 0.4);
+  letter-spacing: 1px;
+}
+#controls span {
+  padding: 3px 8px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+}
+#controls b {
+  color: rgba(232, 200, 106, 0.7);
+  font-weight: normal;
+}
+
+/* —— 击杀确认 —— */
+#killNotify {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%) scale(0.72);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 58;
+  min-width: 240px;
+}
+#killNotify.show {
+  opacity: 1;
+  animation: killPop 0.5s cubic-bezier(0.15, 1.35, 0.35, 1) forwards;
+}
+#killNotify.out {
+  animation: killOut 0.3s ease-in forwards;
+}
+@keyframes killPop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.6) translateY(12px);
+  }
+  55% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+@keyframes killOut {
+  to {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.92) translateY(8px);
+  }
+}
+#killNotify .kn-banner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 18px 6px;
+}
+#killNotify .kn-title {
+  font-family:
+    'Black Ops One',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    sans-serif;
+  font-size: 20px;
+  letter-spacing: 4px;
+  line-height: 1;
+  color: #ffe08a;
+  text-shadow:
+    0 0 16px rgba(255, 160, 40, 0.45),
+    0 2px 10px rgba(0, 0, 0, 0.9);
+}
+#killNotify.headshot .kn-title {
+  color: #ff6b4a;
+  text-shadow:
+    0 0 16px rgba(255, 60, 30, 0.5),
+    0 2px 10px rgba(0, 0, 0, 0.9);
+}
+#killNotify.multi .kn-title {
+  color: #fff2b0;
+  text-shadow:
+    0 0 18px rgba(255, 210, 80, 0.55),
+    0 2px 10px rgba(0, 0, 0, 0.9);
+}
+#killNotify .kn-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: rgba(232, 210, 160, 0.85);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+#killNotify .kn-sub b {
+  color: #ff9a55;
+}
+#killNotify .kn-streak {
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: rgba(212, 168, 73, 0.75);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+#killNotify .kn-flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 120%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255, 180, 60, 0.22), transparent 60%);
+  opacity: 0;
+  pointer-events: none;
+}
+#killNotify.show .kn-flash {
+  animation: killFlash 0.4s ease-out;
+}
+@keyframes killFlash {
+  0% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+}
+
+/* —— 响应式 —— */
+@media (max-width: 760px), (max-height: 620px) {
+  #loader h1 {
+    font-size: 34px;
+    letter-spacing: 5px;
+  }
+  #loader h2 {
+    font-size: 10px;
+    letter-spacing: 8px;
+    margin-bottom: 28px;
+  }
+  #menu {
+    padding: 20px;
+  }
+  #menu h1 {
+    font-size: 42px;
+    letter-spacing: 5px;
+    text-align: center;
+  }
+  #menu .sub {
+    font-size: 10px;
+    letter-spacing: 8px;
+    margin-bottom: 24px;
+  }
+  #menu .info {
+    margin-top: 20px;
+    font-size: 10px;
+    max-width: 560px;
+  }
+  #topBar {
+    top: 8px;
+    min-width: 240px;
+    gap: 12px;
+    padding: 4px 8px;
+  }
+  .score {
+    font-size: 24px;
+    min-width: 36px;
+  }
+  #targetKill {
+    letter-spacing: 1px;
+  }
+  #minimap {
+    width: 104px;
+    height: 104px;
+    top: 8px;
+    right: 8px;
+  }
+  #killFeed {
+    top: 8px;
+    left: 8px;
+    width: 170px;
+  }
+  .kill-msg {
+    padding: 4px 8px;
+    font-size: 9px;
+  }
+  #healthWrap {
+    left: 10px;
+    bottom: 10px;
+    width: min(220px, 42vw);
+  }
+  #ammoWrap {
+    right: 10px;
+    bottom: 10px;
+    min-width: 110px;
+  }
+  #ammoDisplay {
+    font-size: 34px;
+  }
+  #ammoDisplay .reserve {
+    font-size: 14px;
+  }
+  #controls {
+    display: none;
+  }
+  #lowAmmo {
+    bottom: 78px;
+    right: 10px;
+  }
+  .spawn-marker {
+    min-width: 64px;
+    padding: 6px 8px 5px;
+  }
+  .spawn-marker-id {
+    font-size: 16px;
+  }
+  .spawn-marker-name {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 540px) {
+  #menu h1 {
+    font-size: 32px;
+  }
+  #menu .sub {
+    letter-spacing: 5px;
+  }
+  #menu .info {
+    line-height: 1.6;
+  }
+  #topBar {
+    left: 8px;
+    transform: none;
+    min-width: 200px;
+  }
+  #minimap {
+    width: 88px;
+    height: 88px;
+  }
+  #killFeed {
+    top: 64px;
+  }
+  #healthWrap {
+    width: calc(100vw - 140px);
+  }
+  #weaponName {
+    letter-spacing: 2px;
+  }
+  .spawn-marker-name {
+    display: none;
+  }
+  #deathScreen h2,
+  #endScreen h2 {
+    font-size: 32px;
+    letter-spacing: 4px;
+    text-align: center;
+  }
+  #endStats {
+    max-width: 92vw;
+    padding: 12px;
+    font-size: 11px;
+  }
+}

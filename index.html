@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>钢铁前线 — STEEL FRONT</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #070706;
+        color: #ece6d6;
+        font-family: system-ui, sans-serif;
+      }
+      #menu,
+      #hud,
+      #deployScreen {
+        display: none;
+      }
+      #loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #070706;
+        z-index: 200;
+      }
+      #loader h1 {
+        margin: 0 0 6px;
+        font-size: 48px;
+        letter-spacing: 8px;
+        color: #e0c06a;
+        font-weight: 700;
+      }
+      #loader h2 {
+        margin: 0 0 36px;
+        font-size: 12px;
+        letter-spacing: 10px;
+        color: rgba(200, 180, 140, 0.45);
+        font-weight: 400;
+      }
+      .bar-wrap {
+        width: min(320px, 70vw);
+        height: 2px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      #bar {
+        height: 100%;
+        width: 0;
+        background: #d4a849;
+      }
+      #loadStatus {
+        margin-top: 14px;
+        font-size: 11px;
+        letter-spacing: 2px;
+        color: rgba(180, 160, 120, 0.45);
+      }
+      .cog {
+        width: 36px;
+        height: 36px;
+        margin-bottom: 28px;
+        border: 2px solid rgba(255, 255, 255, 0.08);
+        border-top-color: #d4a849;
+        border-radius: 50%;
+      }
+    </style>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Russo+One&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="loader">
+      <div class="cog"></div>
+      <h1>钢铁前线</h1>
+      <h2>S T E E L　F R O N T</h2>
+      <div class="bar-wrap"><div id="bar"></div></div>
+      <div id="loadStatus">正在装配武器...</div>
+    </div>
+
+    <div id="menu">
+      <h1>STEEL FRONT</h1>
+      <div class="sub">1 9 4 4 · 诺 曼 底</div>
+      <button class="btn" id="startBtn">进入战场</button>
+      <div class="settings">
+        <label class="setting">
+          <span>总音量</span>
+          <input type="range" id="menuVolume" min="0" max="100" value="62" />
+        </label>
+        <label class="setting">
+          <span>鼠标灵敏度</span>
+          <input type="range" id="menuSens" min="20" max="200" value="100" />
+        </label>
+      </div>
+      <div class="info">
+        <div>
+          <span>WASD</span> 移动　<span>SHIFT</span> 冲刺　<span>C</span> 切换蹲下　<span
+            >SPACE</span
+          >
+          跳跃
+        </div>
+        <div>
+          <span>左键</span> 射击　<span>R</span> 装弹　<span>右键</span> 瞄准　<span>F</span>
+          刺刀　<span>ESC</span> 暂停
+        </div>
+        <div class="battle-info">盟军部队与轴心国部队在法国北部村庄激战</div>
+      </div>
+    </div>
+
+    <div id="hud">
+      <div id="damageVignette"></div>
+      <div id="deployVignette"></div>
+      <div id="dirDamage"><div class="dir-arrow"></div></div>
+      <div id="topBar">
+        <div class="team allies">
+          <div>
+            <div class="score" id="alliesScore">0</div>
+            <div class="team-name allies-name">盟军</div>
+          </div>
+        </div>
+        <div class="score-target">
+          <div class="vs">对战</div>
+          <div id="targetKill">达到 100 杀</div>
+        </div>
+        <div class="team axis">
+          <div class="axis-score">
+            <div class="score" id="axisScore">0</div>
+            <div class="team-name axis-name">轴心</div>
+          </div>
+        </div>
+      </div>
+      <div id="crosshair">
+        <div class="ch ch-t"></div>
+        <div class="ch ch-b"></div>
+        <div class="ch ch-l"></div>
+        <div class="ch ch-r"></div>
+        <div class="ch ch-c"></div>
+      </div>
+      <div id="hitMarker"></div>
+      <div id="killNotify">
+        <div class="kn-flash"></div>
+        <div class="kn-banner">
+          <div class="kn-title" id="killTitle">击杀</div>
+        </div>
+        <div class="kn-sub" id="killSub"></div>
+        <div class="kn-streak" id="killStreak"></div>
+      </div>
+      <div id="healthWrap">
+        <div class="label">
+          <span>生命体征</span>
+          <span id="healthText">100 / 100</span>
+        </div>
+        <div id="healthBar">
+          <div id="healthFill"></div>
+        </div>
+      </div>
+      <div id="ammoWrap">
+        <div id="weaponName">M1 加兰德</div>
+        <div id="ammoDisplay">
+          <span id="ammoCur">8</span><span class="reserve"> / <span id="ammoRes">96</span></span>
+        </div>
+        <div id="fireMode">半自动</div>
+      </div>
+      <div id="lowAmmo">弹药不足 — 按 R 装弹</div>
+      <div id="minimap">
+        <canvas id="miniCanvas" width="180" height="180"></canvas>
+      </div>
+      <div id="killFeed"></div>
+      <div id="centerMsg"></div>
+      <div id="deathScreen">
+        <h2>阵亡</h2>
+        <div class="killer-info" id="killerInfo"></div>
+      </div>
+      <div id="pauseScreen">
+        <h2>已暂停</h2>
+        <div class="settings">
+          <label class="setting">
+            <span>总音量</span>
+            <input type="range" id="pauseVolume" min="0" max="100" value="62" />
+          </label>
+          <label class="setting">
+            <span>鼠标灵敏度</span>
+            <input type="range" id="pauseSens" min="20" max="200" value="100" />
+          </label>
+        </div>
+        <button class="btn" id="resumeBtn">继续战斗</button>
+        <button class="btn quit-btn" id="quitBtn">退出战场</button>
+      </div>
+      <div id="endScreen">
+        <h2 id="endTitle">胜利</h2>
+        <div id="endStats"></div>
+        <button class="btn" id="restartBtn">再战一场</button>
+      </div>
+      <div id="controls">
+        <span><b>WASD</b> 移动</span><span><b>SHIFT</b> 冲刺</span><span><b>C</b> 切换下蹲</span>
+        <span><b>左键</b> 射击</span><span><b>R</b> 装弹</span><span><b>右键</b> 瞄准</span
+        ><span><b>F</b> 刺刀</span><span><b>ESC</b> 暂停</span>
+      </div>
+    </div>
+
+    <div id="deployScreen">
+      <div id="spawnMarkers"></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
