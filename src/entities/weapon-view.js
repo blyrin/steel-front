@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 
 export class WeaponView {
-  constructor({ camera, matLib, audio }) {
+  constructor({ camera, matLib, audio, reloadDuration, emptyReloadDuration }) {
     this.camera = camera
     this.matLib = matLib
     this.audio = audio
@@ -11,7 +11,11 @@ export class WeaponView {
     this.reloadTime = -1
     this.meleeTime = -1
     this.meleeDuration = 0.58
-    this.reloadDuration = 2.2
+    this.reloadDuration = reloadDuration
+    this.emptyReloadDuration = emptyReloadDuration
+    this.emptyReload = false
+    this.boltLocksOpen = false
+    this.emptyEjectPlayed = false
     this.boltDuration = 0.36
     this.aiming = false
     this.swayX = 0
@@ -38,11 +42,6 @@ export class WeaponView {
     const wood = this.matLib.wood
     const metal = this.matLib.metal
     const dark = this.matLib.metalDark
-    const slingMat = new THREE.MeshStandardMaterial({
-      color: 0x3a2515,
-      roughness: 0.95,
-      metalness: 0.05,
-    })
     const brass = new THREE.MeshStandardMaterial({
       color: 0xb08a3a,
       roughness: 0.42,
@@ -74,38 +73,18 @@ export class WeaponView {
     forend.position.set(0, -0.014, -0.3)
     const handguard = add(new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.022, 0.34), wood))
     handguard.position.set(0, 0.022, -0.36)
-    for (const side of [-1, 1]) {
-      const sideWood = add(new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.03, 0.34), wood))
-      sideWood.position.set(side * 0.028, 0.004, -0.36)
-    }
-
     const receiver = add(new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.04, 0.22), blued))
     receiver.position.set(0, 0.01, -0.08)
     for (const side of [-1, 1]) {
       const plate = add(new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.038, 0.2), dark))
       plate.position.set(side * 0.026, 0.01, -0.08)
     }
-    const topFront = add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.01, 0.06), dark))
-    topFront.position.set(0, 0.034, -0.16)
-    const topRear = add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.01, 0.05), dark))
-    topRear.position.set(0, 0.034, 0)
     const magWell = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.06), dark))
     magWell.position.set(0, -0.012, -0.1)
-    const chamber = add(new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.015, 0.04, 10), blued))
-    chamber.rotation.x = Math.PI / 2
-    chamber.position.set(0, 0.014, -0.2)
 
     const barrel = add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.72, 12), blued))
     barrel.rotation.x = Math.PI / 2
     barrel.position.set(0, 0.016, -0.58)
-    const gasTube = add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.009, 0.48, 8), dark))
-    gasTube.rotation.x = Math.PI / 2
-    gasTube.position.set(0, -0.004, -0.52)
-    const gasLock = add(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.045, 10), dark))
-    gasLock.rotation.x = Math.PI / 2
-    gasLock.position.set(0, 0.004, -0.78)
-    const band = add(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.028), dark))
-    band.position.set(0, 0.006, -0.56)
     const muzzle = add(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.04, 10), dark))
     muzzle.rotation.x = Math.PI / 2
     muzzle.position.set(0, 0.016, -0.96)
@@ -145,14 +124,14 @@ export class WeaponView {
     }
 
     const rearSightBase = add(new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.01, 0.022), dark))
-    rearSightBase.position.set(0, 0.04, -0.04)
+    rearSightBase.position.set(0, 0.033, -0.04)
     const rearSightLeft = add(new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.02, 0.014), dark))
-    rearSightLeft.position.set(-0.012, 0.055, -0.04)
+    rearSightLeft.position.set(-0.012, 0.048, -0.04)
     const rearSightRight = add(new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.02, 0.014), dark))
-    rearSightRight.position.set(0.012, 0.055, -0.04)
+    rearSightRight.position.set(0.012, 0.048, -0.04)
     const rearSightFloor = add(new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.004, 0.014), dark))
-    rearSightFloor.position.set(0, 0.046, -0.04)
-    this.sightCenter = new THREE.Vector3(0, 0.055, -0.04)
+    rearSightFloor.position.set(0, 0.039, -0.04)
+    this.sightCenter = new THREE.Vector3(0, 0.048, -0.04)
 
     const triggerGuard = add(
       new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0035, 6, 12, Math.PI), dark)
@@ -169,35 +148,21 @@ export class WeaponView {
     this.mag.position.copy(this.magBase)
     const clipLip = add(new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.006, 0.046), metal), this.mag)
     clipLip.position.set(0, 0.016, 0)
-    this.reloadFlags = { open: false, insert: false, seat: false, close: false }
+    this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
 
     this.bolt = new THREE.Group()
-    const opRod = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.012, 0.09), metal)
+    const opRod = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.012, 0.36), metal)
+    opRod.position.z = -0.03
     this.bolt.add(opRod)
-    const opHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.009, 0.028, 8), metal)
-    opHandle.rotation.z = Math.PI / 2
-    opHandle.position.set(0.022, 0, 0.02)
-    this.bolt.add(opHandle)
     const opKnob = new THREE.Mesh(new THREE.SphereGeometry(0.01, 8, 6), dark)
-    opKnob.position.set(0.038, 0, 0.02)
+    opKnob.position.set(0.038, 0, 0.14)
     this.bolt.add(opKnob)
-    this.bolt.position.set(0.032, 0.014, -0.12)
+    this.bolt.position.set(0, 0.014, -0.19)
     this.group.add(this.bolt)
-    this.boltBase = new THREE.Vector3(0.032, 0.014, -0.12)
-
-    const sling = add(new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.003, 0.42), slingMat))
-    sling.position.set(-0.028, -0.044, -0.06)
-    sling.rotation.z = 0.12
-    sling.rotation.x = 0.05
-    const slingFront = add(new THREE.Mesh(new THREE.TorusGeometry(0.01, 0.0022, 4, 8), dark))
-    slingFront.position.set(0, -0.04, -0.44)
-    slingFront.rotation.y = Math.PI / 2
-    const slingRear = add(new THREE.Mesh(new THREE.TorusGeometry(0.01, 0.0022, 4, 8), dark))
-    slingRear.position.set(0, -0.048, 0.22)
-    slingRear.rotation.y = Math.PI / 2
+    this.boltBase = new THREE.Vector3(0, 0.014, -0.19)
 
     this.basePosition = new THREE.Vector3(0.18, -0.18, -0.28)
-    this.aimPosition = new THREE.Vector3(-this.sightCenter.x, -this.sightCenter.y, -0.48)
+    this.aimPosition = new THREE.Vector3(-this.sightCenter.x, -this.sightCenter.y - 0.006, -0.3)
     this.aimPitch = 0
     this.smoothPos.copy(this.basePosition)
     this.group.position.copy(this.basePosition)
@@ -212,7 +177,10 @@ export class WeaponView {
     this.boltTime = -1
     this.reloadTime = -1
     this.meleeTime = -1
-    this.reloadFlags = { open: false, insert: false, seat: false, close: false }
+    this.emptyReload = false
+    this.boltLocksOpen = false
+    this.emptyEjectPlayed = false
+    this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
     this.mag.visible = true
     this.mag.position.copy(this.magBase)
     this.mag.rotation.set(0, 0, 0)
@@ -295,29 +263,40 @@ export class WeaponView {
       const { x, y, z } = this.boltBase
       if (progress >= 1) {
         this.boltTime = -1
-        this.bolt.position.set(x, y, z)
+        this.bolt.position.set(x, y, z + (this.boltLocksOpen ? 0.06 : 0))
         this.bolt.rotation.set(0, 0, 0)
-        this.kickZ += 0.004
-        this.kickPitch += 0.004
+        if (!this.boltLocksOpen) {
+          this.kickZ += 0.004
+          this.kickPitch += 0.004
+        }
       } else {
         let phase
-        let roll
         if (progress < 0.28) {
           const time = progress / 0.28
-          const eased = 1 - Math.pow(1 - time, 3)
-          phase = eased
-          roll = eased * 0.35
-        } else if (progress < 0.48) {
+          phase = 1 - Math.pow(1 - time, 3)
+        } else if (this.boltLocksOpen || progress < 0.48) {
           phase = 1
-          roll = 0.35
         } else {
           const time = (progress - 0.48) / 0.52
-          const eased = 1 - Math.pow(1 - time, 2.4)
-          phase = 1 - eased
-          roll = 0.35 * (1 - eased)
+          phase = Math.pow(1 - time, 2.4)
         }
-        this.bolt.position.set(x, y, z + phase * 0.1)
-        this.bolt.rotation.set(0, 0, roll)
+        this.bolt.position.set(x, y, z + phase * 0.06)
+        if (this.boltLocksOpen && progress >= 0.28 && !this.emptyEjectPlayed) {
+          this.emptyEjectPlayed = true
+          this.audio.ping()
+        }
+        if (this.boltLocksOpen && progress >= 0.28) {
+          const eject = Math.min(1, (progress - 0.28) / 0.16)
+          const eased = 1 - Math.pow(1 - eject, 3)
+          this.mag.position.set(
+            this.magBase.x + 0.04 * eased,
+            this.magBase.y + 0.22 * eased,
+            this.magBase.z + 0.035 * eased
+          )
+          this.mag.rotation.set(-0.9 * eased, 0.35 * eased, 1.1 * eased)
+          this.mag.scale.setScalar(1 - 0.22 * eased)
+          if (eject >= 1) this.mag.visible = false
+        }
         if (progress > 0.12 && progress < 0.55) {
           rotationZ += Math.sin(progress * 40) * 0.004 * (1 - Math.abs(progress - 0.3) * 3)
           this.group.position.x += Math.sin(progress * 28) * 0.0012
@@ -327,118 +306,130 @@ export class WeaponView {
 
     if (this.reloadTime >= 0) {
       this.reloadTime += dt
-      const progress = Math.min(1, this.reloadTime / this.reloadDuration)
+      const progress = Math.min(1, this.reloadTime / this.getReloadDuration())
+      const smooth = value => value * value * (3 - 2 * value)
+      const easeOut = value => 1 - Math.pow(1 - value, 3)
+      const poseInEnd = this.emptyReload ? 0.1 : 0.14
+      const insertStart = this.emptyReload ? 0.16 : 0.34
+      const insertEnd = this.emptyReload ? 0.52 : 0.57
+      const seatEnd = this.emptyReload ? 0.68 : 0.7
+      const releaseStart = this.emptyReload ? 0.68 : 0.7
+      const releaseEnd = this.emptyReload ? 0.77 : 0.79
+      const pose =
+        progress < poseInEnd
+          ? smooth(progress / poseInEnd)
+          : progress < 0.8
+            ? 1
+            : 1 - smooth((progress - 0.8) / 0.2)
       const { x, y, z } = this.boltBase
-      let reloadRotationX = 0
-      let reloadRotationY = 0
-      let reloadRotationZ = 0
-      let reloadPositionY = 0
-      let reloadPositionZ = 0
-      let boltPull = 0
-      if (progress < 0.16) {
-        const time = progress / 0.16
-        const eased = time * time * (3 - 2 * time)
-        reloadRotationX = 0.22 * eased
-        reloadRotationY = -0.04 * eased
-        reloadRotationZ = 0.05 * eased
-        reloadPositionY = -0.02 * eased
-        reloadPositionZ = 0.02 * eased
-        boltPull = 0.15 * eased
-        if (time > 0.55 && !this.reloadFlags.open) {
-          this.reloadFlags.open = true
-          this.audio.reloadStage('open')
-        }
-      } else if (progress < 0.32) {
-        const time = (progress - 0.16) / 0.16
-        reloadRotationX = 0.22 + 0.06 * time
-        reloadRotationY = -0.04 - 0.03 * time
-        reloadRotationZ = 0.05
-        reloadPositionY = -0.02 - 0.015 * time
-        reloadPositionZ = 0.02
-        boltPull = 0.15 + 0.85 * time
+      let reloadRotationX = 0.28 * pose
+      let reloadRotationY = -0.1 * pose
+      let reloadRotationZ = 0.075 * pose
+      const reloadPositionX = -0.06 * pose
+      let reloadPositionY = -0.05 * pose
+      let reloadPositionZ = 0.05 * pose
+      let boltPull = this.emptyReload ? 1 : 0
+
+      if (!this.emptyReload && progress >= 0.12 && !this.reloadFlags.open) {
+        this.reloadFlags.open = true
+        this.audio.reloadStage('open')
+      }
+      if (!this.emptyReload && progress >= 0.19 && !this.reloadFlags.eject) {
+        this.reloadFlags.eject = true
+        this.audio.ping()
+      }
+      if (progress >= insertStart + 0.08 && !this.reloadFlags.insert) {
+        this.reloadFlags.insert = true
+        this.audio.reloadStage('insert')
+      }
+      if (progress >= insertEnd && !this.reloadFlags.seat) {
+        this.reloadFlags.seat = true
+        this.audio.reloadStage('seat')
+      }
+      if (progress >= releaseStart && !this.reloadFlags.close) {
+        this.reloadFlags.close = true
+        this.audio.reloadStage('close')
+      }
+
+      if (!this.emptyReload) {
+        if (progress < 0.1) boltPull = 0
+        else if (progress < 0.18) boltPull = easeOut((progress - 0.1) / 0.08)
+        else if (progress < releaseStart) boltPull = 1
+      }
+      if (progress >= releaseStart && progress < releaseEnd)
+        boltPull = 1 - easeOut((progress - releaseStart) / (releaseEnd - releaseStart))
+      else if (progress >= releaseEnd) boltPull = 0
+
+      if (!this.emptyReload && progress < 0.19) {
+        this.mag.visible = true
+        this.mag.position.copy(this.magBase)
+        this.mag.rotation.set(0, 0, 0)
+        this.mag.scale.setScalar(1)
+      } else if (!this.emptyReload && progress < 0.25) {
+        const time = easeOut((progress - 0.19) / 0.06)
+        this.mag.visible = time < 0.9
+        this.mag.position.set(
+          this.magBase.x + 0.04 * time,
+          this.magBase.y + 0.22 * time,
+          this.magBase.z + 0.035 * time
+        )
+        this.mag.rotation.set(-0.9 * time, 0.35 * time, 1.1 * time)
+        this.mag.scale.setScalar(1 - 0.22 * time)
+      } else if (progress < insertStart) {
+        this.mag.visible = false
+      } else if (progress < insertEnd) {
+        const time = smooth((progress - insertStart) / (insertEnd - insertStart))
         this.mag.visible = true
         this.mag.position.set(
-          this.magBase.x + 0.01 * time,
-          this.magBase.y + 0.02 + 0.08 * time,
-          this.magBase.z - 0.01 * time
+          this.magBase.x - 0.04 * (1 - time),
+          this.magBase.y + 0.16 * (1 - time),
+          this.magBase.z + 0.03 * (1 - time)
         )
-        this.mag.rotation.set(-0.4 * time, 0.2 * time, 0.5 * time)
-        this.mag.scale.setScalar(1 - 0.15 * time)
-        if (time > 0.85) this.mag.visible = false
-      } else if (progress < 0.58) {
-        const time = (progress - 0.32) / 0.26
-        const eased = time * time * (3 - 2 * time)
-        reloadRotationX = 0.28 - 0.04 * eased
-        reloadRotationY = -0.07
-        reloadRotationZ = 0.05 - 0.02 * eased
-        reloadPositionY = -0.035
-        reloadPositionZ = 0.02
-        boltPull = 1
-        this.mag.visible = true
-        this.mag.scale.setScalar(1)
-        this.mag.position.set(this.magBase.x, this.magBase.y + 0.09 * (1 - eased), this.magBase.z)
-        this.mag.rotation.set(0.25 * (1 - eased), 0, 0)
-        if (time > 0.25 && !this.reloadFlags.insert) {
-          this.reloadFlags.insert = true
-          this.audio.reloadStage('insert')
-        }
-      } else if (progress < 0.72) {
-        const time = (progress - 0.58) / 0.14
-        reloadRotationX = 0.24 - 0.02 * time
-        reloadRotationY = -0.07 + 0.02 * time
-        reloadRotationZ = 0.03
-        reloadPositionY = -0.035 + 0.01 * time
-        reloadPositionZ = 0.02
-        boltPull = 1
-        this.mag.visible = true
-        this.mag.position.copy(this.magBase)
-        this.mag.rotation.set(0, 0, 0)
-        this.group.position.y += Math.sin(time * Math.PI * 3) * 0.0015
-        if (time > 0.4 && !this.reloadFlags.seat) {
-          this.reloadFlags.seat = true
-          this.audio.reloadStage('seat')
-        }
-      } else if (progress < 0.88) {
-        const time = (progress - 0.72) / 0.16
-        const eased = 1 - Math.pow(1 - time, 2)
-        reloadRotationX = 0.22 * (1 - eased)
-        reloadRotationY = -0.05 * (1 - eased)
-        reloadRotationZ = 0.03 * (1 - eased)
-        reloadPositionY = -0.025 * (1 - eased)
-        reloadPositionZ = 0.02 * (1 - eased)
-        boltPull = 1 - eased
-        this.mag.visible = true
-        this.mag.position.copy(this.magBase)
-        this.mag.rotation.set(0, 0, 0)
-        if (time > 0.2 && !this.reloadFlags.close) {
-          this.reloadFlags.close = true
-          this.audio.reloadStage('close')
-        }
+        this.mag.rotation.set(-0.5 * (1 - time), -0.28 * (1 - time), -0.4 * (1 - time))
+        this.mag.scale.setScalar(0.86 + 0.14 * time)
       } else {
-        const time = (progress - 0.88) / 0.12
-        const eased = 1 - Math.pow(1 - time, 3)
-        reloadRotationX = 0.04 * (1 - eased)
-        reloadRotationY = -0.01 * (1 - eased)
-        reloadPositionY = -0.005 * (1 - eased)
         this.mag.visible = true
         this.mag.position.copy(this.magBase)
         this.mag.rotation.set(0, 0, 0)
         this.mag.scale.setScalar(1)
       }
+
+      if (progress > insertEnd - 0.06 && progress < seatEnd) {
+        const impact = Math.sin(((progress - (insertEnd - 0.06)) / (seatEnd - insertEnd + 0.06)) * Math.PI)
+        reloadRotationX += 0.032 * impact
+        reloadPositionY -= 0.016 * impact
+        reloadPositionZ += 0.01 * impact
+      }
+      if (progress > releaseStart && progress < releaseEnd) {
+        const impact = Math.sin(((progress - releaseStart) / (releaseEnd - releaseStart)) * Math.PI)
+        reloadRotationZ -= 0.03 * impact
+        reloadPositionZ -= 0.016 * impact
+      }
+      if (progress > releaseEnd) {
+        const time = (progress - releaseEnd) / (1 - releaseEnd)
+        const settle = Math.sin(time * Math.PI * 2) * (1 - time)
+        reloadRotationX += 0.012 * settle
+        reloadPositionY += 0.006 * settle
+      }
+
       rotationX += reloadRotationX
       rotationY += reloadRotationY
       rotationZ += reloadRotationZ
+      this.group.position.x += reloadPositionX
       this.group.position.y += reloadPositionY
       this.group.position.z += reloadPositionZ
-      if (this.boltTime < 0) this.bolt.position.set(x, y, z + boltPull * 0.1)
+      this.bolt.position.set(x, y, z + boltPull * 0.06)
       if (progress >= 1) {
         this.reloadTime = -1
+        this.emptyReload = false
+        this.boltLocksOpen = false
         this.mag.visible = true
         this.mag.position.copy(this.magBase)
         this.mag.rotation.set(0, 0, 0)
         this.mag.scale.setScalar(1)
         this.bolt.position.set(x, y, z)
-        this.reloadFlags = { open: false, insert: false, seat: false, close: false }
+        this.bolt.rotation.set(0, 0, 0)
+        this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
       }
     }
 
@@ -514,7 +505,7 @@ export class WeaponView {
     this.group.rotation.set(rotationX, rotationY, rotationZ)
   }
 
-  triggerFire(aiming = false) {
+  triggerFire(aiming = false, locksOpen = false) {
     const multiplier = aiming ? 0.48 : 1
     this.kickVelZ += (0.55 + Math.random() * 0.12) * multiplier
     this.kickVelY += (0.18 + Math.random() * 0.08) * multiplier
@@ -525,18 +516,29 @@ export class WeaponView {
     this.kickPitch -= (0.045 + Math.random() * 0.012) * multiplier
     this.kickYaw += (Math.random() - 0.5) * 0.018 * multiplier
     this.kickRoll += (Math.random() - 0.5) * 0.03 * multiplier
+    this.boltLocksOpen = locksOpen
+    this.emptyEjectPlayed = false
     this.boltTime = 0
   }
 
-  triggerReload() {
+  triggerReload(empty = false) {
+    this.emptyReload = empty
     this.reloadTime = 0
     this.boltTime = -1
-    this.reloadFlags = { open: false, insert: false, seat: false, close: false }
-    this.mag.visible = true
+    this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
+    this.mag.visible = !empty
     this.mag.position.copy(this.magBase)
     this.mag.rotation.set(0, 0, 0)
     this.mag.scale.setScalar(1)
-    this.bolt.position.copy(this.boltBase)
+    this.bolt.position.set(
+      this.boltBase.x,
+      this.boltBase.y,
+      this.boltBase.z + (empty ? 0.06 : 0)
+    )
+  }
+
+  getReloadDuration() {
+    return this.emptyReload ? this.emptyReloadDuration : this.reloadDuration
   }
 
   triggerMelee() {

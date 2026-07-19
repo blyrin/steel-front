@@ -67,7 +67,7 @@ export class Bot {
     this.patrolTarget = this.getRandomPatrolPoint()
     this.reactionTimer = 0
     this.searchPos = null
-    this.botSkill = 0.3 + Math.random() * 0.4
+    this.botSkill = 0.25 + Math.random() * 0.35
     this.kills = 0
     this.deaths = 0
     this.radius = 0.4
@@ -549,10 +549,10 @@ export class Bot {
     if (this.stateName === 'patrol') {
       if (this.position.distanceTo(this.patrolTarget) < 2)
         this.patrolTarget = this.getRandomPatrolPoint()
-      this.moveToward(this.patrolTarget, 2.5)
+      this.moveToward(this.patrolTarget, 2.9)
     } else if (this.stateName === 'alert') {
       if (this.searchPos) {
-        this.moveToward(this.searchPos, 4)
+        this.moveToward(this.searchPos, 4.6)
         if (this.position.distanceTo(this.searchPos) < 3) {
           this.searchPos = null
           this.stateName = 'patrol'
@@ -567,7 +567,7 @@ export class Bot {
     if (this.magazine === 0 && !this.reloading) this.startReload()
     if (this.reloading) {
       this.reloadTimer += dt
-      if (this.reloadTimer > 2.5) {
+      if (this.reloadTimer > this.config.emptyReloadDuration) {
         this.magazine = 8
         this.reloading = false
         this.reloadTimer = 0
@@ -626,16 +626,16 @@ export class Bot {
         return
       }
     }
-    if (distance > 50) this.moveToward(this.target.position, 4.5)
+    if (distance > 50) this.moveToward(this.target.position, 5.2)
     else if (distance < 14) {
       const away = this._moveDirection.subVectors(this.position, this.target.position).setY(0).normalize()
-      this.velocity.x = away.x * 4
-      this.velocity.z = away.z * 4
+      this.velocity.x = away.x * 4.6
+      this.velocity.z = away.z * 4.6
     } else {
       const side = this._moveDirection.set(-deltaZ, 0, deltaX).normalize()
       const sideDirection = Math.sin(this.stateTimer * 0.8) > 0 ? 1 : -1
-      this.velocity.x = side.x * 3 * sideDirection
-      this.velocity.z = side.z * 3 * sideDirection
+      this.velocity.x = side.x * 3.5 * sideDirection
+      this.velocity.z = side.z * 3.5 * sideDirection
     }
     if (
       this.reactionTimer <= 0 &&
@@ -664,7 +664,7 @@ export class Bot {
       }
       return
     }
-    this.moveToward(target, 4.5)
+    this.moveToward(target, 5.2)
     if (
       this.target &&
       this.targetVisible &&
@@ -686,8 +686,8 @@ export class Bot {
     const deltaZ = this.target.position.z - this.position.z
     const side = this._moveDirection.set(-deltaZ, 0, deltaX).normalize().multiplyScalar(this.flankDir)
     const forward = this._forwardDirection.set(deltaX, 0, deltaZ).normalize().multiplyScalar(-0.3)
-    this.velocity.x = (side.x + forward.x) * 4
-    this.velocity.z = (side.z + forward.z) * 4
+    this.velocity.x = (side.x + forward.x) * 4.6
+    this.velocity.z = (side.z + forward.z) * 4.6
     if (
       this.targetVisible &&
       this.reactionTimer <= 0 &&
@@ -739,7 +739,7 @@ export class Bot {
     direction.y += (Math.random() - 0.5) * spread * 2
     direction.z += (Math.random() - 0.5) * spread * 2
     direction.normalize()
-    this.combat.fireBullet(muzzle, direction, this.team, this)
+    this.combat.fireBullet(muzzle, direction, this.team, this, muzzle)
     this.effects.spawnMuzzleFlash(muzzle, direction)
     this.audio.botShot(muzzle)
   }

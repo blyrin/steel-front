@@ -50,7 +50,13 @@ export class Player {
     this.moveLean = 0
     this.baseFov = 75
     this.currentFov = 75
-    this.weapon = new WeaponView({ camera, matLib, audio })
+    this.weapon = new WeaponView({
+      camera,
+      matLib,
+      audio,
+      reloadDuration: config.reloadDuration,
+      emptyReloadDuration: config.emptyReloadDuration,
+    })
     this.ammo = 8
     this.reserveAmmo = 96
     this.magSize = 8
@@ -143,7 +149,7 @@ export class Player {
     if (now - this.lastFire < this.fireDelay * 1000) return
     this.lastFire = now
     this.ammo--
-    this.weapon.triggerFire(this.aiming)
+    this.weapon.triggerFire(this.aiming, this.ammo === 0)
     this.audio.rifleShot()
     const aiming = this.aiming
     this.viewRecoilPitch += (aiming ? 0.007 : 0.013) + Math.random() * 0.003
@@ -158,8 +164,8 @@ export class Player {
     direction.y += (Math.random() - 0.5) * spread * 2
     direction.z += (Math.random() - 0.5) * spread * 2
     direction.normalize()
-    this.combat.fireBullet(this.camera.position.clone(), direction, 'allies', this)
     const muzzle = this.weapon.muzzlePos.getWorldPosition(new THREE.Vector3())
+    this.combat.fireBullet(this.camera.position.clone(), direction, 'allies', this, muzzle)
     const eject = this.weapon.group.localToWorld(new THREE.Vector3(0.06, 0.02, -0.08))
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion)
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion)
@@ -167,7 +173,6 @@ export class Player {
     this.effects.spawnMuzzleFlash(muzzle, direction, true)
     this.effects.spawnSmokePuff(muzzle)
     if (this.ammo === 0) {
-      setTimeout(() => this.audio.ping(), 180)
       setTimeout(() => {
         if (this.alive && this.ammo === 0) this.reload()
       }, 420)
@@ -180,7 +185,7 @@ export class Player {
     if (!this.alive || this.reloading || this.weapon.isBusy()) return
     if (this.ammo >= this.magSize || this.reserveAmmo <= 0) return
     this.reloading = true
-    this.weapon.triggerReload()
+    this.weapon.triggerReload(this.ammo === 0)
     setTimeout(
       () => {
         if (!this.alive) return
@@ -191,7 +196,7 @@ export class Player {
         this.reloading = false
         this.hud.updateAmmo()
       },
-      Math.round(this.weapon.reloadDuration * 1000)
+      Math.round(this.weapon.getReloadDuration() * 1000)
     )
   }
 
@@ -325,7 +330,7 @@ export class Player {
 
     const targetHeight = this.crouching ? this.crouchHeight : this.standHeight
     this.currentHeight = THREE.MathUtils.lerp(this.currentHeight, targetHeight, dt * 10)
-    const speed = this.crouching ? 2.2 : this.sprinting ? 9.5 : 4.5
+    const speed = this.crouching ? 2.2 : this.sprinting ? 9.5 : 5.2
     const moveAxis = this.input.getMoveAxis()
     const direction = this._moveDirection.set(moveAxis.x, 0, moveAxis.z)
     if (direction.lengthSq() > 0) {
@@ -430,7 +435,7 @@ export class Player {
     }
     this.camera.rotation.set(rotationX, rotationY, rotationZ)
     let targetFov = this.baseFov
-    if (this.aiming) targetFov = 62
+    if (this.aiming) targetFov = 55
     else if (this.sprinting && moving) targetFov = 86
     this.currentFov += (targetFov - this.currentFov) * (1 - Math.exp(-7 * dt))
     if (Math.abs(this.camera.fov - this.currentFov) > 0.15) {

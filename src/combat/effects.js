@@ -69,14 +69,19 @@ export function createEffectsSystem({ scene, state, audio }) {
       })
     )
     tracer.frustumCulled = true
+    tracer.matrixAutoUpdate = false
     return tracer
   }
 
   function addTracer(origin, end) {
     const tracer = take('tracer', createTracer)
     const positions = tracer.geometry.attributes.position
-    positions.setXYZ(0, origin.x, origin.y, origin.z)
-    positions.setXYZ(1, end.x, end.y, end.z)
+    tracer.position.copy(origin)
+    tracer.quaternion.identity()
+    tracer.scale.set(1, 1, 1)
+    tracer.updateMatrix()
+    positions.setXYZ(0, 0, 0, 0)
+    positions.setXYZ(1, end.x - origin.x, end.y - origin.y, end.z - origin.z)
     positions.needsUpdate = true
     tracer.geometry.computeBoundingSphere()
     tracer.material.opacity = 0.72
@@ -86,8 +91,8 @@ export function createEffectsSystem({ scene, state, audio }) {
       type: 'tracer',
       life: 0.06,
       maxLife: 0.06,
-      update: () => {
-        tracer.material.opacity *= 0.82
+      update: (dt, time, particle) => {
+        tracer.material.opacity = 0.72 * (1 - time / particle.maxLife)
       },
     })
   }

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { rayHitObstacle } from './collision.js'
 
 export function createCombatSystem({ state, effects, audio, hud }) {
-  function fireBullet(origin, direction, team, owner) {
+  function fireBullet(origin, direction, team, owner, muzzle) {
     let hit = false
     let hitPoint = origin.clone().add(direction.clone().multiplyScalar(200))
     let closestObstacle = 200
@@ -35,7 +35,7 @@ export function createCombatSystem({ state, effects, audio, hud }) {
     }
 
     const lineEnd = hit ? hitPoint : origin.clone().add(direction.clone().multiplyScalar(200))
-    effects.addTracer(origin.clone().add(direction.clone().multiplyScalar(0.3)), lineEnd)
+    effects.addTracer(muzzle.clone().addScaledVector(direction, 0.1), lineEnd)
     if (hitTarget) {
       const headshot = hitPoint.y > 1.55
       if (owner === state.player) state.player._pendingHeadshot = headshot
