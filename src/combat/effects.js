@@ -62,7 +62,7 @@ export function createEffectsSystem({ scene, state, audio }) {
         new THREE.BufferAttribute(new Float32Array(6), 3)
       ),
       new THREE.LineBasicMaterial({
-        color: 0xffdd88,
+        color: 0xfff06a,
         transparent: true,
         opacity: 0.72,
         depthWrite: false,
@@ -198,7 +198,7 @@ export function createEffectsSystem({ scene, state, audio }) {
           createMesh(
             'smoke',
             new THREE.MeshBasicMaterial({
-              color: 0xb8a898,
+              color: 0xb8d5dd,
               transparent: true,
               depthWrite: false,
             })
@@ -241,7 +241,7 @@ export function createEffectsSystem({ scene, state, audio }) {
       () =>
         createMesh(
           'shell',
-          new THREE.MeshStandardMaterial({ color: 0xc0a040, metalness: 0.85, roughness: 0.28 })
+          new THREE.MeshBasicMaterial({ color: 0xf4c84a })
         )
     )
     shell.position.copy(pos)
@@ -290,7 +290,7 @@ export function createEffectsSystem({ scene, state, audio }) {
       () =>
         createMesh(
           'smoke',
-          new THREE.MeshBasicMaterial({ color: 0xb0a090, transparent: true, depthWrite: false })
+          new THREE.MeshBasicMaterial({ color: 0xb5d1d9, transparent: true, depthWrite: false })
         )
     )
     puff.position.copy(pos)
@@ -342,7 +342,7 @@ export function createEffectsSystem({ scene, state, audio }) {
     }
     const dust = take(
       'dust',
-      () => createMesh('dust', new THREE.MeshBasicMaterial({ color: 0xa09080, transparent: true }))
+      () => createMesh('dust', new THREE.MeshBasicMaterial({ color: 0xd79979, transparent: true }))
     )
     dust.position.copy(pos)
     dust.scale.setScalar(0.1)
@@ -364,7 +364,7 @@ export function createEffectsSystem({ scene, state, audio }) {
     for (let i = 0; i < 6; i++) {
       const blood = take(
         'blood',
-        () => createMesh('blood', new THREE.MeshBasicMaterial({ color: 0x8a1010 }))
+        () => createMesh('blood', new THREE.MeshBasicMaterial({ color: 0xe83f5b }))
       )
       blood.position.copy(pos)
       blood.scale.setScalar(0.025)

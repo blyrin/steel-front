@@ -5,9 +5,9 @@ export const CFG = {
   respawnTime: 5,
   reloadDuration: 1.75,
   emptyReloadDuration: 1.55,
-  maxBotViewDist: 90,
+  maxBotViewDist: 50,
   botReactionTime: 0.35,
-  masterVolume: 0.62,
+  masterVolume: 0.65,
   mouseSensitivity: 1,
 }
 

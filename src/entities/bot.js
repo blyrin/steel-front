@@ -33,10 +33,10 @@ const BOT_GEOMETRY = {
 }
 
 const BOT_MARKER_MATERIALS = {
-  allies: new THREE.MeshBasicMaterial({ color: 0x5ad040 }),
-  axis: new THREE.MeshBasicMaterial({ color: 0xff5a3a }),
-  alliesCore: new THREE.MeshBasicMaterial({ color: 0xd8f0c8 }),
-  axisCore: new THREE.MeshBasicMaterial({ color: 0xffe0c0 }),
+  allies: new THREE.MeshBasicMaterial({ color: 0x00c7e6 }),
+  axis: new THREE.MeshBasicMaterial({ color: 0xff3f5f }),
+  alliesCore: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+  axisCore: new THREE.MeshBasicMaterial({ color: 0xffe056 }),
 }
 
 export class Bot {
@@ -444,8 +444,10 @@ export class Bot {
       core.position.y = 0.3
       this.marker.add(core)
     }
-    this.marker.position.set(0, 2, 0)
+    this.marker.position.set(0, 2.06, 0)
+    this.marker.scale.setScalar(1.15)
     this.group.add(this.marker)
+    this.matLib.addOutline(this.group, 1.045)
     this.legPhase = 0
   }
 

@@ -13,11 +13,11 @@ export function createMapSystem({ dom, state, config }) {
 
   function drawStaticLayer() {
     const gradient = staticCtx.createRadialGradient(centerX, centerY, 10, centerX, centerY, 90)
-    gradient.addColorStop(0, 'rgba(48,38,24,0.75)')
-    gradient.addColorStop(1, 'rgba(14,11,8,0.95)')
+    gradient.addColorStop(0, 'rgba(224,245,234,0.94)')
+    gradient.addColorStop(1, 'rgba(91,158,172,0.96)')
     staticCtx.fillStyle = gradient
     staticCtx.fillRect(0, 0, width, height)
-    staticCtx.strokeStyle = 'rgba(120,100,60,0.22)'
+    staticCtx.strokeStyle = 'rgba(32,35,58,0.28)'
     staticCtx.lineWidth = 1
     staticCtx.beginPath()
     staticCtx.moveTo(centerX, 8)
@@ -34,7 +34,7 @@ export function createMapSystem({ dom, state, config }) {
       )
         continue
       staticCtx.fillStyle =
-        obstacle.type === 'building' ? 'rgba(130,110,75,0.65)' : 'rgba(100,85,55,0.55)'
+        obstacle.type === 'building' ? 'rgba(32,35,58,0.72)' : 'rgba(239,91,103,0.72)'
       staticCtx.fillRect(centerX + obstacle.x * scale - 2, centerY + obstacle.z * scale - 2, 4, 4)
     }
     staticLayerReady = true
@@ -49,13 +49,13 @@ export function createMapSystem({ dom, state, config }) {
       const x = centerX + bot.position.x * scale
       const y = centerY + bot.position.z * scale
       if (bot.team === 'allies') {
-        miniCtx.fillStyle = '#5ad040'
+        miniCtx.fillStyle = '#00c7e6'
         miniCtx.fillRect(x - 2.6, y - 2.6, 5.2, 5.2)
         miniCtx.strokeStyle = 'rgba(0,0,0,0.55)'
         miniCtx.lineWidth = 1
         miniCtx.strokeRect(x - 2.6, y - 2.6, 5.2, 5.2)
       } else {
-        miniCtx.fillStyle = '#ff5a3a'
+        miniCtx.fillStyle = '#ff3f5f'
         miniCtx.beginPath()
         miniCtx.moveTo(x, y - 3.4)
         miniCtx.lineTo(x + 3.2, y + 2.4)
@@ -72,20 +72,20 @@ export function createMapSystem({ dom, state, config }) {
     const y = centerY + state.player.position.z * scale
     const forwardX = -Math.sin(state.player.yaw)
     const forwardZ = -Math.cos(state.player.yaw)
-    miniCtx.fillStyle = 'rgba(255,204,64,0.12)'
+    miniCtx.fillStyle = 'rgba(255,212,71,0.24)'
     miniCtx.beginPath()
     miniCtx.moveTo(x, y)
     const angle = Math.atan2(forwardZ, forwardX)
     miniCtx.arc(x, y, 22, angle - 0.45, angle + 0.45)
     miniCtx.closePath()
     miniCtx.fill()
-    miniCtx.strokeStyle = 'rgba(255,220,100,0.9)'
+    miniCtx.strokeStyle = 'rgba(32,35,58,0.9)'
     miniCtx.lineWidth = 2
     miniCtx.beginPath()
     miniCtx.moveTo(x, y)
     miniCtx.lineTo(x + forwardX * 11, y + forwardZ * 11)
     miniCtx.stroke()
-    miniCtx.fillStyle = '#ffcc40'
+    miniCtx.fillStyle = '#ffd447'
     miniCtx.beginPath()
     miniCtx.arc(x, y, 4, 0, Math.PI * 2)
     miniCtx.fill()

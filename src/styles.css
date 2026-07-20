@@ -1,3 +1,16 @@
+:root {
+  --ink: #20233a;
+  --paper: #f5faef;
+  --paper-soft: rgba(245, 250, 239, 0.96);
+  --cyan: #12b6d2;
+  --cyan-dark: #0b6782;
+  --coral: #f04f64;
+  --coral-dark: #9f2948;
+  --yellow: #ffd447;
+  --green: #34895a;
+  --muted: #38465f;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -10,115 +23,124 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000;
+  background: #358310;
+  color: var(--ink);
   cursor: default;
-  font-family:
-    'Russo One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Noto Sans SC',
-    system-ui,
-    sans-serif;
-  color: #ece6d6;
+  font-family: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
 }
 
 canvas {
   display: block;
+  filter: saturate(1.03) contrast(1.08) brightness(0.98);
 }
 
-/* —— 共享按钮 —— */
+/* 共享按钮 */
 .btn {
-  padding: 12px 44px;
-  font-family: 'Russo One', sans-serif;
-  font-size: 15px;
-  letter-spacing: 3px;
-  color: #f0d78a;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(212, 168, 73, 0.45);
-  border-radius: 2px;
-  cursor: pointer;
-  transition:
-    background 0.18s,
-    border-color 0.18s,
-    transform 0.18s,
-    box-shadow 0.18s;
   min-width: 220px;
+  padding: 11px 40px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--yellow);
+  color: var(--ink);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  cursor: pointer;
+  filter: drop-shadow(6px 6px 0 var(--ink));
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  transition: transform 0.12s, filter 0.12s, background 0.12s;
 }
 .btn:hover {
-  background: rgba(212, 168, 73, 0.14);
-  border-color: rgba(232, 200, 106, 0.85);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  background: #fff2a2;
+  transform: translate(-2px, -2px);
+  filter: drop-shadow(8px 8px 0 var(--ink));
+}
+.btn:active {
+  transform: translate(3px, 3px);
+  filter: drop-shadow(2px 2px 0 var(--ink));
 }
 .quit-btn {
   margin-top: 10px;
-  color: #c8b89a;
-  border-color: rgba(160, 140, 110, 0.35);
-  min-width: 220px;
+  background: var(--coral);
+  color: var(--paper);
 }
 .quit-btn:hover {
-  color: #ece6d6;
-  border-color: rgba(200, 180, 140, 0.55);
-  background: rgba(255, 255, 255, 0.05);
+  background: #ff7980;
+  color: var(--paper);
 }
 
-/* —— 加载 —— */
+/* 加载界面 */
 #loader {
   position: fixed;
   inset: 0;
-  background: #070706;
+  z-index: 200;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  background-color: var(--paper);
+  background-image: radial-gradient(rgba(32, 35, 58, 0.16) 1px, transparent 1px);
+  background-size: 12px 12px;
   transition: opacity 0.8s;
 }
+#loader::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 12%;
+  left: 0;
+  height: 18px;
+  border-block: 3px solid var(--ink);
+  background: var(--coral);
+  transform: skewY(-2deg);
+}
 #loader h1 {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Noto Sans SC',
-    sans-serif;
-  font-size: 56px;
-  color: #e0c06a;
-  letter-spacing: 8px;
   margin-bottom: 6px;
+  color: var(--ink);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 56px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  text-shadow: 5px 5px 0 var(--cyan);
 }
 #loader h2 {
-  font-size: 12px;
-  color: rgba(200, 180, 140, 0.45);
-  letter-spacing: 8px;
   margin-bottom: 40px;
+  color: var(--coral);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 8px;
 }
 .bar-wrap {
   width: min(320px, 70vw);
-  height: 2px;
-  background: rgba(255, 255, 255, 0.06);
+  height: 8px;
   overflow: hidden;
-  border-radius: 1px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
 }
 #bar {
-  height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #a07830, #e8c86a);
+  height: 100%;
+  background: var(--yellow);
   transition: width 0.2s;
 }
 #loadStatus {
   margin-top: 14px;
+  color: var(--muted);
   font-size: 11px;
-  color: rgba(180, 160, 120, 0.45);
+  font-weight: 700;
   letter-spacing: 2px;
 }
 .cog {
   width: 36px;
   height: 36px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  border-top-color: #d4a849;
+  margin-bottom: 28px;
+  border: 4px solid rgba(32, 35, 58, 0.18);
+  border-top-color: var(--coral);
+  border-right-color: var(--yellow);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
-  margin-bottom: 28px;
 }
 @keyframes spin {
   to {
@@ -126,42 +148,82 @@ canvas {
   }
 }
 
-/* —— 主菜单 —— */
+/* 主菜单 */
 #menu {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  z-index: 150;
   display: none;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 150;
-  backdrop-filter: blur(6px);
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: max(24px, 4vh) max(24px, 6vw);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: rgba(245, 250, 239, 0.84);
+  backdrop-filter: blur(2px) saturate(1.1);
 }
 #menu.show {
   display: flex;
 }
+#menu::before {
+  content: '';
+  position: absolute;
+  top: -12%;
+  right: -6%;
+  width: 45%;
+  height: 128%;
+  border-left: 5px solid var(--ink);
+  background: rgba(37, 185, 208, 0.44);
+  transform: skewX(-12deg);
+  pointer-events: none;
+}
+#menu::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 38%;
+  height: 100%;
+  background-image: radial-gradient(var(--ink) 1.4px, transparent 1.4px);
+  background-size: 11px 11px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+#menu > * {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
 #menu h1 {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Noto Sans SC',
-    sans-serif;
-  font-size: 84px;
-  color: #e8c86a;
-  letter-spacing: 10px;
-  text-shadow: 0 2px 40px rgba(212, 168, 73, 0.25);
-  margin-bottom: 4px;
+  max-width: 100%;
+  margin-top: auto;
+  margin-bottom: 16px;
+  color: var(--paper);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 88px;
+  font-weight: 700;
+  line-height: 0.86;
+  letter-spacing: 4px;
+  text-align: left;
+  white-space: nowrap;
+  text-shadow: 4px 0 var(--ink), -4px 0 var(--ink), 0 4px var(--ink), 0 -4px var(--ink), 9px 9px var(--coral);
 }
 #menu .sub {
+  max-width: 100%;
+  margin-bottom: 34px;
+  padding: 5px 10px;
+  background: var(--ink);
+  color: var(--yellow);
   font-size: 13px;
-  color: rgba(200, 180, 140, 0.5);
-  letter-spacing: 10px;
-  margin-bottom: 44px;
+  font-weight: 900;
+  letter-spacing: 7px;
+  text-align: left;
+  white-space: nowrap;
+  transform: skewX(-7deg);
 }
 #menu .btn {
-  min-width: 260px;
+  min-width: 250px;
 }
 .settings {
   display: flex;
@@ -174,8 +236,9 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  color: rgba(200, 180, 140, 0.75);
+  color: var(--ink);
   font-size: 11px;
+  font-weight: 900;
   letter-spacing: 2px;
   pointer-events: auto;
 }
@@ -183,74 +246,92 @@ canvas {
   text-transform: uppercase;
 }
 .setting input[type='range'] {
-  -webkit-appearance: none;
-  appearance: none;
   width: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(180, 150, 90, 0.25);
+  height: 7px;
+  border: 2px solid var(--ink);
+  border-radius: 0;
   outline: none;
+  background: var(--paper);
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .setting input[type='range']::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
+  border: 3px solid var(--ink);
   border-radius: 50%;
-  background: #e8c86a;
-  box-shadow: 0 0 10px rgba(232, 200, 106, 0.35);
+  background: var(--coral);
+  box-shadow: none;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .setting input[type='range']::-moz-range-thumb {
   width: 14px;
   height: 14px;
-  border: none;
+  border: 3px solid var(--ink);
   border-radius: 50%;
-  background: #e8c86a;
-  box-shadow: 0 0 10px rgba(232, 200, 106, 0.35);
+  background: var(--coral);
+  box-shadow: none;
   cursor: pointer;
 }
 #menu .info {
+  width: min(640px, 100%);
   margin-top: 36px;
-  color: rgba(180, 165, 135, 0.55);
+  margin-bottom: auto;
+  color: var(--ink);
   font-size: 11px;
+  font-weight: 700;
   line-height: 2;
-  text-align: center;
   letter-spacing: 1px;
-  max-width: 640px;
+  text-align: left;
+  opacity: 0.9;
 }
 #menu .info span {
-  color: rgba(232, 200, 106, 0.9);
+  color: var(--coral-dark);
+  font-weight: 900;
 }
 #menu .battle-info {
   margin-top: 12px;
-  color: rgba(160, 145, 115, 0.4);
+  color: var(--cyan-dark);
+  font-weight: 900;
 }
 
-/* —— HUD 壳 —— */
+/* HUD */
 #hud {
   position: fixed;
   inset: 0;
-  pointer-events: none;
   z-index: 50;
   display: none;
+  pointer-events: none;
 }
 #hud.show {
   display: block;
 }
+#hud::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(32, 35, 58, 0.7) 0.7px, transparent 0.7px);
+  background-size: 9px 9px;
+  mix-blend-mode: multiply;
+  opacity: 0.035;
+  pointer-events: none;
+}
 
-/* —— 顶部分数 —— */
+/* 顶部比分 */
 #topBar {
   position: absolute;
   top: 14px;
   left: 50%;
-  transform: translateX(-50%);
   display: flex;
-  align-items: center;
-  gap: 22px;
-  min-width: 300px;
-  padding: 8px 20px 10px;
+  gap: 18px;
+  padding: 7px 18px 9px;
+  border: 3px solid var(--ink);
+  background: var(--paper-soft);
+  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%, 0 9px);
+  transform: translateX(-50%);
 }
 .team {
   display: flex;
@@ -259,87 +340,92 @@ canvas {
   font-size: 11px;
   letter-spacing: 2px;
 }
-.allies {
-  color: #8fd06a;
+.allies,
+.allies-name,
+.sb-team.allies,
+.sb-col-head.allies {
+  color: var(--cyan);
 }
-.axis {
-  color: #e07a55;
+.axis,
+.axis-name,
+.sb-team.axis,
+.sb-col-head.axis {
+  color: var(--coral);
 }
 .vs {
-  color: rgba(180, 160, 120, 0.35);
+  color: var(--coral);
   font-size: 10px;
+  font-weight: 900;
   letter-spacing: 4px;
 }
 .score {
-  font-family: 'Black Ops One', sans-serif;
-  font-size: 30px;
   min-width: 48px;
-  text-align: center;
+  color: var(--ink);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 30px;
+  font-weight: 700;
   line-height: 1;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.75);
+  text-align: center;
 }
-.score-target,
-.axis-score {
+.score-target {
   text-align: center;
 }
 .axis-score {
   text-align: right;
 }
 .team-name {
-  font-size: 11px;
-  letter-spacing: 2px;
   margin-top: 2px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 2px;
   opacity: 0.85;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
-}
-.allies-name {
-  color: #8fd06a;
-}
-.axis-name {
-  color: #e07a55;
 }
 #targetKill {
-  color: rgba(200, 180, 140, 0.45);
-  font-size: 10px;
-  letter-spacing: 1px;
   margin-top: 3px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
 }
 
-/* —— 生命 —— */
-#healthWrap {
+/* 生命与弹药 */
+#healthWrap,
+#ammoWrap {
   position: absolute;
-  left: 22px;
   bottom: 22px;
-  width: 260px;
+  padding: 10px 12px;
+  border: 3px solid var(--ink);
+  background: var(--paper-soft);
+  clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%);
+}
+#healthWrap {
+  left: 22px;
+  width: 270px;
 }
 .label {
-  font-size: 10px;
-  color: rgba(200, 180, 140, 0.45);
-  letter-spacing: 2px;
-  margin-bottom: 6px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2px;
 }
 #healthBar {
-  height: 6px;
-  background: rgba(0, 0, 0, 0.35);
-  border-radius: 1px;
-  position: relative;
+  height: 10px;
   overflow: hidden;
+  border: 2px solid var(--ink);
+  background: var(--paper);
 }
 #healthFill {
-  height: 100%;
   width: 100%;
-  background: linear-gradient(90deg, #8a1828, #e85a4a);
-  border-radius: 1px;
+  height: 100%;
+  background: var(--coral);
   transition: width 0.25s ease-out;
-  box-shadow: 0 0 10px rgba(200, 50, 40, 0.25);
 }
 #healthFill.low {
-  background: linear-gradient(90deg, #6a0a0a, #ff3030);
+  background: #ff334f;
   animation: pulse 1s infinite;
 }
 @keyframes pulse {
@@ -348,83 +434,82 @@ canvas {
   }
 }
 #healthText {
-  position: static;
+  color: var(--ink);
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.85);
+  font-weight: 900;
   letter-spacing: 1px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
 }
-
-/* —— 弹药 —— */
 #ammoWrap {
-  position: absolute;
   right: 22px;
-  bottom: 22px;
   min-width: 140px;
   text-align: right;
 }
 #weaponName {
-  font-size: 11px;
-  color: rgba(232, 200, 106, 0.85);
-  letter-spacing: 2px;
   margin-bottom: 2px;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+  color: var(--cyan-dark);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 2px;
 }
 #ammoDisplay {
-  font-family: 'Black Ops One', sans-serif;
+  color: var(--ink);
+  font-family: 'Rajdhani', sans-serif;
   font-size: 46px;
-  color: #f4ecd8;
+  font-weight: 700;
   line-height: 1;
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.85);
 }
 #ammoDisplay .reserve {
+  color: var(--coral-dark);
   font-size: 18px;
-  color: rgba(200, 180, 140, 0.45);
 }
 #fireMode {
-  font-size: 10px;
-  color: rgba(180, 160, 120, 0.4);
-  letter-spacing: 1px;
   margin-top: 2px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
 }
 #lowAmmo {
   position: absolute;
-  bottom: 110px;
   right: 22px;
-  color: #ff8a55;
+  bottom: 110px;
+  padding: 6px 10px;
+  border: 2px solid var(--ink);
+  background: var(--yellow);
+  color: var(--ink);
   font-size: 11px;
+  font-weight: 900;
   letter-spacing: 1px;
+  text-align: right;
   opacity: 0;
   transition: opacity 0.3s;
-  text-align: right;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
 }
 #lowAmmo.show {
   opacity: 1;
-  animation: blink 1s infinite;
+}
+body.touch-mode #lowAmmo {
+  right: 10px;
+  bottom: 170px;
+  max-width: calc(100vw - 20px);
 }
 
-/* —— 准星 / 命中 —— */
+/* 准星与命中反馈 */
 #crosshair {
+  --ch-gap: 7px;
+  --ch-len: 8px;
+  --ch-thick: 3px;
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
   width: var(--ch-size, 36px);
   height: var(--ch-size, 36px);
-  --ch-gap: 8px;
-  --ch-len: 7px;
-  --ch-thick: 2px;
-  transition:
-    width 0.08s linear,
-    height 0.08s linear,
-    opacity 0.2s;
-  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+  transform: translate(-50%, -50%);
+  transition: width 0.08s linear, height 0.08s linear, opacity 0.2s;
 }
 .ch {
   position: absolute;
-  background: rgba(240, 230, 190, 0.92);
+  border: 1px solid var(--ink);
+  background: #fffef4;
   opacity: 0.95;
 }
 .ch-t {
@@ -442,15 +527,15 @@ canvas {
   transform: translateX(-50%);
 }
 .ch-l {
-  left: calc(50% - var(--ch-gap) - var(--ch-len));
   top: 50%;
+  left: calc(50% - var(--ch-gap) - var(--ch-len));
   width: var(--ch-len);
   height: var(--ch-thick);
   transform: translateY(-50%);
 }
 .ch-r {
-  left: calc(50% + var(--ch-gap));
   top: 50%;
+  left: calc(50% + var(--ch-gap));
   width: var(--ch-len);
   height: var(--ch-thick);
   transform: translateY(-50%);
@@ -458,11 +543,12 @@ canvas {
 .ch-c {
   top: 50%;
   left: 50%;
-  width: 2px;
-  height: 2px;
+  width: 5px;
+  height: 5px;
+  border: 2px solid var(--ink);
   border-radius: 50%;
+  background: var(--yellow);
   transform: translate(-50%, -50%);
-  background: rgba(255, 255, 255, 0.95);
 }
 #crosshair.aiming,
 #crosshair.hidden {
@@ -482,29 +568,29 @@ canvas {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%) rotate(45deg);
   width: 22px;
   height: 22px;
   opacity: 0;
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 #hitMarker::before,
 #hitMarker::after {
   content: '';
   position: absolute;
-  background: #fff;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+  background: var(--yellow);
+  box-shadow: 0 0 0 2px var(--ink);
 }
 #hitMarker::before {
   top: 50%;
-  left: 0;
   right: 0;
+  left: 0;
   height: 2px;
   transform: translateY(-50%);
 }
 #hitMarker::after {
-  left: 50%;
   top: 0;
   bottom: 0;
+  left: 50%;
   width: 2px;
   transform: translateX(-50%);
 }
@@ -522,110 +608,109 @@ canvas {
   }
 }
 
-/* —— 小地图 —— */
+/* 小地图与击杀播报 */
 #minimap {
   position: absolute;
   top: 14px;
   right: 14px;
   width: 148px;
   height: 148px;
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
   overflow: hidden;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  border: 3px solid var(--ink);
+  background: rgba(245, 250, 239, 0.88);
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
 }
 #minimap canvas {
   width: 100%;
   height: 100%;
+  filter: saturate(1.08) contrast(1.12);
 }
 #minimap::before {
   content: 'N';
   position: absolute;
-  top: 5px;
+  top: 4px;
   left: 50%;
-  transform: translateX(-50%);
   z-index: 2;
+  padding: 1px 5px;
+  background: var(--ink);
+  color: var(--yellow);
   font-size: 9px;
-  color: rgba(232, 200, 106, 0.75);
+  font-weight: 900;
   letter-spacing: 1px;
-  text-shadow: 0 1px 4px #000;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 #minimap::after {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(245, 250, 239, 0.28);
   pointer-events: none;
-  background: radial-gradient(circle, transparent 62%, rgba(0, 0, 0, 0.4));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
-
-/* —— 击杀播报 —— */
 #killFeed {
   position: absolute;
   top: 14px;
   left: 14px;
-  width: 260px;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  width: 260px;
 }
 .kill-msg {
-  background: rgba(0, 0, 0, 0.32);
-  border-left: 2px solid rgba(212, 168, 73, 0.55);
   padding: 5px 10px;
-  font-size: 11px;
+  border: 2px solid var(--ink);
+  border-left: 8px solid var(--cyan);
+  background: var(--paper-soft);
+  box-shadow: 3px 3px 0 rgba(32, 35, 58, 0.65);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
   letter-spacing: 0.5px;
   animation: slideIn 0.22s ease-out;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 .kill-msg.player {
-  border-left-color: #ff7a45;
-  background: rgba(40, 12, 6, 0.4);
+  border-left-color: var(--yellow);
+  background: var(--paper);
 }
-.kill-msg .me {
-  color: #ff9a6a;
+.kill-msg .me,
+.kill-msg .enemy {
+  color: var(--coral-dark);
 }
 .kill-msg .ally {
-  color: #8fd06a;
-}
-.kill-msg .enemy {
-  color: #e07a55;
+  color: var(--cyan-dark);
 }
 @keyframes slideIn {
   from {
-    transform: translateX(-16px);
     opacity: 0;
+    transform: translateX(-16px);
   }
   to {
-    transform: none;
     opacity: 1;
+    transform: none;
   }
 }
 
-/* —— 受击效果 —— */
+/* 受击与中央提示 */
 #damageVignette {
   position: absolute;
   inset: 0;
-  pointer-events: none;
   box-shadow: inset 0 0 200px rgba(180, 20, 20, 0);
   transition: box-shadow 0.4s;
+  pointer-events: none;
 }
 #damageVignette.hit {
-  box-shadow: inset 0 0 180px rgba(180, 20, 20, 0.65);
+  box-shadow: inset 0 0 150px rgba(239, 36, 76, 0.82);
 }
 #dirDamage {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
   width: 380px;
   height: 380px;
-  pointer-events: none;
   opacity: 0;
+  transform: translate(-50%, -50%);
   transition: opacity 0.3s;
+  pointer-events: none;
 }
 #dirDamage.show {
   opacity: 1;
@@ -634,60 +719,75 @@ canvas {
   position: absolute;
   top: 0;
   left: 50%;
-  transform: translateX(-50%);
   width: 0;
   height: 0;
-  border-left: 12px solid transparent;
   border-right: 12px solid transparent;
-  border-bottom: 22px solid rgba(220, 40, 40, 0.8);
-  filter: drop-shadow(0 0 8px rgba(220, 40, 40, 0.5));
+  border-bottom: 22px solid var(--coral);
+  border-left: 12px solid transparent;
+  filter: drop-shadow(0 3px 0 var(--ink));
+  transform: translateX(-50%);
 }
-
-/* —— 中央提示 —— */
 #centerMsg {
   position: absolute;
   top: 48%;
   left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
+  padding: 7px 15px;
+  border: 3px solid var(--ink);
+  background: var(--yellow);
+  box-shadow: 5px 5px 0 var(--ink);
+  color: var(--ink);
   font-size: 14px;
-  color: rgba(232, 200, 106, 0.95);
+  font-weight: 900;
   letter-spacing: 3px;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+  text-align: center;
   opacity: 0;
+  transform: translateX(-50%);
   transition: opacity 0.3s;
 }
 #centerMsg.show {
   opacity: 1;
 }
 #centerMsg .big {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Noto Sans SC',
-    sans-serif;
-  font-size: 30px;
-  color: #ff8a55;
   display: block;
   margin-bottom: 4px;
+  color: var(--coral);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 30px;
+  font-weight: 900;
   letter-spacing: 3px;
+  text-shadow: 2px 2px 0 var(--ink);
 }
 
-/* —— 死亡 —— */
-#deathScreen {
+/* 死亡、暂停与结束界面 */
+#deathScreen,
+#pauseScreen,
+#endScreen {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
   display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  background-color: rgba(245, 250, 239, 0.86);
+  background-image: radial-gradient(rgba(32, 35, 58, 0.18) 1px, transparent 1px);
+  background-size: 12px 12px;
+  backdrop-filter: blur(3px) saturate(0.8);
+}
+#deathScreen {
   z-index: 65;
-  backdrop-filter: blur(2px);
+}
+#pauseScreen {
+  z-index: 80;
+}
+#endScreen {
+  z-index: 95;
+}
+#deathScreen.show,
+#pauseScreen.show,
+#endScreen.show {
+  display: flex;
 }
 #deathScreen.show {
-  display: flex;
   animation: fadeIn 0.35s;
 }
 @keyframes fadeIn {
@@ -695,31 +795,62 @@ canvas {
     opacity: 0;
   }
 }
+#deathScreen h2,
+#pauseScreen h2,
+#endScreen h2 {
+  color: var(--paper);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-weight: 900;
+  text-shadow: 4px 0 var(--ink), -4px 0 var(--ink), 0 4px var(--ink), 0 -4px var(--ink), 8px 8px 0 var(--coral);
+}
 #deathScreen h2 {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Noto Sans SC',
-    sans-serif;
-  font-size: 48px;
-  color: #e04050;
-  letter-spacing: 8px;
-  text-shadow: 0 0 28px rgba(196, 30, 58, 0.4);
   margin-bottom: 12px;
+  font-size: 48px;
+  letter-spacing: 8px;
+}
+#pauseScreen h2 {
+  margin-bottom: 12px;
+  font-size: 42px;
+  letter-spacing: 8px;
+}
+#endScreen h2 {
+  margin-bottom: 24px;
+  font-size: 64px;
+  letter-spacing: 10px;
+}
+#endScreen h2.win {
+  text-shadow: 4px 0 var(--ink), -4px 0 var(--ink), 0 4px var(--ink), 0 -4px var(--ink), 8px 8px 0 var(--cyan);
+}
+.killer-info,
+#endStats {
+  color: var(--ink);
+  font-weight: 700;
 }
 .killer-info {
-  font-size: 14px;
-  color: rgba(200, 185, 155, 0.75);
   margin-bottom: 6px;
+  font-size: 14px;
   letter-spacing: 2px;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
 .killer-info .kname {
-  color: #e07a55;
+  color: var(--coral-dark);
+}
+#endStats {
+  margin-bottom: 24px;
+  padding: 18px 36px;
+  font-size: 13px;
+  line-height: 2.1;
+  letter-spacing: 1px;
+  text-align: center;
+}
+#pauseScreen .settings {
+  margin: 0 0 24px;
+}
+#pauseScreen .btn,
+#endScreen .btn {
+  pointer-events: auto;
 }
 
-/* —— 部署界面 —— */
+/* 部署界面 */
 #deployScreen {
   position: fixed;
   inset: 0;
@@ -743,80 +874,74 @@ canvas {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  min-width: 72px;
-  padding: 8px 10px 7px;
-  border: none;
-  background: rgba(8, 7, 5, 0.78);
-  color: #e8c86a;
+  min-width: 76px;
+  padding: 8px 12px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  transition:
-    background 0.15s,
-    box-shadow 0.15s;
+  transition: background 0.15s;
 }
 .spawn-marker:hover {
-  background: rgba(30, 24, 12, 0.9);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
   z-index: 2;
+  background: var(--yellow);
 }
 .spawn-marker.contested {
-  border-color: rgba(224, 90, 70, 0.85);
-  color: #f0b090;
-}
-.spawn-marker.contested .spawn-marker-id {
-  color: #e07a55;
-}
-.spawn-marker.contested .spawn-marker-status {
-  color: #e07a55;
+  background: #ffe8e5;
 }
 .spawn-marker-id {
-  font-family: 'Black Ops One', sans-serif;
+  color: var(--cyan-dark);
+  font-family: 'Rajdhani', sans-serif;
   font-size: 20px;
+  font-weight: 700;
   line-height: 1;
-  color: #d4a849;
+}
+.spawn-marker.contested .spawn-marker-id,
+.spawn-marker.contested .spawn-marker-status {
+  color: var(--coral-dark);
 }
 .spawn-marker-name {
+  color: var(--ink);
   font-size: 11px;
+  font-weight: 900;
   letter-spacing: 1px;
-  color: rgba(230, 215, 180, 0.9);
   white-space: nowrap;
 }
 .spawn-marker-status {
+  color: var(--green);
   font-size: 9px;
+  font-weight: 900;
   letter-spacing: 2px;
-  color: rgba(122, 184, 90, 0.9);
 }
-
-/* —— 部署过渡 —— */
 #deployVignette {
   position: fixed;
   inset: 0;
   z-index: 55;
-  pointer-events: none;
   box-shadow: inset 0 0 0 rgba(0, 0, 0, 0);
   transition: box-shadow 0.5s;
+  pointer-events: none;
 }
 #deployVignette.landing {
-  box-shadow: inset 0 0 180px rgba(0, 0, 0, 0.85);
+  box-shadow: inset 0 0 180px rgba(32, 35, 58, 0.9);
 }
 
-/* —— 计分板 —— */
+/* 计分板 */
 #scoreboard {
   position: absolute;
-  left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(960px, 94vw);
+  left: 50%;
+  z-index: 75;
   display: none;
   flex-direction: column;
-  background: rgba(28, 26, 22, 0.42);
-  border: 1px solid rgba(210, 185, 120, 0.22);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(6px);
-  z-index: 75;
-  pointer-events: none;
+  width: min(960px, 94vw);
   overflow: hidden;
+  border: 4px solid var(--ink);
+  background: rgba(245, 250, 239, 0.94);
+  box-shadow: 10px 10px 0 rgba(32, 35, 58, 0.72);
+  backdrop-filter: blur(3px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 #scoreboard.show {
   display: flex;
@@ -827,8 +952,8 @@ canvas {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 16px 7px;
-  border-bottom: 1px solid rgba(200, 170, 100, 0.14);
-  background: rgba(255, 250, 235, 0.04);
+  border-bottom: 3px solid var(--ink);
+  background: var(--yellow);
 }
 .sb-team {
   display: flex;
@@ -836,11 +961,7 @@ canvas {
   gap: 10px;
   min-width: 100px;
 }
-.sb-team.allies {
-  color: #8fd06a;
-}
 .sb-team.axis {
-  color: #e07a55;
   justify-content: flex-end;
 }
 .sb-label {
@@ -849,82 +970,76 @@ canvas {
   opacity: 0.9;
 }
 .sb-score {
-  font-family: 'Black Ops One', sans-serif;
+  color: var(--ink);
+  font-family: 'Rajdhani', sans-serif;
   font-size: 22px;
+  font-weight: 700;
   line-height: 1;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
 }
 .sb-title {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    sans-serif;
+  color: var(--ink);
+  font-family: 'Noto Sans SC', sans-serif;
   font-size: 15px;
+  font-weight: 900;
   letter-spacing: 6px;
-  color: rgba(236, 210, 130, 0.9);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
 }
 .sb-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  background: rgba(200, 170, 100, 0.1);
+  gap: 3px;
+  background: var(--ink);
 }
 .sb-col {
-  background: rgba(40, 36, 28, 0.28);
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  background: var(--paper);
+}
+.sb-col-head,
+.sb-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 36px 36px;
+  gap: 6px;
 }
 .sb-col-head {
-  display: grid;
-  grid-template-columns: 22px 1fr 36px 36px;
-  gap: 6px;
   padding: 5px 12px 4px;
+  border-bottom: 2px solid var(--ink);
+  background: #ddecdf;
   font-size: 10px;
+  font-weight: 900;
   letter-spacing: 2px;
   opacity: 0.8;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-.sb-col-head.allies {
-  color: #8fd06a;
-}
-.sb-col-head.axis {
-  color: #e07a55;
 }
 .sb-col-head span:nth-child(3),
 .sb-col-head span:nth-child(4) {
-  text-align: right;
-  color: rgba(200, 180, 140, 0.55);
+  color: var(--muted);
   letter-spacing: 1px;
+  text-align: right;
 }
 .sb-rows {
   overflow: hidden;
   padding: 2px 0 4px;
 }
 .sb-row {
-  display: grid;
-  grid-template-columns: 22px 1fr 36px 36px;
-  gap: 6px;
   align-items: center;
   padding: 2px 12px;
+  color: var(--ink);
   font-size: 12px;
+  font-weight: 700;
   line-height: 1.25;
-  color: rgba(245, 236, 214, 0.92);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
 }
 .sb-row:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(37, 185, 208, 0.11);
 }
 .sb-row.me {
-  background: rgba(212, 168, 73, 0.18);
-  color: #f4db9a;
+  background: var(--yellow);
+  color: var(--ink);
 }
 .sb-row.dead {
   opacity: 0.45;
 }
 .sb-rank {
-  color: rgba(180, 160, 120, 0.5);
+  color: var(--muted);
   font-size: 10px;
   text-align: center;
 }
@@ -933,132 +1048,52 @@ canvas {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sb-stat {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: rgba(230, 210, 170, 0.88);
-}
+.sb-stat,
 .sb-row.me .sb-stat {
-  color: #e8c86a;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
-/* —— 结束 / 暂停 —— */
-#endScreen {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.62);
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 95;
-  backdrop-filter: blur(8px);
-}
-#endScreen.show {
-  display: flex;
-}
-#endScreen h2 {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Noto Sans SC',
-    sans-serif;
-  font-size: 64px;
-  letter-spacing: 10px;
-  margin-bottom: 24px;
-}
-#endScreen h2.win {
-  color: #6ec85a;
-  text-shadow: 0 0 28px rgba(90, 180, 80, 0.35);
-}
-#endScreen h2.lose {
-  color: #e04050;
-  text-shadow: 0 0 28px rgba(196, 30, 58, 0.35);
-}
-#endStats {
-  padding: 18px 36px;
-  margin-bottom: 24px;
-  font-size: 13px;
-  line-height: 2.1;
-  color: rgba(200, 185, 155, 0.7);
-  letter-spacing: 1px;
-  text-align: center;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
-}
-#endStats .val {
-  color: #e0c06a;
-  font-family: 'Black Ops One', sans-serif;
-}
-#pauseScreen {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 80;
-  backdrop-filter: blur(8px);
-}
-#pauseScreen.show {
-  display: flex;
-}
-#pauseScreen h2 {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Noto Sans SC',
-    sans-serif;
-  font-size: 42px;
-  color: #e0c06a;
-  letter-spacing: 8px;
-  margin-bottom: 12px;
-  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.6);
-}
-#pauseScreen .settings {
-  margin: 0 0 24px;
-}
-#pauseScreen .btn,
-#endScreen .btn {
-  pointer-events: auto;
-}
-
-/* —— 底部操作提示 —— */
+/* 底部操作提示 */
 #controls {
   position: absolute;
   bottom: 14px;
   left: 50%;
-  transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 6px;
   max-width: 90%;
-  font-size: 9px;
-  color: rgba(180, 160, 120, 0.4);
+  color: var(--paper);
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 1px;
+  transform: translateX(-50%);
 }
 #controls span {
   padding: 3px 8px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  border: 2px solid var(--ink);
+  background: rgba(32, 35, 58, 0.78);
 }
 #controls b {
-  color: rgba(232, 200, 106, 0.7);
-  font-weight: normal;
+  color: var(--yellow);
+  font-weight: 900;
+}
+body.touch-mode #controls {
+  display: none;
 }
 
-/* —— 手机触摸控件 —— */
+/* 触摸控件 */
 #touchControls {
   position: absolute;
   inset: 0;
+  z-index: 60;
   display: none;
   pointer-events: none;
-  z-index: 60;
   touch-action: none;
-  -webkit-user-select: none;
   user-select: none;
+  -webkit-user-select: none;
 }
 #touchControls.show {
   display: block;
@@ -1071,57 +1106,60 @@ canvas {
 }
 #touchStick {
   position: absolute;
-  left: max(16px, env(safe-area-inset-left));
   bottom: max(72px, calc(env(safe-area-inset-bottom) + 56px));
+  left: max(16px, env(safe-area-inset-left));
+  z-index: 2;
   width: 132px;
   height: 132px;
   pointer-events: auto;
-  z-index: 2;
 }
 #touchStickBase {
   position: relative;
   width: 100%;
   height: 100%;
+  border: 3px solid var(--ink);
   border-radius: 50%;
-  border: 1px solid rgba(232, 200, 106, 0.28);
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.28);
+  background: rgba(245, 250, 239, 0.4);
+  box-shadow: inset 0 0 0 4px rgba(37, 185, 208, 0.35), 4px 4px 0 rgba(32, 35, 58, 0.55);
   touch-action: none;
 }
 #touchStickKnob {
   position: absolute;
-  left: 50%;
   top: 50%;
+  left: 50%;
   width: 54px;
   height: 54px;
+  border: 3px solid var(--ink);
   border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 4px 4px 0 rgba(32, 35, 58, 0.75);
   transform: translate(-50%, -50%);
-  background: rgba(232, 200, 106, 0.28);
-  border: 1px solid rgba(240, 215, 138, 0.55);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   pointer-events: none;
 }
 .touch-btn {
   position: absolute;
+  z-index: 3;
   min-width: 52px;
   min-height: 52px;
   padding: 8px 10px;
+  border: 3px solid var(--ink);
   border-radius: 999px;
-  border: 1px solid rgba(212, 168, 73, 0.42);
-  background: rgba(8, 8, 7, 0.42);
-  color: rgba(240, 230, 190, 0.92);
-  font-family: 'Russo One', 'Microsoft YaHei', sans-serif;
+  background: rgba(245, 250, 239, 0.82);
+  box-shadow: 4px 4px 0 rgba(32, 35, 58, 0.7);
+  color: var(--ink);
+  font-family: 'Noto Sans SC', sans-serif;
   font-size: 12px;
+  font-weight: 900;
   letter-spacing: 1px;
   pointer-events: auto;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
-  z-index: 3;
 }
 .touch-btn:active,
 .touch-btn.active {
-  background: rgba(212, 168, 73, 0.28);
-  border-color: rgba(232, 200, 106, 0.8);
+  background: var(--yellow);
+  box-shadow: 2px 2px 0 rgba(32, 35, 58, 0.7);
+  transform: translate(2px, 2px);
 }
 .touch-fire {
   right: max(18px, env(safe-area-inset-right));
@@ -1131,10 +1169,9 @@ canvas {
   min-width: 84px;
   min-height: 84px;
   border-radius: 50%;
+  background: var(--coral);
+  color: var(--paper);
   font-size: 15px;
-  color: #f0d78a;
-  background: rgba(120, 36, 18, 0.42);
-  border-color: rgba(255, 140, 80, 0.55);
 }
 #touchAim {
   right: max(112px, calc(env(safe-area-inset-right) + 96px));
@@ -1160,7 +1197,7 @@ canvas {
   top: max(12px, env(safe-area-inset-top));
   min-width: 58px;
   min-height: 40px;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 11px;
 }
 #touchScoreboard {
@@ -1170,64 +1207,61 @@ canvas {
   right: max(16px, env(safe-area-inset-right));
 }
 
+/* 旋转提示 */
 #rotateHint {
   position: fixed;
   inset: 0;
+  z-index: 180;
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(7, 7, 6, 0.92);
-  z-index: 180;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background-color: var(--paper);
+  background-image: radial-gradient(rgba(32, 35, 58, 0.16) 1px, transparent 1px);
+  background-size: 12px 12px;
   pointer-events: auto;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
 }
 #rotateHint.show {
   display: flex;
 }
 .rotate-card {
-  text-align: center;
   max-width: 280px;
+  text-align: center;
 }
 .rotate-icon {
-  font-size: 42px;
-  color: #e8c86a;
   margin-bottom: 14px;
+  color: var(--coral);
+  font-size: 42px;
   animation: spin 1.4s linear infinite;
 }
 .rotate-title {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    sans-serif;
-  font-size: 28px;
-  letter-spacing: 4px;
-  color: #e8c86a;
   margin-bottom: 10px;
+  color: var(--coral);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  text-shadow: 3px 3px 0 var(--yellow);
 }
 .rotate-sub {
+  color: var(--muted);
   font-size: 12px;
-  letter-spacing: 2px;
-  color: rgba(200, 180, 140, 0.55);
+  font-weight: 700;
   line-height: 1.7;
+  letter-spacing: 2px;
 }
 
-body.touch-mode #controls {
-  display: none;
-}
-
-/* —— 击杀确认 —— */
+/* 击杀确认 */
 #killNotify {
   position: absolute;
-  left: 50%;
   bottom: 22%;
-  transform: translateX(-50%) scale(0.72);
-  text-align: center;
-  opacity: 0;
-  pointer-events: none;
+  left: 50%;
   z-index: 58;
   min-width: 240px;
+  text-align: center;
+  opacity: 0;
+  transform: translateX(-50%) scale(0.72);
+  pointer-events: none;
 }
 #killNotify.show {
   opacity: 1;
@@ -1261,60 +1295,42 @@ body.touch-mode #controls {
   align-items: center;
   justify-content: center;
   padding: 4px 18px 6px;
+  border: 3px solid var(--ink);
+  background: var(--yellow);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 #killNotify .kn-title {
-  font-family:
-    'Black Ops One',
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Noto Sans SC',
-    sans-serif;
+  color: var(--ink);
+  font-family: 'Noto Sans SC', sans-serif;
   font-size: 20px;
-  letter-spacing: 4px;
+  font-weight: 900;
   line-height: 1;
-  color: #ffe08a;
-  text-shadow:
-    0 0 16px rgba(255, 160, 40, 0.45),
-    0 2px 10px rgba(0, 0, 0, 0.9);
-}
-#killNotify.headshot .kn-title {
-  color: #ff6b4a;
-  text-shadow:
-    0 0 16px rgba(255, 60, 30, 0.5),
-    0 2px 10px rgba(0, 0, 0, 0.9);
-}
-#killNotify.multi .kn-title {
-  color: #fff2b0;
-  text-shadow:
-    0 0 18px rgba(255, 210, 80, 0.55),
-    0 2px 10px rgba(0, 0, 0, 0.9);
+  letter-spacing: 4px;
 }
 #killNotify .kn-sub {
   margin-top: 6px;
+  color: var(--paper);
   font-size: 12px;
+  font-weight: 900;
   letter-spacing: 2px;
-  color: rgba(232, 210, 160, 0.85);
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
-}
-#killNotify .kn-sub b {
-  color: #ff9a55;
+  text-shadow: 2px 0 var(--ink), -2px 0 var(--ink), 0 2px var(--ink), 0 -2px var(--ink);
 }
 #killNotify .kn-streak {
   margin-top: 2px;
+  color: var(--yellow);
   font-size: 10px;
+  font-weight: 900;
   letter-spacing: 3px;
-  color: rgba(212, 168, 73, 0.75);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
 }
 #killNotify .kn-flash {
   position: absolute;
-  left: 50%;
   top: 50%;
+  left: 50%;
   width: 100%;
   height: 120%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(255, 180, 60, 0.22), transparent 60%);
+  background: radial-gradient(circle, rgba(255, 212, 71, 0.52), transparent 60%);
   opacity: 0;
+  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 #killNotify.show .kn-flash {
@@ -1331,53 +1347,53 @@ body.touch-mode #controls {
   }
 }
 
-/* —— 响应式 —— */
+/* 紧凑布局 */
 @media (max-width: 760px), (max-height: 620px) {
   #loader h1 {
     font-size: 34px;
     letter-spacing: 5px;
   }
   #loader h2 {
+    margin-bottom: 28px;
     font-size: 10px;
     letter-spacing: 8px;
-    margin-bottom: 28px;
   }
   #menu {
-    padding: 20px;
+    padding: 18px 6vw;
   }
   #menu h1 {
-    font-size: 42px;
-    letter-spacing: 5px;
-    text-align: center;
+    font-size: 48px;
+    letter-spacing: 2px;
+    text-shadow: 3px 0 var(--ink), -3px 0 var(--ink), 0 3px var(--ink), 0 -3px var(--ink), 6px 6px var(--coral);
   }
   #menu .sub {
+    margin-bottom: 20px;
     font-size: 10px;
-    letter-spacing: 8px;
-    margin-bottom: 24px;
+  }
+  #menu .settings {
+    margin-top: 20px;
   }
   #menu .info {
-    margin-top: 20px;
-    font-size: 10px;
     max-width: 560px;
+    margin-top: 18px;
+    font-size: 10px;
+    line-height: 1.6;
   }
   #topBar {
     top: 8px;
     min-width: 240px;
-    gap: 12px;
-    padding: 4px 8px;
+    border-width: 2px;
   }
   .score {
-    font-size: 24px;
     min-width: 36px;
-  }
-  #targetKill {
-    letter-spacing: 1px;
+    font-size: 24px;
   }
   #minimap {
-    width: 104px;
-    height: 104px;
     top: 8px;
     right: 8px;
+    width: 104px;
+    height: 104px;
+    border-width: 2px;
   }
   #killFeed {
     top: 8px;
@@ -1388,40 +1404,29 @@ body.touch-mode #controls {
     padding: 4px 8px;
     font-size: 9px;
   }
+  #healthWrap,
+  #ammoWrap {
+    bottom: max(10px, env(safe-area-inset-bottom));
+    padding: 7px 9px;
+    border-width: 2px;
+  }
   #healthWrap {
     left: max(10px, env(safe-area-inset-left));
-    bottom: max(10px, env(safe-area-inset-bottom));
     width: min(220px, 42vw);
   }
   #ammoWrap {
     right: max(10px, env(safe-area-inset-right));
-    bottom: max(10px, env(safe-area-inset-bottom));
     min-width: 110px;
-  }
-  #touchStick {
-    width: 118px;
-    height: 118px;
-    bottom: max(64px, calc(env(safe-area-inset-bottom) + 48px));
-  }
-  #touchStickKnob {
-    width: 48px;
-    height: 48px;
-  }
-  .touch-fire {
-    width: 76px;
-    height: 76px;
-    min-width: 76px;
-    min-height: 76px;
-  }
-  #touchJump,
-  #touchCrouch {
-    bottom: max(168px, calc(env(safe-area-inset-bottom) + 152px));
   }
   #ammoDisplay {
     font-size: 34px;
   }
   #ammoDisplay .reserve {
     font-size: 14px;
+  }
+  #lowAmmo {
+    right: 10px;
+    bottom: 78px;
   }
   #controls {
     display: none;
@@ -1441,18 +1446,14 @@ body.touch-mode #controls {
   }
   .sb-col-head,
   .sb-row {
-    padding-left: 8px;
+    grid-template-columns: 18px minmax(0, 1fr) 30px 30px;
     padding-right: 8px;
-    grid-template-columns: 18px 1fr 30px 30px;
+    padding-left: 8px;
     font-size: 11px;
   }
   .sb-row {
     padding-top: 1px;
     padding-bottom: 1px;
-  }
-  #lowAmmo {
-    bottom: 78px;
-    right: 10px;
   }
   .spawn-marker {
     min-width: 64px;
@@ -1464,22 +1465,72 @@ body.touch-mode #controls {
   .spawn-marker-name {
     font-size: 10px;
   }
+  #touchStick {
+    bottom: max(64px, calc(env(safe-area-inset-bottom) + 48px));
+    width: 118px;
+    height: 118px;
+  }
+  #touchStickKnob {
+    width: 48px;
+    height: 48px;
+  }
+  .touch-btn {
+    border-width: 2px;
+    box-shadow: 3px 3px 0 rgba(32, 35, 58, 0.7);
+  }
+  .touch-fire {
+    width: 76px;
+    height: 76px;
+    min-width: 76px;
+    min-height: 76px;
+  }
+  #touchJump,
+  #touchCrouch {
+    bottom: max(168px, calc(env(safe-area-inset-bottom) + 152px));
+  }
+}
+
+@media (max-height: 430px) and (min-aspect-ratio: 4 / 3) {
+  #menu h1 {
+    margin-bottom: 8px;
+    font-size: 38px;
+  }
+  #menu .sub {
+    margin-bottom: 12px;
+    padding-block: 3px;
+  }
+  #menu .btn {
+    padding-block: 8px;
+  }
+  #menu .settings {
+    gap: 8px;
+    margin-top: 14px;
+  }
+  #menu .setting {
+    gap: 4px;
+  }
+  #menu .info {
+    margin-top: 12px;
+    font-size: 9px;
+    line-height: 1.45;
+  }
+  #menu .battle-info {
+    margin-top: 5px;
+  }
 }
 
 @media (max-width: 540px) {
   #menu h1 {
-    font-size: 32px;
+    font-size: 36px;
   }
-  #menu .sub {
-    letter-spacing: 5px;
-  }
-  #menu .info {
-    line-height: 1.6;
+  #menu::before,
+  #menu::after {
+    opacity: 0.2;
   }
   #topBar {
     left: 8px;
+    min-width: 210px;
     transform: none;
-    min-width: 200px;
   }
   #minimap {
     width: 88px;
@@ -1489,10 +1540,7 @@ body.touch-mode #controls {
     top: 64px;
   }
   #healthWrap {
-    width: calc(100vw - 140px);
-  }
-  #weaponName {
-    letter-spacing: 2px;
+    width: calc(100vw - 150px);
   }
   .spawn-marker-name {
     display: none;

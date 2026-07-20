@@ -203,35 +203,32 @@ export function createWorldSystem({ scene, matLib, state, config }) {
   function createSky() {
     const skyMat = new THREE.ShaderMaterial({
       uniforms: {
-        topColor: { value: new THREE.Color(0x7895ad) },
-        midColor: { value: new THREE.Color(0xc4c9c6) },
-        botColor: { value: new THREE.Color(0x9c9888) },
-        hazeColor: { value: new THREE.Color(0xc7c9c1) },
+        topColor: { value: new THREE.Color(0x337fbf) },
+        midColor: { value: new THREE.Color(0x68bddc) },
+        horizonColor: { value: new THREE.Color(0xeeb58f) },
       },
       vertexShader: `
         varying vec3 vWorldPos;
-        void main(){
+        void main() {
           vec4 world = modelMatrix * vec4(position, 1.0);
           vWorldPos = world.xyz;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
-        uniform vec3 topColor, midColor, botColor, hazeColor;
+        uniform vec3 topColor, midColor, horizonColor;
         varying vec3 vWorldPos;
-        void main(){
+        void main() {
           vec3 dir = normalize(vWorldPos);
           float h = dir.y;
-          vec3 col;
-          if(h > 0.0){
-            col = mix(midColor, topColor, smoothstep(0.0, 0.78, h));
-            float sunGlow = pow(max(0.0, dot(dir, normalize(vec3(0.55, 0.28, 0.35)))), 18.0);
-            col += vec3(1.0, 0.72, 0.4) * sunGlow * 0.35;
-          } else {
-            col = mix(midColor, botColor, smoothstep(0.0, -0.4, h));
-          }
-          float horizon = exp(-abs(h) * 7.5);
-          col = mix(col, hazeColor, horizon * 0.55);
+          float skyBand = floor(clamp(h * 4.0, 0.0, 3.0)) / 3.0;
+          vec3 col = mix(midColor, topColor, skyBand);
+          col = mix(horizonColor, col, step(0.07, abs(h)));
+          vec3 sunDir = normalize(vec3(0.55, 0.28, 0.35));
+          float sunDisk = step(0.991, dot(dir, sunDir));
+          float sunRing = step(0.986, dot(dir, sunDir)) - sunDisk;
+          col = mix(col, vec3(1.0, 0.86, 0.28), sunDisk);
+          col = mix(col, vec3(1.0, 0.55, 0.38), sunRing * 0.7);
           gl_FragColor = vec4(col, 1.0);
         }
       `,
@@ -240,25 +237,26 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     })
     scene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMat))
 
-    // 体积感云层
-    const cloudMat = new THREE.MeshBasicMaterial({
-      color: 0xd4d4cf,
-      transparent: true,
-      opacity: 0.24,
-      depthWrite: false,
-    })
-    for (let i = 0; i < 18; i++) {
+    const cloudGeometry = new THREE.DodecahedronGeometry(1, 0)
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xe8f1e6 })
+    const cloudShadeMat = new THREE.MeshBasicMaterial({ color: 0x82adbd })
+    for (let i = 0; i < 15; i++) {
       const cloud = new THREE.Group()
       const baseAngle = Math.random() * Math.PI * 2
-      const baseRadius = 180 + Math.random() * 280
-      const baseY = 55 + Math.random() * 45
+      const baseRadius = 170 + Math.random() * 300
+      const baseY = 54 + Math.random() * 55
       for (let j = 0; j < 5; j++) {
-        const puff = new THREE.Mesh(
-          new THREE.SphereGeometry(12 + Math.random() * 18, 8, 6),
-          cloudMat
-        )
-        puff.position.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 20)
-        puff.scale.set(1.4 + Math.random(), 0.45 + Math.random() * 0.3, 1 + Math.random() * 0.5)
+        const scale = 11 + Math.random() * 15
+        const x = (j - 2) * 11 + (Math.random() - 0.5) * 8
+        const y = (Math.random() - 0.5) * 7
+        const z = (Math.random() - 0.5) * 14
+        const shade = new THREE.Mesh(cloudGeometry, cloudShadeMat)
+        shade.position.set(x, y - 2.6, z + 0.8)
+        shade.scale.set(scale * 1.35, scale * 0.42, scale)
+        cloud.add(shade)
+        const puff = new THREE.Mesh(cloudGeometry, cloudMat)
+        puff.position.set(x, y, z)
+        puff.scale.set(scale * 1.35, scale * 0.42, scale)
         cloud.add(puff)
       }
       cloud.position.set(Math.cos(baseAngle) * baseRadius, baseY, Math.sin(baseAngle) * baseRadius)
@@ -267,12 +265,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
   }
 
   function createDistantHills(half) {
-    const hillMat = new THREE.MeshStandardMaterial({
-      color: 0x5a5e48,
-      roughness: 1,
-      metalness: 0,
-      flatShading: true,
-    })
+    const hillMat = matLib.hill
     for (let i = 0; i < 16; i++) {
       const angle = (i / 16) * Math.PI * 2 + Math.random() * 0.2
       const radius = half + 40 + Math.random() * 50
@@ -295,7 +288,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     const crater = enableShadow(
       new THREE.Mesh(
         new THREE.CircleGeometry(radius, 20),
-        new THREE.MeshStandardMaterial({ color: 0x2c2118, roughness: 1, metalness: 0 })
+        matLib.crater
       ),
       false,
       true
@@ -505,6 +498,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       group.add(rubble)
     }
 
+    matLib.addOutline(group, 1.018)
     scene.add(group)
     // 基座/屋顶略外扩，高度覆盖人字屋顶
     pushBoxObstacle({
@@ -698,7 +692,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     const scorch = enableShadow(
       new THREE.Mesh(
         new THREE.CircleGeometry(2.4, 12),
-        new THREE.MeshStandardMaterial({ color: 0x1a1510, roughness: 1 })
+        matLib.scorch
       ),
       false,
       true
@@ -718,6 +712,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       group.add(hatch)
     }
 
+    matLib.addOutline(group, 1.028)
     scene.add(group)
     // 车体+履带+侧裙；炮管细长不单独扩深
     pushBoxObstacle({
@@ -912,13 +907,14 @@ export function createWorldSystem({ scene, matLib, state, config }) {
 
   function createSmokeColumn(x, z) {
     for (let i = 0; i < 7; i++) {
-      const shade = 0x2a2520 + Math.floor(Math.random() * 0x101008)
+      const smokeColors = [0x555269, 0x68627a, 0x7d7488]
+      const shade = smokeColors[Math.floor(Math.random() * smokeColors.length)]
       const puff = new THREE.Mesh(
         new THREE.SphereGeometry(1.8 + i * 0.55, 8, 6),
         new THREE.MeshBasicMaterial({
           color: shade,
           transparent: true,
-          opacity: 0.28 - i * 0.03,
+          opacity: 0.42 - i * 0.035,
           depthWrite: false,
         })
       )

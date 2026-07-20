@@ -42,16 +42,8 @@ export class WeaponView {
     const wood = this.matLib.wood
     const metal = this.matLib.metal
     const dark = this.matLib.metalDark
-    const brass = new THREE.MeshStandardMaterial({
-      color: 0xb08a3a,
-      roughness: 0.42,
-      metalness: 0.78,
-    })
-    const blued = new THREE.MeshStandardMaterial({
-      color: 0x2a3038,
-      roughness: 0.35,
-      metalness: 0.9,
-    })
+    const brass = this.matLib.brass
+    const blued = this.matLib.blued
     const add = (mesh, parent = this.group) => {
       mesh.castShadow = false
       mesh.receiveShadow = true
@@ -93,11 +85,7 @@ export class WeaponView {
     this.group.add(this.muzzlePos)
 
     this.bayonet = new THREE.Group()
-    const bladeMat = new THREE.MeshStandardMaterial({
-      color: 0xc8c4b8,
-      roughness: 0.28,
-      metalness: 0.9,
-    })
+    const bladeMat = this.matLib.blade
     const mount = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.016, 0.04), dark)
     mount.position.set(0, -0.014, 0)
     this.bayonet.add(mount)
@@ -167,6 +155,7 @@ export class WeaponView {
     this.smoothPos.copy(this.basePosition)
     this.group.position.copy(this.basePosition)
     this.group.rotation.y = 0.03
+    this.matLib.addOutline(this.group, 1.025)
   }
 
   setVisible(visible) {
