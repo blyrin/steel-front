@@ -18,18 +18,16 @@ export function createCombatSystem({ state, effects, audio, hud }) {
     const targets = state.bots.filter(bot => bot.alive && bot.team !== team)
     if (state.player.alive && state.player.team !== team) targets.push(state.player)
     let hitTarget = null
+    let headshot = false
     let closestTarget = hit ? closestObstacle : 200
     for (const target of targets) {
-      const targetPosition = target.position.clone()
-      targetPosition.y = 1.2
-      const toTarget = new THREE.Vector3().subVectors(targetPosition, origin)
-      const projection = toTarget.dot(direction)
-      if (projection < 0 || projection > closestTarget) continue
-      const closest = origin.clone().add(direction.clone().multiplyScalar(projection))
-      if (closest.distanceTo(targetPosition) < 0.5) {
-        closestTarget = projection
-        hitPoint = closest
+      for (const hitbox of target.getHitboxes()) {
+        const t = rayHitObstacle(origin, direction, hitbox, closestTarget)
+        if (t == null) continue
+        closestTarget = t
+        hitPoint = origin.clone().add(direction.clone().multiplyScalar(t))
         hitTarget = target
+        headshot = hitbox.headshot
         hit = true
       }
     }
@@ -37,9 +35,9 @@ export function createCombatSystem({ state, effects, audio, hud }) {
     const lineEnd = hit ? hitPoint : origin.clone().add(direction.clone().multiplyScalar(200))
     effects.addTracer(muzzle.clone().addScaledVector(direction, 0.1), lineEnd)
     if (hitTarget) {
-      const headshot = hitPoint.y > 1.55
-      if (hitTarget === state.player) hitTarget.takeDamage(headshot ? 100 : 35, origin, owner)
-      else hitTarget.takeDamage(headshot ? 100 : 35, owner, headshot)
+      const damage = headshot ? 100 : 35
+      if (hitTarget === state.player) hitTarget.takeDamage(damage, origin, owner)
+      else hitTarget.takeDamage(damage, owner, headshot)
       if (owner === state.player) {
         hud.showHitMarker()
         hud.addScreenShake(headshot ? 0.16 : 0.1)

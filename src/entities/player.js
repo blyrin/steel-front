@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
+import { createCircleHitbox, rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
 import { WeaponView } from './weapon-view.js'
 
 export class Player {
@@ -79,6 +79,10 @@ export class Player {
     this.lastKillAt = 0
     this.radius = 0.4
     this.standHeight = 1.7
+    this.hitboxes = [
+      createCircleHitbox(this.radius, 0, this.standHeight - 0.22),
+      createCircleHitbox(this.radius * 0.78, this.standHeight - 0.32, this.standHeight, true),
+    ]
     this.crouchHeight = 1.1
     this.currentHeight = 1.7
     this._moveDirection = new THREE.Vector3()
@@ -86,6 +90,18 @@ export class Player {
     this._moveAxis = { x: 0, z: 0 }
     camera.position.copy(this.position)
     camera.rotation.order = 'YXZ'
+  }
+
+  getHitboxes() {
+    const height = this.currentHeight
+    this.hitboxes[0].maxY = height - 0.22
+    this.hitboxes[1].minY = height - 0.32
+    this.hitboxes[1].maxY = height
+    for (const hitbox of this.hitboxes) {
+      hitbox.x = this.position.x
+      hitbox.z = this.position.z
+    }
+    return this.hitboxes
   }
 
   addShake(amount) {
@@ -235,14 +251,10 @@ export class Player {
     let hitDistance = this.meleeRange
     for (const bot of this.state.bots) {
       if (!bot.alive || bot.team === this.team) continue
-      const chest = bot.position.clone()
-      chest.y = 1.15
-      const toTarget = chest.clone().sub(origin)
-      const projection = toTarget.dot(direction)
-      if (projection < 0.15 || projection > this.meleeRange) continue
-      const closest = origin.clone().add(direction.clone().multiplyScalar(projection))
-      if (closest.distanceTo(chest) < 0.75 && projection < hitDistance) {
-        hitDistance = projection
+      for (const hitbox of bot.getHitboxes()) {
+        const t = rayHitObstacle(origin, direction, hitbox, hitDistance)
+        if (t == null || t < 0.15) continue
+        hitDistance = t
         hitBot = bot
       }
     }
@@ -464,7 +476,12 @@ export class Player {
   handleCollisions() {
     for (const obstacle of this.state.obstacles) {
       if (obstacle.type === 'ground' || obstacle.type === 'crater') continue
-      resolveObstacleCollision(this.position, this.radius, obstacle)
+      resolveObstacleCollision(
+        this.position,
+        this.radius,
+        obstacle,
+        this.position.y - this.currentHeight
+      )
     }
   }
 }

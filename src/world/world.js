@@ -13,10 +13,10 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     foliage: new THREE.IcosahedronGeometry(1, 0),
   }
 
-  function pushBoxObstacle({ type, x, z, w, d, h, rot }) {
+  function pushBoxObstacle({ type, x, z, w, d, h, rot, minY = 0 }) {
     const cos = Math.cos(rot)
     const sin = Math.sin(rot)
-    state.obstacles.push({
+    const obstacle = {
       type,
       shape: 'box',
       x,
@@ -24,12 +24,60 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       w,
       d,
       h,
+      minY,
+      maxY: minY + h,
       rot,
       cos,
       sin,
       hw: w * 0.5,
       hd: d * 0.5,
       r: Math.sqrt(w * w + d * d) * 0.5,
+    }
+    state.obstacles.push(obstacle)
+    return obstacle
+  }
+
+  function pushModelObstacle({ type, model }) {
+    // 用模型实际变换后的几何范围生成碰撞盒，避免随机尺寸再次漂移
+    model.updateMatrixWorld(true)
+    const modelMatrix = model.matrixWorld
+    const worldToModel = modelMatrix.clone().invert()
+    const localBounds = new THREE.Box3()
+    const worldBounds = new THREE.Box3()
+    const corner = new THREE.Vector3()
+
+    model.traverse(object => {
+      if (!object.isMesh || object.name === 'ink-outline' || object.userData.noCollision) return
+      if (!object.geometry.boundingBox) object.geometry.computeBoundingBox()
+      const { min, max } = object.geometry.boundingBox
+      for (let i = 0; i < 8; i++) {
+        corner.set(
+          i & 1 ? max.x : min.x,
+          i & 2 ? max.y : min.y,
+          i & 4 ? max.z : min.z
+        )
+        corner.applyMatrix4(object.matrixWorld)
+        worldBounds.expandByPoint(corner)
+        corner.applyMatrix4(worldToModel)
+        localBounds.expandByPoint(corner)
+      }
+    })
+
+    const localCenter = localBounds.getCenter(new THREE.Vector3())
+    const worldCenter = localCenter.applyMatrix4(modelMatrix)
+    const worldXAxis = new THREE.Vector3(1, 0, 0).transformDirection(modelMatrix)
+    worldXAxis.y = 0
+    worldXAxis.normalize()
+    const rotation = Math.atan2(-worldXAxis.z, worldXAxis.x)
+    return pushBoxObstacle({
+      type,
+      x: worldCenter.x,
+      z: worldCenter.z,
+      w: localBounds.max.x - localBounds.min.x,
+      d: localBounds.max.z - localBounds.min.z,
+      h: worldBounds.max.y - worldBounds.min.y,
+      minY: worldBounds.min.y,
+      rot: rotation,
     })
   }
 
@@ -498,20 +546,10 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       group.add(rubble)
     }
 
-    matLib.addOutline(group, 1.018)
     scene.add(group)
-    // 基座/屋顶略外扩，高度覆盖人字屋顶
-    pushBoxObstacle({
-      type: 'building',
-      x,
-      z,
-      w: width + 0.25,
-      d: depth + 0.25,
-      h: height + 1.4,
-      rot: rotation,
-    })
-    const radius = Math.sqrt((width + 0.25) ** 2 + (depth + 0.25) ** 2) / 2
-    state.coverPoints.push({ x, z, r: radius + 1, type: 'building' })
+    const obstacle = pushModelObstacle({ type: 'building', model: group })
+    matLib.addOutline(group, 1.018)
+    state.coverPoints.push({ x, z, r: obstacle.r + 1, type: 'building' })
   }
 
   function createSandbags(x, z, rotation = 0) {
@@ -542,17 +580,8 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     group.add(plank)
 
     scene.add(group)
-    // 胶囊横放：两端约 ±1.62，厚度含错层与木板
-    pushBoxObstacle({
-      type: 'sandbag',
-      x,
-      z,
-      w: 3.3,
-      d: 1.15,
-      h: 1.25,
-      rot: rotation,
-    })
-    state.coverPoints.push({ x, z, r: 1.8, type: 'sandbag' })
+    const obstacle = pushModelObstacle({ type: 'sandbag', model: group })
+    state.coverPoints.push({ x, z, r: obstacle.r + 0.15, type: 'sandbag' })
   }
 
   function createCrate(x, z, rotation) {
@@ -595,15 +624,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     }
 
     scene.add(group)
-    pushBoxObstacle({
-      type: 'crate',
-      x,
-      z,
-      w: lidOpen ? size * 1.35 : size + 0.04,
-      d: size + 0.04,
-      h: lidOpen ? size * 1.15 : size + 0.04,
-      rot: rotation,
-    })
+    pushModelObstacle({ type: 'crate', model: group })
   }
 
   function createWreckTank(x, z, rotation) {
@@ -697,6 +718,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       false,
       true
     )
+    scorch.userData.noCollision = true
     scorch.rotation.x = -Math.PI / 2
     scorch.position.set(0, 0.02, 0)
     group.add(scorch)
@@ -712,19 +734,10 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       group.add(hatch)
     }
 
-    matLib.addOutline(group, 1.028)
     scene.add(group)
-    // 车体+履带+侧裙；炮管细长不单独扩深
-    pushBoxObstacle({
-      type: 'tank',
-      x,
-      z,
-      w: 3.45,
-      d: 5.2,
-      h: 2.45,
-      rot: rotation,
-    })
-    state.coverPoints.push({ x, z, r: 3.15, type: 'tank' })
+    const obstacle = pushModelObstacle({ type: 'tank', model: group })
+    matLib.addOutline(group, 1.028)
+    state.coverPoints.push({ x, z, r: obstacle.r, type: 'tank' })
   }
 
   function createBarbedWire(x, z, rotation) {
@@ -756,16 +769,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       group.add(coil)
     }
     scene.add(group)
-    // 桩距 ±1.5，铁丝长 3.2，卷丝略前伸
-    pushBoxObstacle({
-      type: 'wire',
-      x,
-      z,
-      w: 3.3,
-      d: 0.55,
-      h: 1.55,
-      rot: rotation,
-    })
+    pushModelObstacle({ type: 'wire', model: group })
   }
 
   function createTree(x, z) {
@@ -839,14 +843,14 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     }
 
     scene.add(group)
-    // 树干底径约 0.32~0.47，碰撞取躯干
     state.obstacles.push({
       type: 'tree',
       shape: 'circle',
       x,
       z,
-      r: 0.45,
-      h: trunkH + 0.3,
+      r: trunkRadius,
+      minY: 0,
+      maxY: trunkH,
     })
   }
 
@@ -894,6 +898,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       group.add(drum)
     }
     scene.add(group)
+    pushModelObstacle({ type: 'debris', model: group })
   }
 
   function createSmokeColumns() {

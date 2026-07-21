@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
+import { createBoxHitbox, rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
 
 const BOT_GEOMETRY = {
   leg: new THREE.BoxGeometry(0.17, 0.72, 0.2),
@@ -71,6 +71,10 @@ export class Bot {
     this.kills = 0
     this.deaths = 0
     this.radius = 0.4
+    this.hitboxes = [
+      createBoxHitbox(0.77, 0.56, 0, 1.52),
+      createBoxHitbox(0.46, 0.46, 1.5, 1.96, true),
+    ]
     this._seeOrigin = new THREE.Vector3()
     this._seeDir = new THREE.Vector3()
     this._moveDirection = new THREE.Vector3()
@@ -454,6 +458,20 @@ export class Bot {
   getRandomPatrolPoint() {
     const half = this.config.mapSize * 0.42
     return new THREE.Vector3((Math.random() - 0.5) * half * 2, 0, (Math.random() - 0.5) * half * 2)
+  }
+
+  getHitboxes() {
+    const rotation = this.yaw
+    const cos = Math.cos(rotation)
+    const sin = Math.sin(rotation)
+    for (const hitbox of this.hitboxes) {
+      hitbox.x = this.position.x
+      hitbox.z = this.position.z
+      hitbox.rot = rotation
+      hitbox.cos = cos
+      hitbox.sin = sin
+    }
+    return this.hitboxes
   }
 
   canSee(target) {

@@ -1,3 +1,34 @@
+export function createCircleHitbox(radius, minY, maxY, headshot = false) {
+  return {
+    shape: 'circle',
+    x: 0,
+    z: 0,
+    r: radius,
+    minY,
+    maxY,
+    headshot,
+  }
+}
+
+export function createBoxHitbox(width, depth, minY, maxY, headshot = false) {
+  return {
+    shape: 'box',
+    x: 0,
+    z: 0,
+    w: width,
+    d: depth,
+    hw: width * 0.5,
+    hd: depth * 0.5,
+    r: Math.sqrt(width * width + depth * depth) * 0.5,
+    minY,
+    maxY,
+    headshot,
+    rot: 0,
+    cos: 1,
+    sin: 0,
+  }
+}
+
 function clamp(value, min, max) {
   return value < min ? min : value > max ? max : value
 }
@@ -23,8 +54,8 @@ function resolveBox(position, radius, obstacle) {
   const cos = obstacle.cos
   const sin = obstacle.sin
   // world -> local
-  const lx = dx * cos + dz * sin
-  const lz = -dx * sin + dz * cos
+  const lx = dx * cos - dz * sin
+  const lz = dx * sin + dz * cos
   const halfW = obstacle.hw
   const halfD = obstacle.hd
   const closestX = clamp(lx, -halfW, halfW)
@@ -50,11 +81,13 @@ function resolveBox(position, radius, obstacle) {
   }
 
   // local -> world
-  position.x = obstacle.x + nlx * cos - nlz * sin
-  position.z = obstacle.z + nlx * sin + nlz * cos
+  position.x = obstacle.x + nlx * cos + nlz * sin
+  position.z = obstacle.z - nlx * sin + nlz * cos
 }
 
-export function resolveObstacleCollision(position, radius, obstacle) {
+export function resolveObstacleCollision(position, radius, obstacle, bottomY = 0) {
+  // 角色脚底高于障碍物顶部时，允许从上方越过
+  if (bottomY >= obstacle.maxY) return
   if (obstacle.shape === 'box') resolveBox(position, radius, obstacle)
   else resolveCircle(position, radius, obstacle)
 }
@@ -80,10 +113,10 @@ function rayBoxFlat(ox, oz, dx, dz, obstacle, maxDist) {
   const cz = oz - obstacle.z
   const cos = obstacle.cos
   const sin = obstacle.sin
-  const lx = cx * cos + cz * sin
-  const lz = -cx * sin + cz * cos
-  const ldx = dx * cos + dz * sin
-  const ldz = -dx * sin + dz * cos
+  const lx = cx * cos - cz * sin
+  const lz = cx * sin + cz * cos
+  const ldx = dx * cos - dz * sin
+  const ldz = dx * sin + dz * cos
   const halfW = obstacle.hw
   const halfD = obstacle.hd
 
@@ -155,8 +188,9 @@ export function rayHitObstacle(origin, direction, obstacle, maxDist) {
   const t = tFlat * invFlat
   if (t < 0 || t > maxDist) return null
   const hitY = origin.y + direction.y * t
-  const height = obstacle.h ?? 3
-  if (hitY < 0 || hitY > height) return null
+  const minY = obstacle.minY ?? 0
+  const maxY = obstacle.maxY ?? obstacle.h ?? 3
+  if (hitY < minY || hitY > maxY) return null
   return t
 }
 
