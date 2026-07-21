@@ -49,6 +49,9 @@ const CONTROL_KEYS = new Set([
   'KeyD',
   'KeyR',
   'KeyF',
+  'KeyG',
+  'KeyH',
+  'KeyE',
   'KeyC',
   'Space',
   'ShiftLeft',
@@ -60,6 +63,9 @@ const TOUCH_PRESS_CODES = {
   crouch: 'KeyC',
   reload: 'KeyR',
   melee: 'KeyF',
+  grenade: 'KeyG',
+  item: 'KeyH',
+  supply: 'KeyE',
   scoreboard: 'Tab',
 }
 
@@ -547,6 +553,9 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
   bindTogglePress(dom?.touchCrouch, TOUCH_PRESS_CODES.crouch)
   bindTogglePress(dom?.touchReload, TOUCH_PRESS_CODES.reload)
   bindTogglePress(dom?.touchMelee, TOUCH_PRESS_CODES.melee)
+  bindTogglePress(dom?.touchGrenade, TOUCH_PRESS_CODES.grenade)
+  bindTogglePress(dom?.touchItem, TOUCH_PRESS_CODES.item)
+  bindTogglePress(dom?.touchSupply, TOUCH_PRESS_CODES.supply)
   bindHoldButton(
     dom?.touchScoreboard,
     () => {

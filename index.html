@@ -102,6 +102,15 @@
           <input type="range" id="menuSens" min="20" max="200" value="100" />
         </label>
       </div>
+      <section id="recordsPanel" aria-label="战绩">
+        <div class="records-heading">
+          <div>
+            <span class="records-kicker">PERSONNEL LOG / 01</span>
+            <span class="records-title">战绩档案</span>
+          </div>
+        </div>
+        <div id="recordsStats"></div>
+      </section>
       <div class="info">
         <div>
           <span>WASD</span> 移动　<span>SHIFT</span> 冲刺　<span>C</span> 切换蹲下　<span
@@ -111,7 +120,8 @@
         </div>
         <div>
           <span>左键</span> 射击　<span>R</span> 装弹　<span>右键</span> 瞄准　<span>F</span>
-          刺刀　<span>TAB</span> 计分板　<span>ESC</span> 暂停
+          刺刀　<span>G</span> 手雷　<span>H</span> 道具　<span>E</span> 补给　<span>TAB</span>
+          计分板　<span>ESC</span> 暂停
         </div>
         <div class="battle-info">盟军部队与轴心国部队在法国北部村庄激战</div>
       </div>
@@ -170,6 +180,7 @@
           <span id="ammoCur">8</span><span class="reserve"> / <span id="ammoRes">96</span></span>
         </div>
         <div id="fireMode">半自动</div>
+        <div id="equipmentStatus"></div>
       </div>
       <div id="lowAmmo">弹药不足 — 按 R 装弹</div>
       <div id="minimap">
@@ -177,6 +188,7 @@
       </div>
       <div id="killFeed"></div>
       <div id="centerMsg"></div>
+      <div id="actionMsg"></div>
       <div id="deathScreen">
         <h2>阵亡</h2>
         <div class="killer-info" id="killerInfo"></div>
@@ -231,8 +243,8 @@
       <div id="controls">
         <span><b>WASD</b> 移动</span><span><b>SHIFT</b> 冲刺</span><span><b>C</b> 切换下蹲</span>
         <span><b>左键</b> 射击</span><span><b>R</b> 装弹</span><span><b>右键</b> 瞄准</span
-        ><span><b>F</b> 刺刀</span><span><b>TAB</b> 计分板</span
-        ><span><b>ESC</b> 暂停</span>
+        ><span><b>F</b> 刺刀</span><span><b>G</b> 手雷</span><span><b>H</b> 道具</span
+        ><span><b>E</b> 补给</span><span><b>TAB</b> 计分板</span><span><b>ESC</b> 暂停</span>
       </div>
       <div id="touchControls">
         <div id="touchLookPad"></div>
@@ -249,6 +261,9 @@
         <button type="button" class="touch-btn" id="touchCrouch" data-touch-action>蹲</button>
         <button type="button" class="touch-btn" id="touchReload" data-touch-action>装弹</button>
         <button type="button" class="touch-btn" id="touchMelee" data-touch-action>刺刀</button>
+        <button type="button" class="touch-btn" id="touchGrenade" data-touch-action>雷</button>
+        <button type="button" class="touch-btn" id="touchItem" data-touch-action>道具</button>
+        <button type="button" class="touch-btn" id="touchSupply" data-touch-action>补给</button>
         <button type="button" class="touch-btn touch-top" id="touchScoreboard" data-touch-action>
           战况
         </button>
@@ -267,6 +282,21 @@
     </div>
 
     <div id="deployScreen">
+      <aside id="loadoutPanel">
+        <div class="loadout-heading">作战配装</div>
+        <div class="loadout-section">
+          <div class="loadout-label">主武器</div>
+          <div class="loadout-options" id="loadoutWeapons"></div>
+        </div>
+        <div class="loadout-section">
+          <div class="loadout-label">手雷</div>
+          <div class="loadout-options compact" id="loadoutGrenades"></div>
+        </div>
+        <div class="loadout-section">
+          <div class="loadout-label">道具</div>
+          <div class="loadout-options compact" id="loadoutItems"></div>
+        </div>
+      </aside>
       <div id="spawnMarkers"></div>
     </div>
 

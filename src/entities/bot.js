@@ -25,6 +25,8 @@ const BOT_GEOMETRY = {
   rifleBarrel: new THREE.CylinderGeometry(0.018, 0.022, 0.72, 8),
   rifleBody: new THREE.BoxGeometry(0.045, 0.05, 0.35),
   rifleStock: new THREE.BoxGeometry(0.055, 0.07, 0.28),
+  rifleMag: new THREE.BoxGeometry(0.06, 0.18, 0.11),
+  rifleGrip: new THREE.BoxGeometry(0.07, 0.18, 0.08),
   markerPole: new THREE.CylinderGeometry(0.02, 0.02, 0.28, 6),
   markerPlate: new THREE.BoxGeometry(0.22, 0.22, 0.04),
   markerCore: new THREE.BoxGeometry(0.1, 0.1, 0.05),
@@ -43,7 +45,6 @@ export class Bot {
   constructor(team, spawnPosition, services) {
     Object.assign(this, services)
     const botConfig = this.config.bot
-    const weaponConfig = this.config.weapon
     this.team = team
     this.position = spawnPosition.clone()
     this.position.y = 0
@@ -59,12 +60,10 @@ export class Bot {
     this.stateTimer = Math.random() * 5
     this.reloadTimer = 0
     this.fireTimer = 0
-    this.magazine = weaponConfig.magazineSize
     this.reloading = false
-    this.fireDelay = weaponConfig.fireDelay
     this.lastFire = 0
-    this.baseSpread = weaponConfig.botBaseSpread
     this.spreadBloom = 0
+    this.randomizeLoadout()
     this.coverPos = null
     this.patrolTarget = this.getRandomPatrolPoint()
     this.reactionTimer = 0
@@ -97,6 +96,27 @@ export class Bot {
     this.name = this.generateName()
     this.buildModel()
     this.scene.add(this.group)
+  }
+
+  randomizeLoadout() {
+    const randomId = entries => entries[Math.floor(Math.random() * entries.length)]
+    const weaponId = randomId(Object.keys(this.config.weapons))
+    const grenadeId = randomId(Object.keys(this.config.grenades))
+    const itemId = randomId(Object.keys(this.config.items))
+    this.loadout = { weapon: weaponId, grenade: grenadeId, item: itemId }
+    this.weaponData = this.config.weapons[weaponId]
+    this.grenadeData = this.config.grenades[grenadeId]
+    this.itemData = this.config.items[itemId]
+    this.magazine = this.weaponData.magazineSize
+    this.reserveAmmo = this.weaponData.reserveAmmo
+    this.fireDelay = this.weaponData.fireDelay
+    this.baseSpread = this.weaponData.botBaseSpread
+    this.grenadeCount = this.grenadeData.count
+    this.itemUses = this.itemData.uses || 0
+    this.grenadeCooldown =
+      this.config.grenade.aiCooldownMin +
+      Math.random() * this.config.grenade.aiCooldownRange
+    if (this.rifle) this.configureRifleModel()
   }
 
   generateName() {
@@ -418,20 +438,26 @@ export class Bot {
     this.rightArm = createArm(1)
 
     this.rifle = new THREE.Group()
-    const rifleBarrel = new THREE.Mesh(
+    this.rifleBarrel = new THREE.Mesh(
       BOT_GEOMETRY.rifleBarrel,
       this.matLib.metal
     )
-    rifleBarrel.rotation.x = Math.PI / 2
-    rifleBarrel.position.set(0, 0.02, -0.35)
-    this.rifle.add(rifleBarrel)
-    const rifleBody = new THREE.Mesh(BOT_GEOMETRY.rifleBody, this.matLib.metalDark)
-    rifleBody.position.set(0, 0.01, -0.05)
-    this.rifle.add(rifleBody)
-    const rifleStock = new THREE.Mesh(BOT_GEOMETRY.rifleStock, this.matLib.wood)
-    rifleStock.position.set(0, -0.01, 0.22)
-    this.rifle.add(rifleStock)
+    this.rifleBarrel.rotation.x = Math.PI / 2
+    this.rifle.add(this.rifleBarrel)
+    this.rifleBody = new THREE.Mesh(BOT_GEOMETRY.rifleBody, this.matLib.metalDark)
+    this.rifle.add(this.rifleBody)
+    this.rifleStock = new THREE.Mesh(BOT_GEOMETRY.rifleStock, this.matLib.wood)
+    this.rifle.add(this.rifleStock)
+    this.rifleMag = new THREE.Mesh(BOT_GEOMETRY.rifleMag, this.matLib.metalDark)
+    this.rifle.add(this.rifleMag)
+    this.rifleClip = new THREE.Mesh(BOT_GEOMETRY.rifleMag, this.matLib.brass)
+    this.rifle.add(this.rifleClip)
+    this.rifleGrip = new THREE.Mesh(BOT_GEOMETRY.rifleGrip, this.matLib.wood)
+    this.rifle.add(this.rifleGrip)
+    this.rifleMuzzle = new THREE.Object3D()
+    this.rifle.add(this.rifleMuzzle)
     this.rifle.position.set(0.22, 0.46, -0.38)
+    this.configureRifleModel()
     this.body.add(this.rifle)
 
     this.marker = new THREE.Group()
@@ -485,6 +511,61 @@ export class Bot {
     this._rifleTarget = new THREE.Vector3()
   }
 
+  configureRifleModel() {
+    const { modelId, modelScale } = this.weaponData
+    this.rifle.scale.set(...modelScale)
+    this.rifleBarrel.position.set(0, 0.02, -0.35)
+    this.rifleBarrel.scale.set(1, 1, 1)
+    this.rifleBody.position.set(0, 0.01, -0.05)
+    this.rifleBody.scale.set(1, 1, 1)
+    this.rifleStock.position.set(0, -0.01, 0.22)
+    this.rifleStock.scale.set(1, 1, 1)
+    this.rifleMag.position.set(0, -0.1, -0.04)
+    this.rifleMag.scale.set(1, 1, 1)
+    this.rifleMag.visible = false
+    this.rifleClip.position.set(0, 0.065, -0.06)
+    this.rifleClip.scale.set(0.8, 0.16, 0.72)
+    this.rifleClip.visible = false
+    this.rifleGrip.position.set(0, -0.11, -0.2)
+    this.rifleGrip.rotation.x = -0.2
+    this.rifleGrip.visible = false
+    this.rifleMuzzle.position.set(0, 0.02, -0.72)
+
+    if (modelId === 'carbine') {
+      this.rifleBarrel.position.z = -0.27
+      this.rifleBarrel.scale.y = 0.72
+      this.rifleBody.scale.z = 0.82
+      this.rifleStock.position.z = 0.18
+      this.rifleStock.scale.z = 0.76
+      this.rifleMag.scale.set(0.78, 0.72, 0.72)
+      this.rifleMag.visible = true
+      this.rifleMuzzle.position.z = -0.54
+    } else if (modelId === 'thompson') {
+      this.rifleBarrel.position.z = -0.2
+      this.rifleBarrel.scale.set(1.3, 0.48, 1.3)
+      this.rifleBody.position.z = -0.02
+      this.rifleBody.scale.set(1.5, 1.45, 0.8)
+      this.rifleStock.position.z = 0.16
+      this.rifleStock.scale.z = 0.62
+      this.rifleMag.position.set(0, -0.13, -0.035)
+      this.rifleMag.scale.set(1, 1.3, 0.78)
+      this.rifleMag.visible = true
+      this.rifleGrip.visible = true
+      this.rifleMuzzle.position.z = -0.42
+    } else if (modelId === 'bar') {
+      this.rifleBarrel.position.z = -0.44
+      this.rifleBarrel.scale.set(1.35, 1.25, 1.35)
+      this.rifleBody.position.z = -0.08
+      this.rifleBody.scale.set(1.3, 1.25, 1.35)
+      this.rifleStock.position.z = 0.25
+      this.rifleStock.scale.z = 1.15
+      this.rifleMag.position.set(0, -0.12, -0.08)
+      this.rifleMag.scale.set(1.15, 1.15, 1.05)
+      this.rifleMag.visible = true
+      this.rifleMuzzle.position.z = -0.9
+    }
+  }
+
   getRandomPatrolPoint() {
     const half = this.config.match.mapSize * this.config.bot.patrolAreaRatio
     return new THREE.Vector3((Math.random() - 0.5) * half * 2, 0, (Math.random() - 0.5) * half * 2)
@@ -527,6 +608,21 @@ export class Bot {
       const direction = this._seeDir
       origin.set(this.position.x, this.config.bot.viewOriginHeight, this.position.z)
       direction.set(dirX, 0, dirZ)
+      for (const smoke of this.gameState.smokeClouds) {
+        const toSmokeX = smoke.position.x - origin.x
+        const toSmokeZ = smoke.position.z - origin.z
+        const along = THREE.MathUtils.clamp(toSmokeX * dirX + toSmokeZ * dirZ, 0, distance)
+        const closestX = origin.x + dirX * along
+        const closestZ = origin.z + dirZ * along
+        if (
+          Math.hypot(
+            smoke.position.x - closestX,
+            smoke.position.y - origin.y,
+            smoke.position.z - closestZ
+          ) < smoke.radius
+        )
+          return false
+      }
       for (const obstacle of this.gameState.obstacles) {
         if (obstacle.type === 'ground' || obstacle.type === 'crater' || obstacle.type === 'wire')
           continue
@@ -577,6 +673,76 @@ export class Bot {
     return best
   }
 
+  useItem() {
+    if (this.itemUses <= 0) return false
+    if (this.itemData.kind === 'heal') {
+      if (this.health >= this.maxHealth) return false
+      this.health = Math.min(this.maxHealth, this.health + this.itemData.amount)
+    } else {
+      if (this.reserveAmmo >= this.weaponData.reserveAmmo) return false
+      this.reserveAmmo = this.weaponData.reserveAmmo
+    }
+    this.itemUses--
+    return true
+  }
+
+  findNearestAmmoStation() {
+    let nearest = null
+    let distance = Infinity
+    for (const station of this.gameState.ammoStations) {
+      const next = Math.hypot(
+        station.position.x - this.position.x,
+        station.position.z - this.position.z
+      )
+      if (next < distance) {
+        distance = next
+        nearest = station
+      }
+    }
+    return nearest
+  }
+
+  updateResupply() {
+    const station = this.findNearestAmmoStation()
+    if (!station) {
+      this.stateName = 'patrol'
+      return
+    }
+    this.moveToward(station.position, this.config.bot.engageFarSpeed)
+    if (
+      Math.hypot(station.position.x - this.position.x, station.position.z - this.position.z) <
+      this.config.supply.aiArrivalDistance
+    ) {
+      this.reserveAmmo = this.weaponData.reserveAmmo
+      this.magazine = this.weaponData.magazineSize
+      this.stateName = 'patrol'
+      this.patrolTarget = this.getRandomPatrolPoint()
+    }
+  }
+
+  tryThrowGrenade(dt) {
+    if (this.grenadeCount <= 0 || this.grenadeCooldown > 0 || !this.target?.alive) return
+    const distance = this.position.distanceTo(this.target.position)
+    if (
+      distance < this.config.grenade.aiMinDistance ||
+      distance > this.config.grenade.aiMaxDistance ||
+      Math.random() >= this.config.grenade.aiThrowChancePerSecond * dt
+    )
+      return
+    if (this.grenadeData.kind === 'smoke' && this.health > this.config.bot.lowHealthThreshold)
+      return
+    const origin = this.position.clone().setY(1.3)
+    const direction = new THREE.Vector3()
+      .subVectors(this.target.position, origin)
+      .setY(0.35)
+      .normalize()
+    this.grenadeCount--
+    this.combat.throwGrenade(origin, direction, this.grenadeData, this.team, this)
+    this.grenadeCooldown =
+      this.config.grenade.aiCooldownMin +
+      Math.random() * this.config.grenade.aiCooldownRange
+  }
+
   update(dt) {
     if (!this.alive) {
       this.updateModelAnimation(dt)
@@ -584,11 +750,16 @@ export class Bot {
     }
     this.stateTimer += dt
     this.fireTimer += dt
+    this.grenadeCooldown -= dt
     this.spreadBloom = Math.max(
       0,
       this.spreadBloom - dt * this.config.weapon.spreadBloomRecovery
     )
-    const enemy = this.findNearestEnemy()
+    if (this.health < this.config.bot.lowHealthThreshold) this.useItem()
+    if (this.magazine === 0 && this.reserveAmmo === 0) {
+      if (!this.useItem() && this.stateName !== 'resupply') this.stateName = 'resupply'
+    }
+    const enemy = this.stateName === 'resupply' ? null : this.findNearestEnemy()
     if (enemy) {
       if (this.target !== enemy) {
         this.target = enemy
@@ -628,12 +799,18 @@ export class Bot {
     } else if (this.stateName === 'engage') this.updateEngage(dt)
     else if (this.stateName === 'seek_cover') this.updateSeekCover()
     else if (this.stateName === 'flank') this.updateFlank()
+    else if (this.stateName === 'resupply') this.updateResupply()
 
-    if (this.magazine === 0 && !this.reloading) this.startReload()
+    if (this.magazine === 0 && this.reserveAmmo > 0 && !this.reloading) this.startReload()
     if (this.reloading) {
       this.reloadTimer += dt
-      if (this.reloadTimer > this.config.weapon.emptyReloadDuration) {
-        this.magazine = this.config.weapon.magazineSize
+      if (this.reloadTimer > this.weaponData.emptyReloadDuration) {
+        const amount = Math.min(
+          this.weaponData.magazineSize - this.magazine,
+          this.reserveAmmo
+        )
+        this.magazine += amount
+        this.reserveAmmo -= amount
         this.reloading = false
         this.reloadTimer = 0
       }
@@ -719,6 +896,16 @@ export class Bot {
     this.aimPose += (aimTarget - this.aimPose) * (1 - Math.exp(-7 * dt))
     const reloadTarget = this.reloading ? 1 : 0
     this.reloadPose += (reloadTarget - this.reloadPose) * (1 - Math.exp(-9 * dt))
+    const modelId = this.weaponData.modelId
+    if (modelId === 'garand') {
+      this.rifleClip.visible = this.reloading && this.reloadPose > 0.12
+      this.rifleClip.position.y = 0.12 - this.reloadPose * 0.055
+    } else {
+      this.rifleClip.visible = false
+      this.rifleMag.visible = !this.reloading || this.reloadPose < 0.72
+      this.rifleMag.position.y =
+        (modelId === 'thompson' ? -0.13 : -0.1) - this.reloadPose * 0.16
+    }
     this.fireKick *= Math.exp(-14 * dt)
     const recoil = this.fireKick * this.fireKick
     const holdPose = this.aimPose * (1 - this.reloadPose * 0.9)
@@ -727,7 +914,7 @@ export class Bot {
     const stepLift = (1 - Math.cos(this.legPhase * 2)) * 0.005 * this.moveBlend
     const bodyYTarget = 0.78 + breathing + stepLift
     const bodyPitchTarget = THREE.MathUtils.clamp(
-      -forwardSpeed * 0.004 - holdPose * 0.008 - recoil * 0.012,
+      -forwardSpeed * 0.004 - holdPose * 0.008 + recoil * 0.012,
       -0.04,
       0.025
     )
@@ -746,10 +933,26 @@ export class Bot {
     const rightArmX = THREE.MathUtils.lerp(carryRightX, 1.15, this.aimPose)
     const leftArmZ = THREE.MathUtils.lerp(0, 0.5, this.aimPose)
     const rightArmZ = -0.16
-    const reloadLeftX = 0.2
-    const reloadRightX = 0.38
-    const reloadLeftZ = 0.78
-    const reloadRightZ = -0.42
+    let reloadLeftX = 0.2
+    let reloadRightX = 0.38
+    let reloadLeftZ = 0.78
+    let reloadRightZ = -0.42
+    if (modelId === 'carbine') {
+      reloadLeftX = 0.35
+      reloadRightX = 0.55
+      reloadLeftZ = 0.5
+      reloadRightZ = -0.2
+    } else if (modelId === 'thompson') {
+      reloadLeftX = 0.05
+      reloadRightX = 0.65
+      reloadLeftZ = 1
+      reloadRightZ = -0.55
+    } else if (modelId === 'bar') {
+      reloadLeftX = -0.1
+      reloadRightX = 0.3
+      reloadLeftZ = 0.9
+      reloadRightZ = -0.2
+    }
     const armEase = 1 - Math.exp(-11 * dt)
     this.leftArm.rotation.x +=
       (THREE.MathUtils.lerp(leftArmX, reloadLeftX, this.reloadPose) -
@@ -800,9 +1003,34 @@ export class Bot {
     const aimRifleX = 0.17
     const aimRifleY = 0.48
     const aimRifleZ = -0.4
-    const reloadRifleX = 0.3
-    const reloadRifleY = 0.3
-    const reloadRifleZ = -0.22
+    let reloadRifleX = 0.3
+    let reloadRifleY = 0.3
+    let reloadRifleZ = -0.22
+    let reloadPitchOffset = -0.48
+    let reloadYawOffset = 0
+    let reloadRollOffset = 0.28
+    if (modelId === 'carbine') {
+      reloadRifleX = 0.25
+      reloadRifleY = 0.35
+      reloadRifleZ = -0.18
+      reloadPitchOffset = -0.28
+      reloadYawOffset = -0.22
+      reloadRollOffset = -0.18
+    } else if (modelId === 'thompson') {
+      reloadRifleX = 0.07
+      reloadRifleY = 0.23
+      reloadRifleZ = -0.12
+      reloadPitchOffset = -0.6
+      reloadYawOffset = -0.25
+      reloadRollOffset = -0.55
+    } else if (modelId === 'bar') {
+      reloadRifleX = 0.2
+      reloadRifleY = 0.16
+      reloadRifleZ = -0.08
+      reloadPitchOffset = -0.75
+      reloadYawOffset = -0.18
+      reloadRollOffset = -0.42
+    }
     this._rifleTarget.set(
       THREE.MathUtils.lerp(
         THREE.MathUtils.lerp(carryRifleX, aimRifleX, this.aimPose),
@@ -824,12 +1052,16 @@ export class Bot {
     this.rifle.position.lerp(this._rifleTarget, rifleEase)
     this.rifle.position.z += recoil * 0.035
     const riflePitchTarget =
-      THREE.MathUtils.lerp(-0.18, targetPitch + 0.02, this.aimPose) -
-      this.reloadPose * 0.48 -
+      THREE.MathUtils.lerp(-0.18, targetPitch + 0.02, this.aimPose) +
+      this.reloadPose * reloadPitchOffset +
       recoil * 0.06
-    const rifleYawTarget = THREE.MathUtils.lerp(0.08, 0.015, this.aimPose) + recoil * 0.012
+    const rifleYawTarget =
+      THREE.MathUtils.lerp(0.08, 0.015, this.aimPose) +
+      this.reloadPose * reloadYawOffset +
+      recoil * 0.012
     const rifleRollTarget =
-      THREE.MathUtils.lerp(0.06, 0.015, this.aimPose) + this.reloadPose * 0.28
+      THREE.MathUtils.lerp(0.06, 0.015, this.aimPose) +
+      this.reloadPose * reloadRollOffset
     this.rifle.rotation.x += (riflePitchTarget - this.rifle.rotation.x) * rifleEase
     this.rifle.rotation.y += (rifleYawTarget - this.rifle.rotation.y) * rifleEase
     this.rifle.rotation.z += (rifleRollTarget - this.rifle.rotation.z) * rifleEase
@@ -846,7 +1078,7 @@ export class Bot {
     this.marker.position.y += (markerY - this.marker.position.y) * (1 - Math.exp(-8 * dt))
   }
 
-  updateEngage() {
+  updateEngage(dt) {
     if (!this.target?.alive) {
       this.target = null
       this.stateName = 'patrol'
@@ -855,6 +1087,7 @@ export class Bot {
     const distance = this.position.distanceTo(this.target.position)
     const deltaX = this.target.position.x - this.position.x
     const deltaZ = this.target.position.z - this.position.z
+    this.tryThrowGrenade(dt)
     if (
       this.health < this.config.bot.lowHealthThreshold &&
       (!this.coverPos || this.stateTimer % this.config.bot.coverRefreshInterval < 0.1)
@@ -884,8 +1117,9 @@ export class Bot {
       this.targetVisible &&
       !this.reloading &&
       this.fireTimer >
-        this.config.bot.engageFireBaseDelay +
-          (1 - this.botSkill) * this.config.bot.engageFireSkillDelay
+        (this.config.bot.engageFireBaseDelay +
+          (1 - this.botSkill) * this.config.bot.engageFireSkillDelay) *
+          this.weaponData.aiCadenceMultiplier
     ) {
       this.fire()
       this.fireTimer = 0
@@ -914,7 +1148,8 @@ export class Bot {
       this.targetVisible &&
       this.reactionTimer <= 0 &&
       !this.reloading &&
-      this.fireTimer > this.config.bot.seekCoverFireInterval
+      this.fireTimer >
+        this.config.bot.seekCoverFireInterval * this.weaponData.aiCadenceMultiplier
     ) {
       this.fire()
       this.fireTimer = 0
@@ -939,7 +1174,8 @@ export class Bot {
       this.targetVisible &&
       this.reactionTimer <= 0 &&
       !this.reloading &&
-      this.fireTimer > this.config.bot.flankFireInterval
+      this.fireTimer >
+        this.config.bot.flankFireInterval * this.weaponData.aiCadenceMultiplier
     ) {
       this.fire()
       this.fireTimer = 0
@@ -980,7 +1216,7 @@ export class Bot {
     this.fireKick = Math.min(1, this.fireKick + 0.72)
     const targetHeight = this.config.bot.targetHeight
     const muzzle = new THREE.Vector3()
-    this.rifle.getWorldPosition(muzzle)
+    this.rifleMuzzle.getWorldPosition(muzzle)
     muzzle.y = targetHeight
     const target = this.target.position.clone()
     target.y = targetHeight
@@ -988,13 +1224,13 @@ export class Bot {
     const spread = this.getSpread()
     this.spreadBloom = Math.min(
       this.config.weapon.spreadBloomMax,
-      this.spreadBloom + this.config.weapon.spreadBloomPerShot
+      this.spreadBloom + this.weaponData.spreadBloomPerShot
     )
     direction.x += (Math.random() - 0.5) * spread * 2
     direction.y += (Math.random() - 0.5) * spread * 2
     direction.z += (Math.random() - 0.5) * spread * 2
     direction.normalize()
-    this.combat.fireBullet(muzzle, direction, this.team, this, muzzle)
+    this.combat.fireBullet(muzzle, direction, this.team, this, muzzle, this.weaponData)
     this.effects.spawnMuzzleFlash(muzzle, direction)
     this.audio.botShot(muzzle)
   }
@@ -1004,7 +1240,7 @@ export class Bot {
     this.reloadTimer = 0
   }
 
-  takeDamage(amount, attacker, isHeadshot = false) {
+  takeDamage(amount, attacker, isHeadshot = false, attackType = 'weapon') {
     if (!this.alive) return
     this.health -= amount
     if (this.stateName === 'patrol' && attacker) {
@@ -1017,11 +1253,11 @@ export class Bot {
     }
     const hitPosition = this.position.clone().setY(1.2)
     this.audio.hitFlesh(hitPosition)
-    if (this.health <= 0) this.die(attacker, isHeadshot)
+    if (this.health <= 0) this.die(attacker, isHeadshot, attackType)
     else this.audio.pain(this.config.bot.painChance, hitPosition)
   }
 
-  die(attacker, isHeadshot) {
+  die(attacker, isHeadshot, attackType = 'weapon') {
     this.alive = false
     this.stateName = 'dead'
     this.deathTime = 0
@@ -1032,7 +1268,7 @@ export class Bot {
     this.effects.spawnBlood(this.position.clone().setY(1.2))
     this.audio.pain(this.config.bot.deathPainChance, fallPosition)
     this.audio.bodyFall(fallPosition)
-    this.scoring.recordElimination(this, attacker, isHeadshot)
+    this.scoring.recordElimination(this, attacker, isHeadshot, attackType)
     setTimeout(() => this.respawn(), this.config.match.respawnTime * 1000)
   }
 
@@ -1043,8 +1279,8 @@ export class Bot {
     )
       return
     this.alive = true
+    this.randomizeLoadout()
     this.health = this.maxHealth
-    this.magazine = this.config.weapon.magazineSize
     this.reloading = false
     this.stateName = 'patrol'
     this.target = null

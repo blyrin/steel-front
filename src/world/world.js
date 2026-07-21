@@ -255,9 +255,69 @@ export function createWorldSystem({ scene, matLib, state, config }) {
         (Math.random() - 0.5) * config.match.mapSize * 0.85
       )
     }
+    createAmmoStation(4, -29, 0)
+    createAmmoStation(-4, 29, Math.PI)
+    createAmmoStation(-39, -4, Math.PI / 2)
+    createAmmoStation(39, 4, -Math.PI / 2)
     createSky()
     createDistantHills(half)
     createSmokeColumns()
+  }
+
+  function createAmmoStation(x, z, rotation) {
+    const group = new THREE.Group()
+    group.position.set(x, 0, z)
+    group.rotation.y = rotation
+
+    for (const side of [-1, 1]) {
+      const crate = enableShadow(
+        new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.72, 1.05), matLib.wood),
+        true,
+        true
+      )
+      crate.position.set(side * 0.54, 0.36, 0)
+      group.add(crate)
+      const band = new THREE.Mesh(
+        new THREE.BoxGeometry(1.08, 0.08, 1.08),
+        matLib.metalDark
+      )
+      band.position.set(side * 0.54, 0.48, 0)
+      group.add(band)
+    }
+
+    const sign = new THREE.Group()
+    sign.position.set(0, 1.65, 0)
+    const diamond = new THREE.Mesh(
+      new THREE.BoxGeometry(0.48, 0.48, 0.08),
+      matLib.allyAccent
+    )
+    diamond.rotation.z = Math.PI / 4
+    diamond.userData.noCollision = true
+    sign.add(diamond)
+    for (const offset of [-0.11, 0, 0.11]) {
+      const round = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, 0.28, 6),
+        matLib.brass
+      )
+      round.rotation.x = Math.PI / 2
+      round.position.set(offset, 0, -0.08)
+      round.userData.noCollision = true
+      sign.add(round)
+    }
+    group.add(sign)
+    scene.add(group)
+    matLib.addOutline(group, 1.03)
+    pushBoxObstacle({
+      type: 'ammo-station',
+      x,
+      z,
+      w: 2.2,
+      d: 1.05,
+      h: 0.72,
+      rot: rotation,
+    })
+    state.coverPoints.push({ x, z, r: 1.7, type: 'ammo-station' })
+    state.ammoStations.push({ position: new THREE.Vector3(x, 0, z), group })
   }
 
   function createSky() {

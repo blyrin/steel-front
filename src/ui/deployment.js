@@ -30,7 +30,9 @@ export function createDeploymentSystem({
   renderer,
   audio,
   input,
+  hud,
   config,
+  saveSettings,
 }) {
   const project = new THREE.Vector3()
   const startPos = new THREE.Vector3()
@@ -46,6 +48,55 @@ export function createDeploymentSystem({
   let startYaw = 0
   let startRoll = 0
   let screenAnimTime = 0
+  let loadoutBuilt = false
+
+  function refreshLoadoutSelection() {
+    const selected = state.settings.loadout
+    for (const button of dom.loadoutPanel.querySelectorAll('[data-loadout-kind]')) {
+      button.classList.toggle('selected', selected[button.dataset.loadoutKind] === button.dataset.id)
+    }
+  }
+
+  function buildLoadoutOptions() {
+    if (loadoutBuilt) {
+      refreshLoadoutSelection()
+      return
+    }
+    loadoutBuilt = true
+    const groups = [
+      ['weapon', config.weapons, dom.loadoutWeapons],
+      ['grenade', config.grenades, dom.loadoutGrenades],
+      ['item', config.items, dom.loadoutItems],
+    ]
+    for (const [kind, entries, container] of groups) {
+      for (const [id, data] of Object.entries(entries)) {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'loadout-option'
+        button.dataset.loadoutKind = kind
+        button.dataset.id = id
+        const name = document.createElement('span')
+        name.className = 'loadout-option-name'
+        name.textContent = data.name
+        const detail = document.createElement('span')
+        detail.className = 'loadout-option-detail'
+        if (kind === 'weapon') detail.textContent = `${data.fireMode} · ${data.magazineSize} 发`
+        else if (kind === 'grenade') detail.textContent = `${data.count} 枚`
+        else detail.textContent = `${data.uses} 次`
+        button.append(name, detail)
+        button.addEventListener('click', () => {
+          if (deploy.phase !== 'deploy_screen') return
+          state.settings.loadout[kind] = id
+          state.player.applyLoadout(state.settings.loadout)
+          hud.updateAmmo()
+          saveSettings(state.settings)
+          refreshLoadoutSelection()
+        })
+        container.appendChild(button)
+      }
+    }
+    refreshLoadoutSelection()
+  }
 
   function isContested(spawn) {
     let enemyNear = 0
@@ -78,10 +129,19 @@ export function createDeploymentSystem({
   }
 
   function updateMarkers() {
+    const panelRight = dom.loadoutPanel.getBoundingClientRect().right
     for (const { el, spawn, statusEl } of markers) {
       project.set(spawn.x, 0.5, spawn.z).project(camera)
-      const x = (project.x * 0.5 + 0.5) * innerWidth
-      const y = (-project.y * 0.5 + 0.5) * innerHeight
+      const x = THREE.MathUtils.clamp(
+        (project.x * 0.5 + 0.5) * innerWidth,
+        panelRight + 52,
+        innerWidth - 52
+      )
+      const y = THREE.MathUtils.clamp(
+        (-project.y * 0.5 + 0.5) * innerHeight,
+        42,
+        innerHeight - 42
+      )
       el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`
       const contested = isContested(spawn)
       el.classList.toggle('contested', contested)
@@ -116,8 +176,9 @@ export function createDeploymentSystem({
   function enterDeployUi() {
     deploy.phase = 'deploy_screen'
     setGodCamera()
-    buildMarkers()
     dom.deployScreen.classList.add('show')
+    buildLoadoutOptions()
+    buildMarkers()
   }
 
   function showScreen() {
@@ -270,10 +331,10 @@ export function createDeploymentSystem({
     camera.rotation.set(0, endYaw, 0)
     camera.position.copy(endPos)
     deploy.phase = 'none'
+    player.applyLoadout(state.settings.loadout, false)
+    hud.updateHealth()
+    hud.updateAmmo()
     player.alive = true
-    player.health = player.maxHealth
-    player.ammo = player.magSize
-    player.reserveAmmo = config.weapon.reserveAmmo
     player.position.set(spawn.x, config.player.standHeight, spawn.z)
     player.velocity.set(0, 0, 0)
     state.player.weapon.setVisible(true)

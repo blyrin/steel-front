@@ -4,7 +4,7 @@ import { rayHitObstacle } from './collision.js'
 export function createCombatSystem({ state, effects, audio, hud, config }) {
   const combatConfig = config.combat
 
-  function fireBullet(origin, direction, team, owner, muzzle) {
+  function fireBullet(origin, direction, team, owner, muzzle, attack) {
     let hit = false
     let hitPoint = origin.clone().add(direction.clone().multiplyScalar(combatConfig.bulletRange))
     let closestObstacle = combatConfig.bulletRange
@@ -41,7 +41,19 @@ export function createCombatSystem({ state, effects, audio, hud, config }) {
       lineEnd
     )
     if (hitTarget) {
-      const damage = headshot ? combatConfig.headDamage : combatConfig.bodyDamage
+      const falloffProgress = THREE.MathUtils.clamp(
+        (closestTarget - attack.effectiveRange) /
+          (combatConfig.bulletRange - attack.effectiveRange),
+        0,
+        1
+      )
+      const damageMultiplier = THREE.MathUtils.lerp(
+        1,
+        attack.minDamageMultiplier,
+        falloffProgress
+      )
+      const damage =
+        (headshot ? attack.headDamage : attack.bodyDamage) * damageMultiplier
       if (hitTarget === state.player) hitTarget.takeDamage(damage, origin, owner)
       else hitTarget.takeDamage(damage, owner, headshot)
       if (owner === state.player) {
@@ -70,5 +82,57 @@ export function createCombatSystem({ state, effects, audio, hud, config }) {
     }
   }
 
-  return { fireBullet }
+  function explodeGrenade(position, grenade, team, owner) {
+    if (grenade.kind === 'smoke') {
+      state.smokeClouds.push({
+        position: position.clone(),
+        radius: grenade.radius,
+        expiresAt: performance.now() + grenade.duration * 1000,
+      })
+      effects.spawnSmokeCloud(position, grenade.radius, grenade.duration)
+      return
+    }
+
+    effects.spawnExplosion(position, grenade.radius)
+    audio.grenadeExplosion(position)
+    const targets = state.bots.filter(bot => bot.alive && bot.team !== team)
+    if (state.player.alive && state.player.team !== team) targets.push(state.player)
+    let ownerHitTarget = false
+    for (const target of targets) {
+      const targetY =
+        target === state.player ? target.position.y - 0.7 : target.position.y + 1
+      const distance = Math.hypot(
+        target.position.x - position.x,
+        targetY - position.y,
+        target.position.z - position.z
+      )
+      if (distance >= grenade.radius) continue
+      const damage = grenade.damage * (1 - (distance / grenade.radius) * 0.78)
+      if (target === state.player) target.takeDamage(damage, position, owner, 'grenade')
+      else target.takeDamage(damage, owner, false, 'grenade')
+      effects.spawnBlood(target.position.clone().setY(1.1))
+      if (owner === state.player) ownerHitTarget = true
+    }
+    if (ownerHitTarget) hud.showHitMarker()
+  }
+
+  function throwGrenade(origin, direction, grenade, team, owner) {
+    const velocity = direction.clone().normalize().multiplyScalar(grenade.throwSpeed)
+    velocity.y += grenade.throwSpeed * 0.32
+    effects.spawnThrownGrenade(
+      origin,
+      velocity,
+      grenade,
+      position => explodeGrenade(position, grenade, team, owner)
+    )
+  }
+
+  function update() {
+    const now = performance.now()
+    for (let i = state.smokeClouds.length - 1; i >= 0; i--) {
+      if (state.smokeClouds[i].expiresAt <= now) state.smokeClouds.splice(i, 1)
+    }
+  }
+
+  return { fireBullet, throwGrenade, update }
 }

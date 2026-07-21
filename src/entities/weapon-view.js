@@ -17,6 +17,7 @@ export class WeaponView {
     this.boltLocksOpen = false
     this.emptyEjectPlayed = false
     this.boltDuration = config.boltAnimationDuration
+    this.aimingViewModelRecoilMultiplier = config.aimingViewModelRecoilMultiplier
     this.aiming = false
     this.swayX = 0
     this.swayY = 0
@@ -32,7 +33,10 @@ export class WeaponView {
     this.kickRoll = 0
     this.kickVelZ = 0
     this.kickVelY = 0
-    this.kickVelPitch = 0
+    this.pendingRecoilPitch = 0
+    this.pendingRecoilYaw = 0
+    this.pendingRecoilRoll = 0
+    this.recoilMultiplier = 1
     this.smoothPos = new THREE.Vector3()
     this.build()
     camera.add(this.group)
@@ -106,9 +110,11 @@ export class WeaponView {
     frontSightBase.position.set(0, 0.03, -0.9)
     const frontSightPost = add(new THREE.Mesh(new THREE.BoxGeometry(0.0035, 0.022, 0.005), dark))
     frontSightPost.position.set(0, 0.044, -0.9)
+    const frontSightWings = []
     for (const side of [-1, 1]) {
       const wing = add(new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.018, 0.018), dark))
       wing.position.set(side * 0.012, 0.04, -0.9)
+      frontSightWings.push(wing)
     }
 
     const rearSightBase = add(new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.01, 0.022), dark))
@@ -133,6 +139,7 @@ export class WeaponView {
 
     this.mag = add(new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.032, 0.044), brass))
     this.magBase = new THREE.Vector3(0, -0.002, -0.1)
+    this.magBaseScale = new THREE.Vector3(1, 1, 1)
     this.mag.position.copy(this.magBase)
     const clipLip = add(new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.006, 0.046), metal), this.mag)
     clipLip.position.set(0, 0.016, 0)
@@ -149,6 +156,69 @@ export class WeaponView {
     this.group.add(this.bolt)
     this.boltBase = new THREE.Vector3(0, 0.014, -0.19)
 
+    const thompsonParts = new THREE.Group()
+    const thompsonGrip = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.15, 0.07), wood)
+    thompsonGrip.position.set(0, -0.085, -0.28)
+    thompsonGrip.rotation.x = -0.2
+    thompsonParts.add(thompsonGrip)
+    const thompsonPistolGrip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.065), wood)
+    thompsonPistolGrip.position.set(0, -0.085, -0.005)
+    thompsonPistolGrip.rotation.x = 0.25
+    thompsonParts.add(thompsonPistolGrip)
+    this.group.add(thompsonParts)
+
+    const barParts = new THREE.Group()
+    const bipodMount = add(
+      new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.022, 0.078), dark),
+      barParts
+    )
+    bipodMount.position.set(0, -0.012, -0.92)
+    const bipodPivot = add(
+      new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.07, 8), metal),
+      barParts
+    )
+    bipodPivot.rotation.z = Math.PI / 2
+    bipodPivot.position.set(0, -0.025, -0.94)
+    const bipodFootGeometry = new THREE.BoxGeometry(0.044, 0.014, 0.06)
+    const bipodTop = new THREE.Vector3()
+    const bipodBottom = new THREE.Vector3()
+    for (const side of [-1, 1]) {
+      bipodTop.set(side * 0.022, -0.026, -0.94)
+      bipodBottom.set(side * 0.092, -0.26, -1.17)
+      const direction = bipodBottom.clone().sub(bipodTop)
+      const leg = add(
+        new THREE.Mesh(new THREE.BoxGeometry(0.01, direction.length(), 0.01), metal),
+        barParts
+      )
+      leg.position.copy(bipodTop).add(bipodBottom).multiplyScalar(0.5)
+      leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
+      const foot = add(new THREE.Mesh(bipodFootGeometry, dark), barParts)
+      foot.position.copy(bipodBottom)
+      foot.rotation.y = side * 0.18
+    }
+    this.group.add(barParts)
+
+    this.modelParts = {
+      buttPad,
+      butt,
+      comb,
+      wrist,
+      gripWood,
+      forend,
+      handguard,
+      receiver,
+      magWell,
+      barrel,
+      muzzle,
+      frontSightBase,
+      frontSightPost,
+      frontSightWings,
+      thompsonParts,
+      barParts,
+      brass,
+      dark,
+    }
+
     this.basePosition = new THREE.Vector3(0.18, -0.18, -0.28)
     this.aimPosition = new THREE.Vector3(-this.sightCenter.x, -this.sightCenter.y - 0.006, -0.3)
     this.aimPitch = 0
@@ -156,6 +226,138 @@ export class WeaponView {
     this.group.position.copy(this.basePosition)
     this.group.rotation.y = 0.03
     this.matLib.addOutline(this.group, 1.025)
+  }
+
+  setMagazineScale(multiplier = 1) {
+    this.mag.scale.copy(this.magBaseScale).multiplyScalar(multiplier)
+  }
+
+  configure(weapon) {
+    this.reloadDuration = weapon.reloadDuration
+    this.emptyReloadDuration = weapon.emptyReloadDuration
+    this.weaponModelId = weapon.modelId
+    this.recoilMultiplier = weapon.recoilMultiplier
+    this.group.scale.set(...weapon.modelScale)
+
+    const parts = this.modelParts
+    parts.buttPad.position.set(0, -0.04, 0.3)
+    parts.buttPad.scale.set(1, 1, 1)
+    parts.butt.position.set(0, -0.04, 0.2)
+    parts.butt.scale.set(1, 1, 1)
+    parts.comb.position.set(0, 0.012, 0.16)
+    parts.comb.scale.set(1, 1, 1)
+    parts.comb.visible = true
+    parts.wrist.position.set(0, -0.03, 0.06)
+    parts.wrist.scale.set(1, 1, 1)
+    parts.gripWood.visible = true
+    parts.forend.position.set(0, -0.014, -0.3)
+    parts.forend.scale.set(1, 1, 1)
+    parts.forend.visible = true
+    parts.handguard.position.set(0, 0.022, -0.36)
+    parts.handguard.scale.set(1, 1, 1)
+    parts.handguard.visible = true
+    parts.receiver.position.set(0, 0.01, -0.08)
+    parts.receiver.scale.set(1, 1, 1)
+    parts.magWell.position.set(0, -0.012, -0.1)
+    parts.magWell.scale.set(1, 1, 1)
+    parts.barrel.position.set(0, 0.016, -0.58)
+    parts.barrel.scale.set(1, 1, 1)
+    parts.muzzle.position.set(0, 0.016, -0.96)
+    parts.muzzle.scale.set(1, 1, 1)
+    this.muzzlePos.position.set(0, 0.016, -1.02)
+    parts.frontSightBase.position.z = -0.9
+    parts.frontSightPost.position.z = -0.9
+    for (const wing of parts.frontSightWings) wing.position.z = -0.9
+    parts.thompsonParts.visible = false
+    parts.barParts.visible = false
+    this.boltBase.set(0, 0.014, -0.19)
+    this.magBase.set(0, -0.002, -0.1)
+    this.magBaseScale.set(1, 1, 1)
+    this.mag.material = parts.brass
+    this.bayonetBaseZ = -0.98
+
+    if (weapon.modelId === 'carbine') {
+      parts.buttPad.position.z = 0.25
+      parts.butt.position.z = 0.17
+      parts.butt.scale.z = 0.72
+      parts.comb.position.z = 0.13
+      parts.comb.scale.z = 0.72
+      parts.forend.position.z = -0.23
+      parts.forend.scale.z = 0.65
+      parts.handguard.position.z = -0.25
+      parts.handguard.scale.z = 0.58
+      parts.receiver.scale.z = 0.82
+      this.boltBase.z = -0.26
+      parts.barrel.position.z = -0.42
+      parts.barrel.scale.y = 0.62
+      parts.muzzle.position.z = -0.66
+      this.muzzlePos.position.z = -0.72
+      this.bayonetBaseZ = -0.68
+      parts.frontSightBase.position.z = -0.61
+      parts.frontSightPost.position.z = -0.61
+      for (const wing of parts.frontSightWings) wing.position.z = -0.61
+      this.magBase.set(0, -0.025, -0.09)
+      this.magBaseScale.set(1.35, 2.3, 1.2)
+      this.mag.material = parts.dark
+    } else if (weapon.modelId === 'thompson') {
+      parts.buttPad.position.z = 0.24
+      parts.butt.position.z = 0.15
+      parts.butt.scale.z = 0.58
+      parts.comb.visible = false
+      parts.wrist.position.z = 0.025
+      parts.gripWood.visible = false
+      parts.forend.visible = false
+      parts.handguard.visible = false
+      parts.receiver.position.z = -0.045
+      parts.receiver.scale.set(1.45, 1.5, 0.82)
+      parts.magWell.position.y = -0.025
+      parts.magWell.scale.set(1.5, 1.4, 1.2)
+      parts.barrel.position.z = -0.27
+      parts.barrel.scale.set(1.3, 0.38, 1.3)
+      parts.muzzle.position.z = -0.43
+      parts.muzzle.scale.set(1.35, 1, 1.35)
+      this.muzzlePos.position.z = -0.48
+      this.bayonetBaseZ = -0.42
+      parts.frontSightBase.position.z = -0.39
+      parts.frontSightPost.position.z = -0.39
+      for (const wing of parts.frontSightWings) wing.position.z = -0.39
+      parts.thompsonParts.visible = true
+      this.magBase.set(0, -0.075, -0.085)
+      this.magBaseScale.set(1.8, 4.8, 1.35)
+      this.mag.material = parts.dark
+    } else if (weapon.modelId === 'bar') {
+      parts.buttPad.position.z = 0.34
+      parts.butt.position.z = 0.23
+      parts.butt.scale.z = 1.15
+      parts.comb.position.z = 0.19
+      parts.comb.scale.z = 1.15
+      parts.forend.position.z = -0.36
+      parts.forend.scale.set(1.15, 1.12, 1.28)
+      parts.handguard.position.z = -0.43
+      parts.handguard.scale.z = 1.25
+      parts.receiver.position.z = -0.1
+      parts.receiver.scale.set(1.25, 1.25, 1.35)
+      parts.magWell.position.y = -0.02
+      parts.magWell.scale.set(1.45, 1.35, 1.35)
+      parts.barrel.position.z = -0.67
+      parts.barrel.scale.set(1.35, 1.2, 1.35)
+      parts.muzzle.position.z = -1.12
+      parts.muzzle.scale.set(1.4, 1.2, 1.4)
+      this.muzzlePos.position.z = -1.19
+      parts.frontSightBase.position.z = -1.06
+      parts.frontSightPost.position.z = -1.06
+      for (const wing of parts.frontSightWings) wing.position.z = -1.06
+      parts.barParts.visible = true
+      this.magBase.set(0, -0.065, -0.12)
+      this.magBaseScale.set(1.8, 3.8, 1.8)
+      this.mag.material = parts.dark
+      this.bayonetBaseZ = -1.14
+    }
+
+    this.bayonet.visible = weapon.bayonet
+    this.bayonet.position.z = this.bayonetBaseZ
+    this.mag.position.copy(this.magBase)
+    this.setMagazineScale()
   }
 
   setVisible(visible) {
@@ -169,14 +371,25 @@ export class WeaponView {
     this.emptyReload = false
     this.boltLocksOpen = false
     this.emptyEjectPlayed = false
+    this.pendingRecoilPitch = 0
+    this.pendingRecoilYaw = 0
+    this.pendingRecoilRoll = 0
+    this.kickZ = 0
+    this.kickY = 0
+    this.kickX = 0
+    this.kickPitch = 0
+    this.kickYaw = 0
+    this.kickRoll = 0
+    this.kickVelZ = 0
+    this.kickVelY = 0
     this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
     this.mag.visible = true
     this.mag.position.copy(this.magBase)
     this.mag.rotation.set(0, 0, 0)
-    this.mag.scale.setScalar(1)
+    this.setMagazineScale()
     this.bolt.position.copy(this.boltBase)
     this.bolt.rotation.set(0, 0, 0)
-    this.bayonet.position.z = -0.98
+    this.bayonet.position.z = this.bayonetBaseZ
     this.bayonet.rotation.x = 0
   }
 
@@ -215,26 +428,26 @@ export class WeaponView {
     const targetPosition = aiming ? this.aimPosition : this.basePosition
     this.smoothPos.lerp(targetPosition, 1 - Math.exp(-(aiming ? 20 : 12) * dt))
     const damping = Math.exp(-14 * dt)
-    const spring = 1 - Math.exp(-22 * dt)
+    const positionSpring = 1 - Math.exp(-22 * dt)
     this.kickVelZ *= damping
     this.kickVelY *= damping
-    this.kickVelPitch *= damping
     this.kickZ += this.kickVelZ * dt
     this.kickY += this.kickVelY * dt
-    this.kickPitch += this.kickVelPitch * dt
-    this.kickZ += -this.kickZ * spring
-    this.kickY += -this.kickY * spring
-    this.kickX += -this.kickX * spring
-    this.kickPitch += -this.kickPitch * spring
-    this.kickYaw += -this.kickYaw * spring
-    this.kickRoll += -this.kickRoll * spring
+    this.kickZ += -this.kickZ * positionSpring
+    this.kickY += -this.kickY * positionSpring
+    this.kickX += -this.kickX * positionSpring
+    const pitchYawSpring = 1 - Math.pow(0.0001, dt)
+    const rollSpring = 1 - Math.pow(0.0002, dt)
+    this.kickPitch += -this.kickPitch * pitchYawSpring + this.pendingRecoilPitch
+    this.kickYaw += -this.kickYaw * pitchYawSpring + this.pendingRecoilYaw
+    this.kickRoll += -this.kickRoll * rollSpring + this.pendingRecoilRoll
+    this.pendingRecoilPitch = 0
+    this.pendingRecoilYaw = 0
+    this.pendingRecoilRoll = 0
     if (aiming) {
       this.kickZ = Math.min(this.kickZ, 0.014)
       this.kickY = THREE.MathUtils.clamp(this.kickY, -0.006, 0.008)
       this.kickX = THREE.MathUtils.clamp(this.kickX, -0.004, 0.004)
-      this.kickPitch = THREE.MathUtils.clamp(this.kickPitch, -0.03, 0.01)
-      this.kickYaw = THREE.MathUtils.clamp(this.kickYaw, -0.01, 0.01)
-      this.kickRoll = THREE.MathUtils.clamp(this.kickRoll, -0.012, 0.012)
     }
 
     this.group.position.set(
@@ -255,8 +468,9 @@ export class WeaponView {
         this.bolt.position.set(x, y, z + (this.boltLocksOpen ? 0.06 : 0))
         this.bolt.rotation.set(0, 0, 0)
         if (!this.boltLocksOpen) {
-          this.kickZ += 0.004
-          this.kickPitch += 0.004
+          const boltKick = this.aiming ? this.aimingViewModelRecoilMultiplier : 1
+          this.kickZ += 0.004 * boltKick
+          this.kickPitch += 0.004 * boltKick
         }
       } else {
         let phase
@@ -270,11 +484,11 @@ export class WeaponView {
           phase = Math.pow(1 - time, 2.4)
         }
         this.bolt.position.set(x, y, z + phase * 0.06)
-        if (this.boltLocksOpen && progress >= 0.28 && !this.emptyEjectPlayed) {
-          this.emptyEjectPlayed = true
-          this.audio.ping()
-        }
-        if (this.boltLocksOpen && progress >= 0.28) {
+        if (this.weaponModelId === 'garand' && this.boltLocksOpen && progress >= 0.28) {
+          if (!this.emptyEjectPlayed) {
+            this.emptyEjectPlayed = true
+            this.audio.ping()
+          }
           const eject = Math.min(1, (progress - 0.28) / 0.16)
           const eased = 1 - Math.pow(1 - eject, 3)
           this.mag.position.set(
@@ -283,7 +497,7 @@ export class WeaponView {
             this.magBase.z + 0.035 * eased
           )
           this.mag.rotation.set(-0.9 * eased, 0.35 * eased, 1.1 * eased)
-          this.mag.scale.setScalar(1 - 0.22 * eased)
+          this.setMagazineScale(1 - 0.22 * eased)
           if (eject >= 1) this.mag.visible = false
         }
         if (progress > 0.12 && progress < 0.55) {
@@ -298,34 +512,69 @@ export class WeaponView {
       const progress = Math.min(1, this.reloadTime / this.getReloadDuration())
       const smooth = value => value * value * (3 - 2 * value)
       const easeOut = value => 1 - Math.pow(1 - value, 3)
-      const poseInEnd = this.emptyReload ? 0.1 : 0.14
-      const insertStart = this.emptyReload ? 0.16 : 0.34
-      const insertEnd = this.emptyReload ? 0.52 : 0.57
-      const seatEnd = this.emptyReload ? 0.68 : 0.7
-      const releaseStart = this.emptyReload ? 0.68 : 0.7
-      const releaseEnd = this.emptyReload ? 0.77 : 0.79
-      const pose =
-        progress < poseInEnd
-          ? smooth(progress / poseInEnd)
-          : progress < 0.8
-            ? 1
-            : 1 - smooth((progress - 0.8) / 0.2)
+      const modelId = this.weaponModelId
+      const detachable = modelId !== 'garand'
+      let poseInEnd = this.emptyReload ? 0.1 : 0.14
+      let insertStart = this.emptyReload ? 0.16 : 0.34
+      let insertEnd = this.emptyReload ? 0.52 : 0.57
+      let seatEnd = this.emptyReload ? 0.68 : 0.7
+      let releaseStart = this.emptyReload ? 0.68 : 0.7
+      let releaseEnd = this.emptyReload ? 0.77 : 0.79
+      if (detachable) {
+        poseInEnd = 0.12
+        insertStart = 0.44
+        insertEnd = 0.69
+        seatEnd = 0.76
+        releaseStart = 0.78
+        releaseEnd = 0.88
+      }
+      let pose
+      if (progress < poseInEnd) pose = smooth(progress / poseInEnd)
+      else if (progress < 0.8) pose = 1
+      else pose = 1 - smooth((progress - 0.8) / 0.2)
       const { x, y, z } = this.boltBase
       let reloadRotationX = 0.28 * pose
       let reloadRotationY = -0.1 * pose
       let reloadRotationZ = 0.075 * pose
-      const reloadPositionX = -0.06 * pose
+      let reloadPositionX = -0.06 * pose
       let reloadPositionY = -0.05 * pose
       let reloadPositionZ = 0.05 * pose
+      const handlingArc = Math.sin(
+        Math.PI * THREE.MathUtils.clamp((progress - 0.08) / 0.76, 0, 1)
+      )
+      if (modelId === 'carbine') {
+        reloadRotationX = 0.16 * pose
+        reloadRotationY = 0.22 * pose + 0.08 * handlingArc
+        reloadRotationZ = -0.16 * pose
+        reloadPositionX = 0.035 * pose + 0.025 * handlingArc
+        reloadPositionY = 0.055 * pose
+        reloadPositionZ = 0.085 * pose
+      } else if (modelId === 'thompson') {
+        reloadRotationX = 0.34 * pose
+        reloadRotationY = 0.28 * pose
+        reloadRotationZ = -0.42 * pose - 0.16 * handlingArc
+        reloadPositionX = 0.14 * pose
+        reloadPositionY = 0.11 * pose + 0.025 * handlingArc
+        reloadPositionZ = 0.09 * pose
+      } else if (modelId === 'bar') {
+        reloadRotationX = 0.28 * pose
+        reloadRotationY = -0.24 * pose
+        reloadRotationZ = 0.18 * pose
+        reloadPositionX = 0.11 * pose
+        reloadPositionY = -0.04 * pose
+        reloadPositionZ = 0.07 * pose
+      }
       let boltPull = this.emptyReload ? 1 : 0
+      const cyclesBolt = !detachable || this.emptyReload
 
-      if (!this.emptyReload && progress >= 0.12 && !this.reloadFlags.open) {
+      if ((detachable || !this.emptyReload) && progress >= 0.12 && !this.reloadFlags.open) {
         this.reloadFlags.open = true
         this.audio.reloadStage('open')
       }
-      if (!this.emptyReload && progress >= 0.19 && !this.reloadFlags.eject) {
+      if ((detachable || !this.emptyReload) && progress >= 0.19 && !this.reloadFlags.eject) {
         this.reloadFlags.eject = true
-        this.audio.ping()
+        if (detachable) this.audio.reloadStage('seat')
+        else this.audio.ping()
       }
       if (progress >= insertStart + 0.08 && !this.reloadFlags.insert) {
         this.reloadFlags.insert = true
@@ -335,25 +584,79 @@ export class WeaponView {
         this.reloadFlags.seat = true
         this.audio.reloadStage('seat')
       }
-      if (progress >= releaseStart && !this.reloadFlags.close) {
+      if (progress >= releaseStart && !this.reloadFlags.close && cyclesBolt) {
         this.reloadFlags.close = true
         this.audio.reloadStage('close')
       }
 
-      if (!this.emptyReload) {
+      if (!detachable && !this.emptyReload) {
         if (progress < 0.1) boltPull = 0
         else if (progress < 0.18) boltPull = easeOut((progress - 0.1) / 0.08)
         else if (progress < releaseStart) boltPull = 1
       }
-      if (progress >= releaseStart && progress < releaseEnd)
+      if (cyclesBolt && progress >= releaseStart && progress < releaseEnd)
         boltPull = 1 - easeOut((progress - releaseStart) / (releaseEnd - releaseStart))
-      else if (progress >= releaseEnd) boltPull = 0
+      else if (cyclesBolt && progress >= releaseEnd) boltPull = 0
 
-      if (!this.emptyReload && progress < 0.19) {
+      if (detachable) {
+        const removeStart = 0.1
+        let removeEnd = 0.34
+        let drop = 0.12
+        if (modelId === 'thompson') {
+          removeEnd = 0.38
+          drop = 0.17
+        } else if (modelId === 'bar') {
+          removeEnd = 0.4
+          drop = 0.15
+        }
+        if (progress < removeStart) {
+          this.mag.visible = true
+          this.mag.position.copy(this.magBase)
+          this.mag.rotation.set(0, 0, 0)
+          this.setMagazineScale()
+        } else if (progress < removeEnd) {
+          const time = smooth((progress - removeStart) / (removeEnd - removeStart))
+          this.mag.visible = time < 0.97
+          this.mag.position.set(
+            this.magBase.x + 0.04 * time,
+            this.magBase.y - drop * time,
+            this.magBase.z + 0.03 * time
+          )
+          this.mag.rotation.set(0.18 * time, -0.1 * time, 0.24 * time)
+          this.setMagazineScale(1 - 0.08 * time)
+        } else if (progress < insertStart) {
+          this.mag.visible = false
+        } else if (progress < insertEnd) {
+          const time = smooth((progress - insertStart) / (insertEnd - insertStart))
+          const remaining = 1 - time
+          this.mag.visible = true
+          if (modelId === 'carbine') {
+            this.mag.position.set(
+              this.magBase.x - 0.018 * remaining,
+              this.magBase.y - drop * remaining,
+              this.magBase.z + 0.004 * remaining
+            )
+            this.mag.rotation.set(0.04 * remaining, 0.02 * remaining, -0.08 * remaining)
+          } else {
+            this.mag.position.set(
+              this.magBase.x - 0.045 * remaining,
+              this.magBase.y - drop * remaining,
+              this.magBase.z + 0.035 * remaining
+            )
+            this.mag.rotation.set(0.22 * remaining, 0.12 * remaining, -0.2 * remaining)
+          }
+          this.setMagazineScale(0.92 + 0.08 * time)
+        } else {
+          this.mag.visible = true
+          this.mag.position.copy(this.magBase)
+          this.mag.rotation.set(0, 0, 0)
+          this.setMagazineScale()
+        }
+      } else if (!this.emptyReload && progress < 0.19) {
         this.mag.visible = true
         this.mag.position.copy(this.magBase)
         this.mag.rotation.set(0, 0, 0)
-        this.mag.scale.setScalar(1)
+        this.setMagazineScale()
       } else if (!this.emptyReload && progress < 0.25) {
         const time = easeOut((progress - 0.19) / 0.06)
         this.mag.visible = time < 0.9
@@ -363,7 +666,7 @@ export class WeaponView {
           this.magBase.z + 0.035 * time
         )
         this.mag.rotation.set(-0.9 * time, 0.35 * time, 1.1 * time)
-        this.mag.scale.setScalar(1 - 0.22 * time)
+        this.setMagazineScale(1 - 0.22 * time)
       } else if (progress < insertStart) {
         this.mag.visible = false
       } else if (progress < insertEnd) {
@@ -375,12 +678,12 @@ export class WeaponView {
           this.magBase.z + 0.03 * (1 - time)
         )
         this.mag.rotation.set(-0.5 * (1 - time), -0.28 * (1 - time), -0.4 * (1 - time))
-        this.mag.scale.setScalar(0.86 + 0.14 * time)
+        this.setMagazineScale(0.86 + 0.14 * time)
       } else {
         this.mag.visible = true
         this.mag.position.copy(this.magBase)
         this.mag.rotation.set(0, 0, 0)
-        this.mag.scale.setScalar(1)
+        this.setMagazineScale()
       }
 
       if (progress > insertEnd - 0.06 && progress < seatEnd) {
@@ -415,7 +718,7 @@ export class WeaponView {
         this.mag.visible = true
         this.mag.position.copy(this.magBase)
         this.mag.rotation.set(0, 0, 0)
-        this.mag.scale.setScalar(1)
+        this.setMagazineScale()
         this.bolt.position.set(x, y, z)
         this.bolt.rotation.set(0, 0, 0)
         this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
@@ -474,37 +777,37 @@ export class WeaponView {
       rotationY += meleeRotationY
       if (progress < 0.18) {
         const time = progress / 0.18
-        this.bayonet.position.z = -0.98 + 0.008 * time
+        this.bayonet.position.z = this.bayonetBaseZ + 0.008 * time
         this.bayonet.rotation.x = 0.01 * time
       } else if (progress < 0.5) {
         const time = Math.min(1, (progress - 0.18) / 0.18)
-        this.bayonet.position.z = -0.972 - 0.03 * time
+        this.bayonet.position.z = this.bayonetBaseZ + 0.008 - 0.03 * time
         this.bayonet.rotation.x = 0.01 - 0.02 * time
       } else {
         const time = (progress - 0.5) / 0.5
-        this.bayonet.position.z = -1.002 + 0.022 * time
+        this.bayonet.position.z = this.bayonetBaseZ - 0.022 + 0.022 * time
         this.bayonet.rotation.x = -0.01 * (1 - time)
       }
       if (progress >= 1) {
         this.meleeTime = -1
         this.bayonet.rotation.x = 0
-        this.bayonet.position.z = -0.98
+        this.bayonet.position.z = this.bayonetBaseZ
       }
     }
     this.group.rotation.set(rotationX, rotationY, rotationZ)
   }
 
-  triggerFire(aiming = false, locksOpen = false) {
-    const multiplier = aiming ? 0.48 : 1
-    this.kickVelZ += (0.55 + Math.random() * 0.12) * multiplier
-    this.kickVelY += (0.18 + Math.random() * 0.08) * multiplier
-    this.kickVelPitch -= (1.8 + Math.random() * 0.5) * multiplier
-    this.kickZ += 0.018 * multiplier
-    this.kickY += 0.006 * multiplier
-    this.kickX += (Math.random() - 0.5) * 0.008 * multiplier
-    this.kickPitch -= (0.045 + Math.random() * 0.012) * multiplier
-    this.kickYaw += (Math.random() - 0.5) * 0.018 * multiplier
-    this.kickRoll += (Math.random() - 0.5) * 0.03 * multiplier
+  triggerFire(aiming = false, locksOpen = false, recoilImpulse) {
+    const viewModelMultiplier = aiming ? this.aimingViewModelRecoilMultiplier : 1
+    const positionMultiplier = viewModelMultiplier * this.recoilMultiplier
+    this.kickVelZ += (0.55 + Math.random() * 0.12) * positionMultiplier
+    this.kickVelY += (0.18 + Math.random() * 0.08) * positionMultiplier
+    this.kickZ += 0.018 * positionMultiplier
+    this.kickY += 0.006 * positionMultiplier
+    this.kickX += (Math.random() - 0.5) * 0.008 * positionMultiplier
+    this.pendingRecoilPitch += recoilImpulse.pitch * viewModelMultiplier
+    this.pendingRecoilYaw += recoilImpulse.yaw * viewModelMultiplier
+    this.pendingRecoilRoll += recoilImpulse.roll * viewModelMultiplier
     this.boltLocksOpen = locksOpen
     this.emptyEjectPlayed = false
     this.boltTime = 0
@@ -515,10 +818,10 @@ export class WeaponView {
     this.reloadTime = 0
     this.boltTime = -1
     this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
-    this.mag.visible = !empty
+    this.mag.visible = this.weaponModelId !== 'garand' || !empty
     this.mag.position.copy(this.magBase)
     this.mag.rotation.set(0, 0, 0)
-    this.mag.scale.setScalar(1)
+    this.setMagazineScale()
     this.bolt.position.set(
       this.boltBase.x,
       this.boltBase.y,
@@ -533,7 +836,7 @@ export class WeaponView {
   triggerMelee() {
     this.meleeTime = 0
     this.bayonet.rotation.x = 0
-    this.bayonet.position.z = -0.98
+    this.bayonet.position.z = this.bayonetBaseZ
   }
 
   isBusy() {

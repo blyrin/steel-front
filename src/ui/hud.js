@@ -16,6 +16,9 @@ export function createHud({ dom, state, deploy, audio, config }) {
   let healthLow = null
   let ammoCurrent = null
   let ammoReserve = null
+  let weaponName = ''
+  let fireMode = ''
+  let equipmentStatus = ''
   let lowAmmoVisible = null
   let crosshairAiming = null
   let crosshairGap = ''
@@ -59,6 +62,19 @@ export function createHud({ dom, state, deploy, audio, config }) {
       ammoReserve = player.reserveAmmo
       dom.ammoRes.textContent = player.reserveAmmo
     }
+    if (player.weaponData.name !== weaponName) {
+      weaponName = player.weaponData.name
+      dom.weaponName.textContent = weaponName
+    }
+    if (player.weaponData.fireMode !== fireMode) {
+      fireMode = player.weaponData.fireMode
+      dom.fireMode.textContent = fireMode
+    }
+    const equipmentText = `${player.grenadeData.name} ×${player.grenadeCount} · ${player.itemData.name} ×${player.itemUses}`
+    if (equipmentText !== equipmentStatus) {
+      equipmentStatus = equipmentText
+      dom.equipmentStatus.textContent = equipmentText
+    }
     if (lowAmmoVisibleNow !== lowAmmoVisible) {
       lowAmmoVisible = lowAmmoVisibleNow
       dom.lowAmmo.classList.toggle('show', lowAmmoVisibleNow)
@@ -96,6 +112,50 @@ export function createHud({ dom, state, deploy, audio, config }) {
   function updateScores() {
     dom.alliesScore.textContent = state.alliesScore
     dom.axisScore.textContent = state.axisScore
+  }
+
+  function formatRatio(kills, deaths) {
+    return (kills / Math.max(1, deaths)).toFixed(2)
+  }
+
+  function formatWinRate(records) {
+    return records.matches ? `${Math.round((records.wins / records.matches) * 100)}%` : '0%'
+  }
+
+  function formatPlayTime(seconds) {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor(seconds / 60) % 60
+    if (hours > 0) return `${hours} 小时 ${minutes} 分`
+    return `${minutes} 分钟`
+  }
+
+  function renderRecords() {
+    const records = state.records
+    const entries = [
+      ['总场次', records.matches],
+      ['胜率', formatWinRate(records)],
+      ['总击杀', records.kills],
+      ['K/D', formatRatio(records.kills, records.deaths)],
+      ['爆头数', records.headshots],
+      ['近战击杀', records.meleeKills],
+      ['投掷物击杀', records.grenadeKills],
+      ['最高连杀', records.bestKillStreak],
+      ['战斗时长', formatPlayTime(records.totalSeconds)],
+    ]
+    dom.recordsStats.replaceChildren(
+      ...entries.map(([labelText, valueText]) => {
+        const item = document.createElement('div')
+        item.className = 'record-item'
+        const label = document.createElement('span')
+        label.className = 'record-label'
+        label.textContent = labelText
+        const value = document.createElement('strong')
+        value.className = 'record-value'
+        value.textContent = String(valueText)
+        item.append(label, value)
+        return item
+      })
+    )
   }
 
   function addScreenShake(amount) {
@@ -185,6 +245,16 @@ export function createHud({ dom, state, deploy, audio, config }) {
     dom.centerMsg._timer = setTimeout(() => dom.centerMsg.classList.remove('show'), duration)
   }
 
+  function showActionMessage(message) {
+    dom.actionMsg.textContent = message
+    dom.actionMsg.classList.add('show')
+    clearTimeout(dom.actionMsg._timer)
+    dom.actionMsg._timer = setTimeout(
+      () => dom.actionMsg.classList.remove('show'),
+      hudConfig.actionMessageDuration
+    )
+  }
+
   function showDeathScreen(attacker) {
     dom.killerInfo.replaceChildren()
     if (attacker) {
@@ -197,11 +267,19 @@ export function createHud({ dom, state, deploy, audio, config }) {
       dom.killerInfo.textContent = '阵亡'
     }
     dom.deathScreen.classList.add('show')
+    dom.hud.classList.add('death-active')
     dom.crosshair.classList.add('hidden')
+    dom.hitMarker.classList.remove('show')
+    dom.killNotify.classList.remove('show', 'out', 'headshot', 'multi')
+    dom.centerMsg.classList.remove('show')
+    dom.actionMsg.classList.remove('show')
+    dom.dirDamage.classList.remove('show')
+    setScoreboardVisible(false)
   }
 
   function hideDeathScreen() {
     dom.deathScreen.classList.remove('show')
+    dom.hud.classList.remove('death-active')
   }
 
   function addKillFeed(type, killerName, victimName, victimTeam) {
@@ -229,15 +307,19 @@ export function createHud({ dom, state, deploy, audio, config }) {
     if (document.pointerLockElement) document.exitPointerLock()
     dom.deployScreen.classList.remove('show')
     dom.deathScreen.classList.remove('show')
+    dom.hud.classList.remove('death-active')
     if (dom.touchControls) dom.touchControls.classList.remove('show')
     if (dom.rotateHint) dom.rotateHint.classList.remove('show')
     setScoreboardVisible(false)
     dom.endTitle.textContent = playerWon ? '胜利' : '战败'
     dom.endTitle.className = playerWon ? 'win' : 'lose'
+    renderRecords()
     const stats = [
       `我方击杀: ${state.alliesScore}　敌方击杀: ${state.axisScore}`,
       `个人击杀: ${state.player.kills}　阵亡次数: ${state.player.deaths}`,
-      `击杀/死亡比: ${(state.player.kills / Math.max(1, state.player.deaths)).toFixed(2)}`,
+      `本局 K/D: ${formatRatio(state.player.kills, state.player.deaths)}　爆头: ${state.player.headshots}`,
+      `近战击杀: ${state.player.meleeKills}　投掷物击杀: ${state.player.grenadeKills}`,
+      `累计 K/D: ${formatRatio(state.records.kills, state.records.deaths)}　胜率: ${formatWinRate(state.records)}`,
       `战斗时长: ${Math.floor((performance.now() - state.startTime) / 1000)} 秒`,
     ]
     dom.endStats.replaceChildren(
@@ -345,6 +427,8 @@ export function createHud({ dom, state, deploy, audio, config }) {
     dom.scoreboard.classList.toggle('show', visible)
   }
 
+  renderRecords()
+
   return {
     updateHealth,
     updateAmmo,
@@ -356,10 +440,12 @@ export function createHud({ dom, state, deploy, audio, config }) {
     showDamageVignette,
     showDirDamage,
     showCenterMessage,
+    showActionMessage,
     showDeathScreen,
     hideDeathScreen,
     addKillFeed,
     showEndScreen,
+    renderRecords,
     setScoreboardVisible,
   }
 }

@@ -1,6 +1,12 @@
 import * as THREE from 'three'
 import { AUDIO_FILES, CFG, LOAD_STEPS, SPAWN_POINTS } from './config.js'
-import { createGameState, createDeployState, saveSettings } from './state.js'
+import {
+  createGameState,
+  createDeployState,
+  saveSettings,
+  saveRecords,
+  recordMatchResult,
+} from './state.js'
 import { createSceneRuntime } from './scene.js'
 import { AudioSystem } from './audio/audio-system.js'
 import { createWorldSystem } from './world/world.js'
@@ -76,11 +82,13 @@ export function createGame() {
     renderer: runtime.renderer,
     audio,
     input,
+    hud,
     config: CFG,
+    saveSettings,
   })
 
   const combat = createCombatSystem({ state, effects, audio, hud, config: CFG })
-  const scoring = createScoringSystem({ state, hud, checkVictory })
+  const scoring = createScoringSystem({ state, hud, checkVictory, saveRecords })
 
   function getRandomSpawn(team) {
     const points = SPAWN_POINTS[team]
@@ -93,8 +101,14 @@ export function createGame() {
   }
 
   function checkVictory() {
-    if (state.alliesScore >= CFG.match.killTarget) hud.showEndScreen(true)
-    else if (state.axisScore >= CFG.match.killTarget) hud.showEndScreen(false)
+    if (!state.running) return
+    if (state.alliesScore >= CFG.match.killTarget) {
+      recordMatchResult(state.records, true, (performance.now() - state.startTime) / 1000)
+      hud.showEndScreen(true)
+    } else if (state.axisScore >= CFG.match.killTarget) {
+      recordMatchResult(state.records, false, (performance.now() - state.startTime) / 1000)
+      hud.showEndScreen(false)
+    }
   }
 
   function initGame() {
@@ -182,6 +196,7 @@ export function createGame() {
     if (!state.loading && state.running && !state.paused) {
       state.player.update(dt)
       for (const bot of state.bots) bot.update(dt)
+      combat.update()
       effects.update(dt)
       if (deploy.phase === 'none') {
         maps.updateMinimap()

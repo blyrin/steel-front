@@ -393,5 +393,111 @@ export function createEffectsSystem({ scene, state, audio, config }) {
     }
   }
 
-  return { update, addTracer, spawnMuzzleFlash, spawnShell, spawnSmokePuff, spawnSpark, spawnBlood }
+  function spawnThrownGrenade(origin, velocity, grenade, onDetonate) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 8, 6),
+      new THREE.MeshToonMaterial({ color: grenade.color })
+    )
+    mesh.position.copy(origin)
+    addParticle({
+      mesh,
+      type: 'grenade',
+      life: grenade.fuse,
+      maxLife: grenade.fuse,
+      vel: velocity.clone(),
+      update: (dt, time, particle) => {
+        particle.vel.y -= config.grenade.gravity * dt
+        particle.mesh.position.addScaledVector(particle.vel, dt)
+        particle.mesh.rotation.x += dt * 9
+        particle.mesh.rotation.z += dt * 7
+        if (particle.mesh.position.y < 0.09) {
+          particle.mesh.position.y = 0.09
+          particle.vel.y = Math.abs(particle.vel.y) * config.grenade.bounce
+          particle.vel.x *= 0.68
+          particle.vel.z *= 0.68
+        }
+      },
+      onComplete: () => onDetonate(mesh.position.clone()),
+    })
+  }
+
+  function spawnExplosion(position, radius) {
+    const flash = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 10, 7),
+      new THREE.MeshBasicMaterial({ color: 0xffd447, transparent: true, depthWrite: false })
+    )
+    flash.position.copy(position)
+    flash.position.y = Math.max(0.8, position.y)
+    flash.scale.setScalar(0.2)
+    addParticle({
+      mesh: flash,
+      type: 'explosion',
+      life: 0.42,
+      maxLife: 0.42,
+      update: (dt, time, particle) => {
+        const progress = time / particle.maxLife
+        particle.mesh.scale.setScalar(0.2 + radius * 0.26 * progress)
+        particle.mesh.material.opacity = 1 - progress
+      },
+    })
+    for (let i = 0; i < 8; i++) {
+      const direction = new THREE.Vector3(
+        Math.random() - 0.5,
+        0.25 + Math.random() * 0.75,
+        Math.random() - 0.5
+      ).normalize()
+      spawnSpark(position.clone(), direction.multiplyScalar(-1))
+    }
+  }
+
+  function spawnSmokeCloud(position, radius, duration) {
+    const puffCount = 14
+    for (let i = 0; i < puffCount; i++) {
+      const smoke = new THREE.Mesh(
+        geometry.smoke,
+        new THREE.MeshBasicMaterial({
+          color: i % 3 === 0 ? 0x9bdbe1 : 0xd5e6df,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+        })
+      )
+      const angle = (i / puffCount) * Math.PI * 2
+      const distance = radius * (0.18 + (i % 4) * 0.14)
+      smoke.position.set(
+        position.x + Math.cos(angle) * distance,
+        position.y + 0.6 + (i % 3) * 0.55,
+        position.z + Math.sin(angle) * distance
+      )
+      const scale = 0.8 + (i % 5) * 0.18
+      smoke.scale.setScalar(scale)
+      addParticle({
+        mesh: smoke,
+        type: 'grenade-smoke',
+        life: duration,
+        maxLife: duration,
+        update: (dt, time, particle) => {
+          const fadeIn = Math.min(1, time / 1.2)
+          const fadeOut = Math.min(1, particle.life / 2)
+          particle.mesh.material.opacity = 0.34 * fadeIn * fadeOut
+          particle.mesh.position.y += dt * 0.025
+          particle.mesh.rotation.y += dt * 0.08
+          particle.mesh.scale.setScalar(scale * (1 + Math.min(time, 4) * 0.08))
+        },
+      })
+    }
+  }
+
+  return {
+    update,
+    addTracer,
+    spawnMuzzleFlash,
+    spawnShell,
+    spawnSmokePuff,
+    spawnSpark,
+    spawnBlood,
+    spawnThrownGrenade,
+    spawnExplosion,
+    spawnSmokeCloud,
+  }
 }

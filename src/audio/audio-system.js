@@ -360,6 +360,20 @@ export class AudioSystem {
     })
   }
 
+  grenadeExplosion(pos) {
+    this.play(['distant_01', 'distant_02'], {
+      vol: 1.15,
+      rate: 0.72,
+      rateJitter: 0.05,
+      pos,
+      ref: 30,
+      max: 150,
+      rolloff: 0.24,
+      wet: 0.22,
+      priority: 2,
+    })
+  }
+
   botShot(pos) {
     if (!pos) return
     const now = performance.now()

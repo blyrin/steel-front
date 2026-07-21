@@ -4,7 +4,7 @@ export const CFG = {
     // 地图边长。
     mapSize: 240,
     // 任一队伍达到该击杀数后结束比赛。
-    killTarget: 100,
+    killTarget: 150,
     // 每支队伍的人数，包含玩家所在队伍的玩家。
     teamSize: 20,
     // Bot 阵亡后的复活等待时间。
@@ -14,7 +14,7 @@ export const CFG = {
     // 单帧最大模拟时间，避免切后台后瞬移。
     maxFrameDelta: 0.05,
     // 启动加载阶段的相机高度。
-    initialCameraHeight: 4,
+    initialCameraHeight: 5,
   },
   // 菜单和暂停界面中的玩家设置默认值。
   settings: {
@@ -50,9 +50,9 @@ export const CFG = {
     meleeDamage: 100,
     // 散布值是方向向量偏移量，越大越不准。
     // 玩家静止时的基础射击散布。
-    baseSpread: 0.004,
+    baseSpread: 0.005,
     // Bot 静止时的基础射击散布。
-    botBaseSpread: 0.015,
+    botBaseSpread: 0.018,
     // 射击散布的最大值。
     maxSpread: 0.08,
     // 连续射击额外散布的上限。
@@ -102,10 +102,161 @@ export const CFG = {
     hipRecoilRoll: 0.015,
     // 玩家瞄准时的横滚后坐力。
     aimingRecoilRoll: 0.008,
+    // 开镜时枪模额外机械后坐相对实际视角后坐的倍率。
+    aimingViewModelRecoilMultiplier: 0.22,
     // 玩家腰射时的屏幕震动强度。
     hipFireShake: 0.15,
     // 玩家瞄准射击时的屏幕震动强度。
     aimingFireShake: 0.08,
+  },
+  // 可在部署界面选择的主武器。高射速武器以远距衰减和散布换取近战压制力。
+  weapons: {
+    garand: {
+      modelId: 'garand',
+      name: 'M1 加兰德',
+      fireMode: '半自动',
+      automatic: false,
+      magazineSize: 8,
+      reserveAmmo: 80,
+      fireDelay: 0.18,
+      reloadDuration: 1.75,
+      emptyReloadDuration: 1.55,
+      bodyDamage: 35,
+      headDamage: 100,
+      effectiveRange: 72,
+      minDamageMultiplier: 0.78,
+      baseSpread: 0.005,
+      botBaseSpread: 0.018,
+      spreadBloomPerShot: 0.005,
+      aimedSpreadBloomPerShot: 0.004,
+      recoilMultiplier: 1,
+      aiCadenceMultiplier: 1,
+      modelScale: [1, 1, 1],
+      bayonet: true,
+    },
+    carbine: {
+      modelId: 'carbine',
+      name: 'M1 卡宾枪',
+      fireMode: '半自动',
+      automatic: false,
+      magazineSize: 15,
+      reserveAmmo: 105,
+      fireDelay: 0.14,
+      reloadDuration: 1.65,
+      emptyReloadDuration: 1.8,
+      bodyDamage: 27,
+      headDamage: 78,
+      effectiveRange: 55,
+      minDamageMultiplier: 0.7,
+      baseSpread: 0.007,
+      botBaseSpread: 0.021,
+      spreadBloomPerShot: 0.0045,
+      aimedSpreadBloomPerShot: 0.0035,
+      recoilMultiplier: 0.76,
+      aiCadenceMultiplier: 0.72,
+      modelScale: [0.96, 0.96, 0.96],
+      bayonet: true,
+    },
+    thompson: {
+      modelId: 'thompson',
+      name: 'M1A1 汤姆逊',
+      fireMode: '全自动',
+      automatic: true,
+      magazineSize: 30,
+      reserveAmmo: 120,
+      fireDelay: 0.095,
+      reloadDuration: 2.15,
+      emptyReloadDuration: 2.35,
+      bodyDamage: 20,
+      headDamage: 58,
+      effectiveRange: 28,
+      minDamageMultiplier: 0.5,
+      baseSpread: 0.011,
+      botBaseSpread: 0.026,
+      spreadBloomPerShot: 0.004,
+      aimedSpreadBloomPerShot: 0.003,
+      recoilMultiplier: 0.68,
+      aiCadenceMultiplier: 0.32,
+      modelScale: [1.02, 1.02, 1.02],
+      bayonet: true,
+    },
+    bar: {
+      modelId: 'bar',
+      name: 'M1918 BAR',
+      fireMode: '全自动',
+      automatic: true,
+      magazineSize: 20,
+      reserveAmmo: 80,
+      fireDelay: 0.12,
+      reloadDuration: 2.45,
+      emptyReloadDuration: 2.65,
+      bodyDamage: 30,
+      headDamage: 86,
+      effectiveRange: 60,
+      minDamageMultiplier: 0.72,
+      baseSpread: 0.009,
+      botBaseSpread: 0.024,
+      spreadBloomPerShot: 0.0065,
+      aimedSpreadBloomPerShot: 0.005,
+      recoilMultiplier: 1.18,
+      aiCadenceMultiplier: 0.46,
+      modelScale: [1.04, 1.04, 1.04],
+      bayonet: true,
+    },
+  },
+  grenades: {
+    frag: {
+      name: 'MK II 破片手雷',
+      kind: 'frag',
+      count: 2,
+      fuse: 2.6,
+      throwSpeed: 22,
+      radius: 12,
+      damage: 110,
+      color: 0x4f6f58,
+    },
+    smoke: {
+      name: 'M18 烟雾弹',
+      kind: 'smoke',
+      count: 2,
+      fuse: 1.4,
+      throwSpeed: 21,
+      radius: 8,
+      duration: 12,
+      color: 0x12b6d2,
+    },
+  },
+  items: {
+    medkit: {
+      name: '急救包',
+      kind: 'heal',
+      uses: 1,
+      amount: 50,
+    },
+    ammoPouch: {
+      name: '携行弹药包',
+      kind: 'ammo',
+      uses: 1,
+    },
+  },
+  loadout: {
+    defaultWeapon: 'garand',
+    defaultGrenade: 'frag',
+    defaultItem: 'medkit',
+  },
+  grenade: {
+    cooldown: 0.8,
+    gravity: 13,
+    bounce: 0.38,
+    aiMinDistance: 9,
+    aiMaxDistance: 28,
+    aiThrowChancePerSecond: 0.32,
+    aiCooldownMin: 9,
+    aiCooldownRange: 7,
+  },
+  supply: {
+    interactRadius: 3.4,
+    aiArrivalDistance: 2.7,
   },
   // 玩家生命、移动、视角和受击反馈参数。
   player: {
@@ -195,7 +346,7 @@ export const CFG = {
     // Bot 技能值随机范围的宽度。
     skillRange: 0.35,
     // Bot 最大视野距离。
-    viewDistance: 60,
+    viewDistance: 70,
     // Bot 发现目标后的反应时间基准。
     reactionTime: 0.5,
     // 视野判定：前方夹角阈值、视线起点高度和最小侧视距离。
@@ -455,6 +606,8 @@ export const CFG = {
     killFeedMaxItems: 6,
     // 中央提示默认显示时长。
     centerMessageDuration: 2000,
+    // 道具和补给反馈的显示时长。
+    actionMessageDuration: 1600,
   },
   // Web Audio 同时播放的声音数量限制。
   audio: {

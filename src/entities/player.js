@@ -54,6 +54,7 @@ export class Player {
     this.moveLean = 0
     this.baseFov = playerConfig.baseFov
     this.currentFov = playerConfig.baseFov
+    this.loadout = { ...state.settings.loadout }
     this.weapon = new WeaponView({
       camera,
       matLib,
@@ -62,21 +63,29 @@ export class Player {
       reloadDuration: weaponConfig.reloadDuration,
       emptyReloadDuration: weaponConfig.emptyReloadDuration,
     })
-    this.ammo = weaponConfig.magazineSize
-    this.reserveAmmo = weaponConfig.reserveAmmo
-    this.magSize = weaponConfig.magazineSize
-    this.fireDelay = weaponConfig.fireDelay
+    this.weaponData = null
+    this.ammo = 0
+    this.reserveAmmo = 0
+    this.magSize = 0
+    this.fireDelay = 0
     this.lastFire = 0
     this.reloading = false
+    this.grenadeCount = 0
+    this.itemUses = 0
+    this.lastGrenade = 0
+    this.applyLoadout(this.loadout, false)
     this.lastMelee = 0
     this.meleeDelay = weaponConfig.meleeDelay
     this.meleeRange = weaponConfig.meleeRange
     this.meleeDamage = weaponConfig.meleeDamage
-    this.baseSpread = weaponConfig.baseSpread
     this.spreadBloom = 0
     this.currentSpread = this.baseSpread
     this.kills = 0
     this.deaths = 0
+    this.headshots = 0
+    this.meleeKills = 0
+    this.grenadeKills = 0
+    this.bestKillStreak = 0
     this.alive = true
     this.killStreak = 0
     this.lastKillAt = 0
@@ -104,6 +113,25 @@ export class Player {
     camera.rotation.order = 'YXZ'
   }
 
+  applyLoadout(loadout, preserveHealth = true) {
+    this.loadout = { ...loadout }
+    this.weaponData = this.config.weapons[this.loadout.weapon]
+    this.weapon.configure(this.weaponData)
+    this.magSize = this.weaponData.magazineSize
+    this.fireDelay = this.weaponData.fireDelay
+    this.baseSpread = this.weaponData.baseSpread
+    this.maxHealth = this.config.player.maxHealth
+    this.health = preserveHealth ? Math.min(this.health, this.maxHealth) : this.maxHealth
+    this.grenadeData = this.config.grenades[this.loadout.grenade]
+    this.itemData = this.config.items[this.loadout.item]
+    this.grenadeCount = this.grenadeData.count
+    this.itemUses = this.itemData.uses || 0
+    this.ammo = this.magSize
+    this.reserveAmmo = this.weaponData.reserveAmmo
+    this.reloading = false
+    this.weapon.resetActions()
+  }
+
   getHitboxes() {
     const playerConfig = this.config.player
     const height = this.currentHeight
@@ -121,7 +149,7 @@ export class Player {
     this.shakeTrauma = Math.min(this.config.player.shakeTraumaMax, this.shakeTrauma + amount)
   }
 
-  takeDamage(amount, fromPos, attacker) {
+  takeDamage(amount, fromPos, attacker, attackType = 'weapon') {
     const playerConfig = this.config.player
     if (!this.alive) return
     this.health -= amount
@@ -141,10 +169,10 @@ export class Player {
       const direction = new THREE.Vector3().subVectors(fromPos, this.position).setY(0).normalize()
       this.hud.showDirDamage(Math.atan2(direction.x, -direction.z) + this.yaw)
     }
-    if (this.health <= 0) this.die(attacker)
+    if (this.health <= 0) this.die(attacker, attackType)
   }
 
-  die(attacker) {
+  die(attacker, attackType = 'weapon') {
     const playerConfig = this.config.player
     if (!this.alive) return
     this.alive = false
@@ -165,7 +193,7 @@ export class Player {
     this.hud.showDeathScreen(attacker)
     this.deathCamStart = this.camera.position.clone()
     this.deathCamTime = 0
-    this.scoring.recordElimination(this, attacker)
+    this.scoring.recordElimination(this, attacker, false, attackType)
   }
 
   getSpread() {
@@ -190,24 +218,37 @@ export class Player {
     if (now - this.lastFire < this.fireDelay * 1000) return
     this.lastFire = now
     this.ammo--
-    this.weapon.triggerFire(this.aiming, this.ammo === 0)
     this.audio.rifleShot()
     const aiming = this.aiming
-    this.viewRecoilPitch +=
-      (aiming ? weaponConfig.aimingRecoilPitch : weaponConfig.hipRecoilPitch) +
-      Math.random() * weaponConfig.recoilPitchRandom
-    this.viewRecoilYaw +=
-      (Math.random() - 0.5) *
-      (aiming ? weaponConfig.aimingRecoilYaw : weaponConfig.hipRecoilYaw)
-    this.viewRecoilRoll +=
-      (Math.random() - 0.5) *
-      (aiming ? weaponConfig.aimingRecoilRoll : weaponConfig.hipRecoilRoll)
-    this.addShake(aiming ? weaponConfig.aimingFireShake : weaponConfig.hipFireShake)
+    const recoilMultiplier = this.weaponData.recoilMultiplier
+    const recoilImpulse = {
+      pitch:
+        ((aiming ? weaponConfig.aimingRecoilPitch : weaponConfig.hipRecoilPitch) +
+          Math.random() * weaponConfig.recoilPitchRandom) *
+        recoilMultiplier,
+      yaw:
+        (Math.random() - 0.5) *
+        (aiming ? weaponConfig.aimingRecoilYaw : weaponConfig.hipRecoilYaw) *
+        recoilMultiplier,
+      roll:
+        (Math.random() - 0.5) *
+        (aiming ? weaponConfig.aimingRecoilRoll : weaponConfig.hipRecoilRoll) *
+        recoilMultiplier,
+    }
+    this.viewRecoilPitch += recoilImpulse.pitch
+    this.viewRecoilYaw += recoilImpulse.yaw
+    this.viewRecoilRoll += recoilImpulse.roll
+    this.weapon.triggerFire(aiming, this.ammo === 0, recoilImpulse)
+    this.addShake(
+      (aiming ? weaponConfig.aimingFireShake : weaponConfig.hipFireShake) * recoilMultiplier
+    )
     const spread = this.getSpread()
     this.spreadBloom = Math.min(
       weaponConfig.spreadBloomMax,
       this.spreadBloom +
-        (aiming ? weaponConfig.aimedSpreadBloomPerShot : weaponConfig.spreadBloomPerShot)
+        (aiming
+          ? this.weaponData.aimedSpreadBloomPerShot
+          : this.weaponData.spreadBloomPerShot)
     )
     const direction = new THREE.Vector3()
     this.camera.getWorldDirection(direction)
@@ -216,7 +257,14 @@ export class Player {
     direction.z += (Math.random() - 0.5) * spread * 2
     direction.normalize()
     const muzzle = this.weapon.muzzlePos.getWorldPosition(new THREE.Vector3())
-    this.combat.fireBullet(this.camera.position.clone(), direction, 'allies', this, muzzle)
+    this.combat.fireBullet(
+      this.camera.position.clone(),
+      direction,
+      'allies',
+      this,
+      muzzle,
+      this.weaponData
+    )
     const eject = this.weapon.group.localToWorld(new THREE.Vector3(0.06, 0.02, -0.08))
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion)
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion)
@@ -239,7 +287,7 @@ export class Player {
     this.weapon.triggerReload(this.ammo === 0)
     setTimeout(
       () => {
-        if (!this.alive) return
+        if (!this.alive || !this.reloading) return
         const need = this.magSize - this.ammo
         const amount = Math.min(need, this.reserveAmmo)
         this.ammo += amount
@@ -249,6 +297,64 @@ export class Player {
       },
       Math.round(this.weapon.getReloadDuration() * 1000)
     )
+  }
+
+  throwGrenade() {
+    const now = performance.now()
+    if (
+      !this.alive ||
+      this.reloading ||
+      this.weapon.isBusy() ||
+      this.grenadeCount <= 0 ||
+      now - this.lastGrenade < this.config.grenade.cooldown * 1000
+    )
+      return
+    this.lastGrenade = now
+    this.grenadeCount--
+    this.aiming = false
+    const direction = new THREE.Vector3()
+    this.camera.getWorldDirection(direction)
+    this.combat.throwGrenade(
+      this.camera.position.clone().addScaledVector(direction, 0.5),
+      direction,
+      this.grenadeData,
+      this.team,
+      this
+    )
+    this.hud.updateAmmo()
+  }
+
+  useItem() {
+    if (!this.alive || this.itemUses <= 0) return
+    if (this.itemData.kind === 'heal') {
+      if (this.health >= this.maxHealth) return
+      this.health = Math.min(this.maxHealth, this.health + this.itemData.amount)
+      this.hud.showActionMessage('已使用急救包')
+    } else {
+      if (this.reserveAmmo >= this.weaponData.reserveAmmo) return
+      this.reserveAmmo = this.weaponData.reserveAmmo
+      this.hud.showActionMessage('已补充携行弹药')
+    }
+    this.itemUses--
+    this.hud.updateHealth()
+    this.hud.updateAmmo()
+  }
+
+  useAmmoStation() {
+    const isNearAmmoStation = this.state.ammoStations.some(
+      station => this.position.distanceTo(station.position) <= this.config.supply.interactRadius
+    )
+    if (!isNearAmmoStation) return
+    if (this.ammo === this.magSize && this.reserveAmmo === this.weaponData.reserveAmmo) {
+      this.hud.showActionMessage('弹药已满')
+      return
+    }
+    this.ammo = this.magSize
+    this.reserveAmmo = this.weaponData.reserveAmmo
+    this.reloading = false
+    this.weapon.resetActions()
+    this.hud.updateAmmo()
+    this.hud.showActionMessage('弹药补给完成')
   }
 
   melee() {
@@ -294,7 +400,7 @@ export class Player {
     }
     if (hitBot) {
       const hitPosition = hitBot.position.clone().setY(1.2)
-      hitBot.takeDamage(this.meleeDamage, this)
+      hitBot.takeDamage(this.meleeDamage, this, false, 'melee')
       this.audio.stabHitFlesh(hitPosition)
       this.effects.spawnBlood(hitPosition)
       this.hud.showHitMarker()
@@ -361,6 +467,9 @@ export class Player {
     if (this.input.consumePressed('KeyC')) this.crouching = !this.crouching
     if (this.input.consumePressed('KeyR')) this.reload()
     if (this.input.consumePressed('KeyF')) this.melee()
+    if (this.input.consumePressed('KeyG')) this.throwGrenade()
+    if (this.input.consumePressed('KeyH')) this.useItem()
+    if (this.input.consumePressed('KeyE')) this.useAmmoStation()
 
     const aiming = this.input.isMouseDown('right') && !this.weapon.isBusy()
     const sprintHeld =
@@ -370,7 +479,8 @@ export class Player {
     if (sprintHeld && this.crouching && !aiming) this.crouching = false
     this.aiming = aiming
     this.sprinting = sprintHeld && !this.crouching && !this.aiming
-    if (this.input.consumePressed('MouseLeft')) this.fire()
+    const firePressed = this.input.consumePressed('MouseLeft')
+    if (this.weaponData.automatic ? this.input.isMouseDown('left') : firePressed) this.fire()
 
     const lookSensitivity =
       playerConfig.lookSensitivity *

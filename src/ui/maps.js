@@ -37,6 +37,15 @@ export function createMapSystem({ dom, state, config }) {
         obstacle.type === 'building' ? 'rgba(32,35,58,0.72)' : 'rgba(239,91,103,0.72)'
       staticCtx.fillRect(centerX + obstacle.x * scale - 2, centerY + obstacle.z * scale - 2, 4, 4)
     }
+    staticCtx.fillStyle = '#ffd447'
+    staticCtx.strokeStyle = '#20233a'
+    staticCtx.lineWidth = 1
+    for (const station of state.ammoStations) {
+      const x = centerX + station.position.x * scale
+      const y = centerY + station.position.z * scale
+      staticCtx.fillRect(x - 3, y - 3, 6, 6)
+      staticCtx.strokeRect(x - 3, y - 3, 6, 6)
+    }
     staticLayerReady = true
   }
 
