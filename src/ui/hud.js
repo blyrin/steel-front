@@ -211,6 +211,7 @@ export function createHud({ dom, state, deploy, audio }) {
     state.running = false
     if (document.pointerLockElement) document.exitPointerLock()
     dom.deployScreen.classList.remove('show')
+    dom.deathScreen.classList.remove('show')
     if (dom.touchControls) dom.touchControls.classList.remove('show')
     if (dom.rotateHint) dom.rotateHint.classList.remove('show')
     setScoreboardVisible(false)

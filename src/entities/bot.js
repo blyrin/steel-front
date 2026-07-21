@@ -751,7 +751,7 @@ export class Bot {
     this.reloadTimer = 0
   }
 
-  takeDamage(amount, attacker) {
+  takeDamage(amount, attacker, isHeadshot = false) {
     if (!this.alive) return
     this.health -= amount
     if (this.stateName === 'patrol' && attacker) {
@@ -764,40 +764,20 @@ export class Bot {
     }
     const hitPosition = this.position.clone().setY(1.2)
     this.audio.hitFlesh(hitPosition)
-    if (this.health <= 0) this.die(attacker)
+    if (this.health <= 0) this.die(attacker, isHeadshot)
     else this.audio.pain(0.25, hitPosition)
   }
 
-  die(attacker) {
+  die(attacker, isHeadshot) {
     this.alive = false
     this.stateName = 'dead'
-    this.deaths++
     this.group.rotation.z = Math.PI / 2
     this.group.position.y = 0.3
     const fallPosition = this.position.clone().setY(0.3)
     this.effects.spawnBlood(this.position.clone().setY(1.2))
     this.audio.pain(0.4, fallPosition)
     this.audio.bodyFall(fallPosition)
-    if (attacker) {
-      if (attacker === this.gameState.player) {
-        const headshot = !!this.gameState.player._pendingHeadshot
-        this.gameState.player._pendingHeadshot = false
-        this.gameState.player.kills++
-        this.gameState.alliesScore++
-        this.hud.addKillFeed('player', '你', this.name, this.team)
-        this.hud.showKillNotify(this.name, headshot)
-      } else if (attacker.team === 'allies') {
-        this.gameState.alliesScore++
-        this.hud.addKillFeed('ally', attacker.name, this.name, this.team)
-      } else {
-        this.gameState.axisScore++
-        this.hud.addKillFeed('enemy', attacker.name, this.name, this.team)
-      }
-      attacker.kills++
-    } else if (this.team === 'allies') this.gameState.axisScore++
-    else this.gameState.alliesScore++
-    this.hud.updateScores()
-    this.checkVictory()
+    this.scoring.recordElimination(this, attacker, isHeadshot)
     setTimeout(() => this.respawn(), this.config.respawnTime * 1000)
   }
 

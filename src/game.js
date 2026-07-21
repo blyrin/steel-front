@@ -6,6 +6,7 @@ import { AudioSystem } from './audio/audio-system.js'
 import { createWorldSystem } from './world/world.js'
 import { createEffectsSystem } from './combat/effects.js'
 import { createCombatSystem } from './combat/ballistics.js'
+import { createScoringSystem } from './combat/scoring.js'
 import { Player } from './entities/player.js'
 import { Bot } from './entities/bot.js'
 import { getDom } from './ui/dom.js'
@@ -79,6 +80,7 @@ export function createGame() {
   })
 
   const combat = createCombatSystem({ state, effects, audio, hud })
+  const scoring = createScoringSystem({ state, hud, checkVictory })
 
   function getRandomSpawn(team) {
     const points = SPAWN_POINTS[team]
@@ -108,6 +110,7 @@ export function createGame() {
       hud,
       effects,
       combat,
+      scoring,
       deployment,
     })
     const botServices = {
@@ -120,8 +123,8 @@ export function createGame() {
       hud,
       effects,
       combat,
+      scoring,
       getRandomSpawn,
-      checkVictory,
     }
     for (let i = 0; i < CFG.teamSize - 1; i++) {
       state.bots.push(new Bot('allies', getRandomSpawn('allies'), botServices))

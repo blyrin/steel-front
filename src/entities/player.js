@@ -15,6 +15,7 @@ export class Player {
     hud,
     effects,
     combat,
+    scoring,
     deployment,
   }) {
     this.camera = camera
@@ -27,6 +28,7 @@ export class Player {
     this.hud = hud
     this.effects = effects
     this.combat = combat
+    this.scoring = scoring
     this.deployment = deployment
     this.team = 'allies'
     this.maxHealth = 100
@@ -75,7 +77,6 @@ export class Player {
     this.alive = true
     this.killStreak = 0
     this.lastKillAt = 0
-    this._pendingHeadshot = false
     this.radius = 0.4
     this.standHeight = 1.7
     this.crouchHeight = 1.1
@@ -110,7 +111,6 @@ export class Player {
   die(attacker) {
     if (!this.alive) return
     this.alive = false
-    this.deaths++
     this.killStreak = 0
     this.crouching = false
     this.sprinting = false
@@ -128,6 +128,7 @@ export class Player {
     this.hud.showDeathScreen(attacker)
     this.deathCamStart = this.camera.position.clone()
     this.deathCamTime = 0
+    this.scoring.recordElimination(this, attacker)
   }
 
   getSpread() {
@@ -247,7 +248,6 @@ export class Player {
     }
     if (hitBot) {
       const hitPosition = hitBot.position.clone().setY(1.2)
-      this._pendingHeadshot = false
       hitBot.takeDamage(this.meleeDamage, this)
       this.audio.stabHitFlesh(hitPosition)
       this.effects.spawnBlood(hitPosition)

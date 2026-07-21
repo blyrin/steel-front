@@ -38,9 +38,8 @@ export function createCombatSystem({ state, effects, audio, hud }) {
     effects.addTracer(muzzle.clone().addScaledVector(direction, 0.1), lineEnd)
     if (hitTarget) {
       const headshot = hitPoint.y > 1.55
-      if (owner === state.player) state.player._pendingHeadshot = headshot
       if (hitTarget === state.player) hitTarget.takeDamage(headshot ? 100 : 35, origin, owner)
-      else hitTarget.takeDamage(headshot ? 100 : 35, owner)
+      else hitTarget.takeDamage(headshot ? 100 : 35, owner, headshot)
       if (owner === state.player) {
         hud.showHitMarker()
         hud.addScreenShake(headshot ? 0.16 : 0.1)
