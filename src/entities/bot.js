@@ -292,120 +292,130 @@ export class Bot {
     const bootMat = this.matLib.metalDark
     const packMat = isAlly ? this.matLib.allyUniform : this.matLib.axisUniform
 
-    const legGeometry = BOT_GEOMETRY.leg
-    this.leftLeg = new THREE.Mesh(legGeometry, uniform)
-    this.leftLeg.position.set(-0.12, 0.46, 0)
-    this.leftLeg.castShadow = true
-    this.leftLeg.receiveShadow = true
-    this.group.add(this.leftLeg)
-    this.rightLeg = new THREE.Mesh(legGeometry, uniform)
-    this.rightLeg.position.set(0.12, 0.46, 0)
-    this.rightLeg.castShadow = true
-    this.rightLeg.receiveShadow = true
-    this.group.add(this.rightLeg)
+    this.body = new THREE.Group()
+    this.body.position.y = 0.78
+    this.group.add(this.body)
 
-    for (const side of [-1, 1]) {
+    const legGeometry = BOT_GEOMETRY.leg
+    const createLeg = side => {
+      const leg = new THREE.Group()
+      leg.position.set(side * 0.12, 0.78, 0)
+      const legMesh = new THREE.Mesh(legGeometry, uniform)
+      legMesh.position.y = -0.36
+      legMesh.castShadow = true
+      legMesh.receiveShadow = true
+      leg.add(legMesh)
       const boot = new THREE.Mesh(BOT_GEOMETRY.boot, bootMat)
-      boot.position.set(side * 0.12, 0.08, 0.04)
+      boot.position.set(0, -0.7, -0.08)
       boot.castShadow = false
-      this.group.add(boot)
+      leg.add(boot)
+      this.group.add(leg)
+      return leg
     }
+    this.leftLeg = createLeg(-1)
+    this.rightLeg = createLeg(1)
 
     const torso = new THREE.Mesh(BOT_GEOMETRY.torso, uniform)
-    torso.position.set(0, 1.16, 0)
+    torso.position.set(0, 0.38, 0)
     torso.castShadow = true
     torso.receiveShadow = true
-    this.group.add(torso)
+    this.body.add(torso)
     const chest = new THREE.Mesh(BOT_GEOMETRY.chest, uniform)
-    chest.position.set(0, 1.35, 0.02)
+    chest.position.set(0, 0.57, 0.02)
     chest.castShadow = false
-    this.group.add(chest)
+    this.body.add(chest)
     const belt = new THREE.Mesh(BOT_GEOMETRY.belt, bootMat)
-    belt.position.set(0, 0.86, 0)
-    this.group.add(belt)
+    belt.position.set(0, 0.08, 0)
+    this.body.add(belt)
     for (const side of [-1, 1]) {
       const pouch = new THREE.Mesh(BOT_GEOMETRY.pouch, this.matLib.wood)
-      pouch.position.set(side * 0.16, 0.86, 0.16)
-      this.group.add(pouch)
+      pouch.position.set(side * 0.16, 0.08, 0.16)
+      this.body.add(pouch)
     }
 
     const pack = new THREE.Mesh(BOT_GEOMETRY.pack, packMat)
-    pack.position.set(0, 1.22, 0.2)
+    pack.position.set(0, 0.44, 0.2)
     pack.castShadow = true
-    this.group.add(pack)
+    this.body.add(pack)
+    this.pack = pack
 
     const patchLeft = new THREE.Mesh(BOT_GEOMETRY.patch, accent)
-    patchLeft.position.set(-0.26, 1.34, 0)
-    this.group.add(patchLeft)
+    patchLeft.position.set(-0.26, 0.56, 0)
+    this.body.add(patchLeft)
     const patchRight = new THREE.Mesh(BOT_GEOMETRY.patch, accent)
-    patchRight.position.set(0.26, 1.34, 0)
-    this.group.add(patchRight)
+    patchRight.position.set(0.26, 0.56, 0)
+    this.body.add(patchRight)
     if (isAlly) {
       const stripe = new THREE.Mesh(BOT_GEOMETRY.stripe, accent)
-      stripe.position.set(0, 1.28, 0)
-      this.group.add(stripe)
+      stripe.position.set(0, 0.5, 0)
+      this.body.add(stripe)
     } else {
       const sash = new THREE.Mesh(BOT_GEOMETRY.sash, accent)
-      sash.position.set(0.08, 1.18, 0)
+      sash.position.set(0.08, 0.4, 0)
       sash.rotation.z = 0.45
-      this.group.add(sash)
+      this.body.add(sash)
     }
 
+    this.head = new THREE.Group()
+    this.head.position.set(0, 0.74, 0)
+    this.body.add(this.head)
     const neck = new THREE.Mesh(BOT_GEOMETRY.neck, this.matLib.skin)
-    neck.position.set(0, 1.52, 0)
-    this.group.add(neck)
+    neck.position.set(0, 0, 0)
+    this.head.add(neck)
     const head = new THREE.Mesh(BOT_GEOMETRY.head, this.matLib.skin)
-    head.position.set(0, 1.66, 0)
+    head.position.set(0, 0.14, 0)
     head.castShadow = true
-    this.group.add(head)
+    this.head.add(head)
     if (isAlly) {
       const dome = new THREE.Mesh(
         BOT_GEOMETRY.allyHelmet,
         helmetMat
       )
-      dome.position.set(0, 1.78, 0)
+      dome.position.set(0, 0.26, 0)
       dome.scale.set(1.08, 0.88, 1.12)
       dome.castShadow = true
-      this.group.add(dome)
+      this.head.add(dome)
       const brim = new THREE.Mesh(BOT_GEOMETRY.allyBrim, helmetMat)
-      brim.position.set(0, 1.72, 0)
-      this.group.add(brim)
+      brim.position.set(0, 0.2, 0)
+      this.head.add(brim)
       const net = new THREE.Mesh(BOT_GEOMETRY.allyNet, this.matLib.allyAccent)
-      net.position.set(0, 1.9, 0)
-      this.group.add(net)
+      net.position.set(0, 0.38, 0)
+      this.head.add(net)
     } else {
       const dome = new THREE.Mesh(
         BOT_GEOMETRY.axisHelmet,
         helmetMat
       )
-      dome.position.set(0, 1.8, 0)
+      dome.position.set(0, 0.28, 0)
       dome.scale.set(1.08, 0.92, 1.18)
       dome.castShadow = true
-      this.group.add(dome)
+      this.head.add(dome)
       const rear = new THREE.Mesh(BOT_GEOMETRY.axisRear, helmetMat)
-      rear.position.set(0, 1.72, 0.12)
-      this.group.add(rear)
+      rear.position.set(0, 0.2, 0.12)
+      this.head.add(rear)
       for (const side of [-1, 1]) {
         const skirt = new THREE.Mesh(BOT_GEOMETRY.axisSkirt, helmetMat)
-        skirt.position.set(side * 0.16, 1.72, 0.02)
-        this.group.add(skirt)
+        skirt.position.set(side * 0.16, 0.2, 0.02)
+        this.head.add(skirt)
       }
     }
 
     const armGeometry = BOT_GEOMETRY.arm
-    this.leftArm = new THREE.Mesh(armGeometry, uniform)
-    this.leftArm.position.set(-0.32, 1.16, 0)
-    this.leftArm.castShadow = false
-    this.group.add(this.leftArm)
-    this.rightArm = new THREE.Mesh(armGeometry, uniform)
-    this.rightArm.position.set(0.32, 1.16, 0)
-    this.rightArm.castShadow = false
-    this.group.add(this.rightArm)
-    for (const side of [-1, 1]) {
+    const createArm = side => {
+      const arm = new THREE.Group()
+      arm.position.set(side * 0.31, 0.62, 0)
+      const sleeve = new THREE.Mesh(armGeometry, uniform)
+      sleeve.position.set(0, -0.29, 0)
+      sleeve.castShadow = false
+      arm.add(sleeve)
       const hand = new THREE.Mesh(BOT_GEOMETRY.hand, this.matLib.skin)
-      hand.position.set(side * 0.32, 0.84, 0.02)
-      this.group.add(hand)
+      hand.position.set(0, -0.59, 0.02)
+      arm.add(hand)
+      this.body.add(arm)
+      return arm
     }
+    this.leftArm = createArm(-1)
+    this.rightArm = createArm(1)
 
     this.rifle = new THREE.Group()
     const rifleBarrel = new THREE.Mesh(
@@ -421,8 +431,8 @@ export class Bot {
     const rifleStock = new THREE.Mesh(BOT_GEOMETRY.rifleStock, this.matLib.wood)
     rifleStock.position.set(0, -0.01, 0.22)
     this.rifle.add(rifleStock)
-    this.rifle.position.set(0.22, 1.12, -0.18)
-    this.group.add(this.rifle)
+    this.rifle.position.set(0.22, 0.46, -0.38)
+    this.body.add(this.rifle)
 
     this.marker = new THREE.Group()
     const pole = new THREE.Mesh(
@@ -465,7 +475,14 @@ export class Bot {
     this.marker.scale.setScalar(1.15)
     this.group.add(this.marker)
     this.matLib.addOutline(this.group, 1.045)
-    this.legPhase = 0
+    this.legPhase = Math.random() * Math.PI * 2
+    this.animationTime = Math.random() * Math.PI * 2
+    this.moveBlend = 0
+    this.aimPose = 0
+    this.reloadPose = 0
+    this.fireKick = 0
+    this.deathTime = -1
+    this._rifleTarget = new THREE.Vector3()
   }
 
   getRandomPatrolPoint() {
@@ -561,7 +578,10 @@ export class Bot {
   }
 
   update(dt) {
-    if (!this.alive) return
+    if (!this.alive) {
+      this.updateModelAnimation(dt)
+      return
+    }
     this.stateTimer += dt
     this.fireTimer += dt
     this.spreadBloom = Math.max(
@@ -624,22 +644,13 @@ export class Bot {
     this.position.z = Math.max(-half, Math.min(half, this.position.z))
     this.handleCollisions()
     this.group.position.copy(this.position)
-    const cameraDeltaX = this.camera.position.x - this.position.x
-    const cameraDeltaZ = this.camera.position.z - this.position.z
-    this.marker.rotation.y = Math.atan2(cameraDeltaX, cameraDeltaZ) - this.yaw
-    if (this.velocity.lengthSq() > this.config.bot.stationarySpeedThreshold ** 2) {
-      this.legPhase += dt * 10
-      const swing = Math.sin(this.legPhase) * 0.4
-      this.leftLeg.rotation.x = swing
-      this.rightLeg.rotation.x = -swing
-      this.leftArm.rotation.x = -swing * 0.5
-    } else {
-      this.leftLeg.rotation.x *= 0.8
-      this.rightLeg.rotation.x *= 0.8
-      this.leftArm.rotation.x *= 0.8
-    }
     let targetYaw = this.yaw
-    if (this.target?.alive && this.stateName === 'engage') {
+    if (
+      this.target?.alive &&
+      (this.stateName === 'engage' ||
+        this.stateName === 'seek_cover' ||
+        this.stateName === 'flank')
+    ) {
       targetYaw = Math.atan2(
         -(this.target.position.x - this.position.x),
         -(this.target.position.z - this.position.z)
@@ -652,6 +663,187 @@ export class Bot {
     while (difference < -Math.PI) difference += Math.PI * 2
     this.yaw += difference * Math.min(1, dt * this.config.bot.turnSpeed)
     this.group.rotation.y = this.yaw
+    const cameraDeltaX = this.camera.position.x - this.position.x
+    const cameraDeltaZ = this.camera.position.z - this.position.z
+    this.marker.rotation.y = Math.atan2(cameraDeltaX, cameraDeltaZ) - this.yaw
+    this.updateModelAnimation(dt, difference)
+  }
+
+  updateModelAnimation(dt, turnDifference = 0) {
+    this.animationTime += dt
+    if (!this.alive) {
+      this.deathTime = Math.max(0, this.deathTime) + dt
+      const progress = Math.min(1, this.deathTime / 0.55)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      this.group.rotation.z = (Math.PI / 2) * eased
+      this.group.position.y = 0.04 + (1 - eased) * 0.06
+      return
+    }
+
+    const speed = Math.hypot(this.velocity.x, this.velocity.z)
+    const moveBlendTarget = THREE.MathUtils.clamp(speed / 1.5, 0, 1)
+    this.moveBlend +=
+      (moveBlendTarget - this.moveBlend) * (1 - Math.exp(-10 * dt))
+    if (this.moveBlend > 0.01)
+      this.legPhase += dt * (7.5 + Math.min(speed, 6) * 0.65)
+
+    const forwardX = -Math.sin(this.yaw)
+    const forwardZ = -Math.cos(this.yaw)
+    const rightX = Math.cos(this.yaw)
+    const rightZ = -Math.sin(this.yaw)
+    const forwardSpeed = this.velocity.x * forwardX + this.velocity.z * forwardZ
+    const sideSpeed = this.velocity.x * rightX + this.velocity.z * rightZ
+    const forwardSign = forwardSpeed < -0.15 ? -1 : 1
+    const stride = Math.sin(this.legPhase) * 0.52 * this.moveBlend * forwardSign
+    const sideStride =
+      Math.cos(this.legPhase) *
+      THREE.MathUtils.clamp(Math.abs(sideSpeed) / Math.max(speed, 0.01), 0, 1) *
+      0.1 *
+      this.moveBlend
+    const legEase = 1 - Math.exp(-16 * dt)
+    const leftStep = stride + sideStride
+    const rightStep = -stride + sideStride
+    const legSpread =
+      THREE.MathUtils.clamp(sideSpeed / 5, -1, 1) * 0.06 * this.moveBlend
+    this.leftLeg.rotation.x += (leftStep - this.leftLeg.rotation.x) * legEase
+    this.rightLeg.rotation.x += (rightStep - this.rightLeg.rotation.x) * legEase
+    this.leftLeg.rotation.z += (legSpread - this.leftLeg.rotation.z) * legEase
+    this.rightLeg.rotation.z += (legSpread - this.rightLeg.rotation.z) * legEase
+
+    const combatState =
+      this.stateName === 'engage' ||
+      this.stateName === 'seek_cover' ||
+      this.stateName === 'flank'
+    let aimTarget = 0
+    if (combatState) aimTarget = this.targetVisible ? 1 : 0.58
+    this.aimPose += (aimTarget - this.aimPose) * (1 - Math.exp(-7 * dt))
+    const reloadTarget = this.reloading ? 1 : 0
+    this.reloadPose += (reloadTarget - this.reloadPose) * (1 - Math.exp(-9 * dt))
+    this.fireKick *= Math.exp(-14 * dt)
+    const recoil = this.fireKick * this.fireKick
+    const holdPose = this.aimPose * (1 - this.reloadPose * 0.9)
+
+    const breathing = Math.sin(this.animationTime * 1.65) * 0.008
+    const stepLift = (1 - Math.cos(this.legPhase * 2)) * 0.005 * this.moveBlend
+    const bodyYTarget = 0.78 + breathing + stepLift
+    const bodyPitchTarget = THREE.MathUtils.clamp(
+      -forwardSpeed * 0.004 - holdPose * 0.008 - recoil * 0.012,
+      -0.04,
+      0.025
+    )
+    const bodyRollTarget =
+      THREE.MathUtils.clamp(-sideSpeed * 0.004, -0.035, 0.035) +
+      Math.sin(this.animationTime * 0.9) * 0.003
+    const bodyEase = 1 - Math.exp(-8 * dt)
+    this.body.position.y += (bodyYTarget - this.body.position.y) * bodyEase
+    this.body.rotation.x += (bodyPitchTarget - this.body.rotation.x) * bodyEase
+    this.body.rotation.z += (bodyRollTarget - this.body.rotation.z) * bodyEase
+    this.pack.rotation.x += (-bodyPitchTarget * 0.35 - this.pack.rotation.x) * bodyEase
+
+    const carryLeftX = -stride * 0.22 * (1 - holdPose)
+    const carryRightX = 1.05 + stride * 0.08 * (1 - holdPose)
+    const leftArmX = THREE.MathUtils.lerp(carryLeftX, 1.15, this.aimPose)
+    const rightArmX = THREE.MathUtils.lerp(carryRightX, 1.15, this.aimPose)
+    const leftArmZ = THREE.MathUtils.lerp(0, 0.5, this.aimPose)
+    const rightArmZ = -0.16
+    const reloadLeftX = 0.2
+    const reloadRightX = 0.38
+    const reloadLeftZ = 0.78
+    const reloadRightZ = -0.42
+    const armEase = 1 - Math.exp(-11 * dt)
+    this.leftArm.rotation.x +=
+      (THREE.MathUtils.lerp(leftArmX, reloadLeftX, this.reloadPose) -
+        this.leftArm.rotation.x) *
+      armEase
+    this.rightArm.rotation.x +=
+      (THREE.MathUtils.lerp(rightArmX, reloadRightX, this.reloadPose) -
+        this.rightArm.rotation.x) *
+      armEase
+    this.leftArm.rotation.y +=
+      (THREE.MathUtils.lerp(0.04, 0, this.aimPose) - this.leftArm.rotation.y) *
+      armEase
+    this.rightArm.rotation.y +=
+      (THREE.MathUtils.lerp(-0.04, 0, this.aimPose) - this.rightArm.rotation.y) *
+      armEase
+    this.leftArm.rotation.z +=
+      (THREE.MathUtils.lerp(leftArmZ, reloadLeftZ, this.reloadPose) -
+        this.leftArm.rotation.z) *
+      armEase
+    this.rightArm.rotation.z +=
+      (THREE.MathUtils.lerp(rightArmZ, reloadRightZ, this.reloadPose) -
+        this.rightArm.rotation.z) *
+      armEase
+
+    const horizontalTargetDistance = this.target
+      ? Math.max(
+          0.1,
+          Math.hypot(
+            this.target.position.x - this.position.x,
+            this.target.position.z - this.position.z
+          )
+        )
+      : 20
+    const rifleHeight = this.position.y + this.body.position.y + 0.46
+    const targetPitch = this.target?.alive
+      ? THREE.MathUtils.clamp(
+          Math.atan2(
+            this.config.bot.targetHeight - rifleHeight,
+            horizontalTargetDistance
+          ),
+          -0.18,
+          0.18
+        )
+      : 0.02
+    const carryRifleX = 0.22
+    const carryRifleY = 0.46
+    const carryRifleZ = -0.38
+    const aimRifleX = 0.17
+    const aimRifleY = 0.48
+    const aimRifleZ = -0.4
+    const reloadRifleX = 0.3
+    const reloadRifleY = 0.3
+    const reloadRifleZ = -0.22
+    this._rifleTarget.set(
+      THREE.MathUtils.lerp(
+        THREE.MathUtils.lerp(carryRifleX, aimRifleX, this.aimPose),
+        reloadRifleX,
+        this.reloadPose
+      ),
+      THREE.MathUtils.lerp(
+        THREE.MathUtils.lerp(carryRifleY, aimRifleY, this.aimPose),
+        reloadRifleY,
+        this.reloadPose
+      ),
+      THREE.MathUtils.lerp(
+        THREE.MathUtils.lerp(carryRifleZ, aimRifleZ, this.aimPose),
+        reloadRifleZ,
+        this.reloadPose
+      )
+    )
+    const rifleEase = 1 - Math.exp(-13 * dt)
+    this.rifle.position.lerp(this._rifleTarget, rifleEase)
+    this.rifle.position.z += recoil * 0.035
+    const riflePitchTarget =
+      THREE.MathUtils.lerp(-0.18, targetPitch + 0.02, this.aimPose) -
+      this.reloadPose * 0.48 -
+      recoil * 0.06
+    const rifleYawTarget = THREE.MathUtils.lerp(0.08, 0.015, this.aimPose) + recoil * 0.012
+    const rifleRollTarget =
+      THREE.MathUtils.lerp(0.06, 0.015, this.aimPose) + this.reloadPose * 0.28
+    this.rifle.rotation.x += (riflePitchTarget - this.rifle.rotation.x) * rifleEase
+    this.rifle.rotation.y += (rifleYawTarget - this.rifle.rotation.y) * rifleEase
+    this.rifle.rotation.z += (rifleRollTarget - this.rifle.rotation.z) * rifleEase
+
+    const headEase = 1 - Math.exp(-9 * dt)
+    const headPitchTarget = targetPitch * this.aimPose * 0.3 - bodyPitchTarget * 0.35
+    const headYawTarget = THREE.MathUtils.clamp(turnDifference * 0.32, -0.22, 0.22)
+    const headRollTarget = -bodyRollTarget * 0.45
+    this.head.rotation.x += (headPitchTarget - this.head.rotation.x) * headEase
+    this.head.rotation.y += (headYawTarget - this.head.rotation.y) * headEase
+    this.head.rotation.z += (headRollTarget - this.head.rotation.z) * headEase
+
+    const markerY = 2.06 + Math.sin(this.animationTime * 2.1) * 0.025
+    this.marker.position.y += (markerY - this.marker.position.y) * (1 - Math.exp(-8 * dt))
   }
 
   updateEngage() {
@@ -785,6 +977,7 @@ export class Bot {
     if (now - this.lastFire < this.fireDelay * 1000) return
     this.lastFire = now
     this.magazine--
+    this.fireKick = Math.min(1, this.fireKick + 0.72)
     const targetHeight = this.config.bot.targetHeight
     const muzzle = new THREE.Vector3()
     this.rifle.getWorldPosition(muzzle)
@@ -831,8 +1024,10 @@ export class Bot {
   die(attacker, isHeadshot) {
     this.alive = false
     this.stateName = 'dead'
-    this.group.rotation.z = Math.PI / 2
-    this.group.position.y = 0.3
+    this.deathTime = 0
+    this.group.rotation.z = 0
+    this.marker.visible = false
+    this.group.position.y = 0.1
     const fallPosition = this.position.clone().setY(0.3)
     this.effects.spawnBlood(this.position.clone().setY(1.2))
     this.audio.pain(this.config.bot.deathPainChance, fallPosition)
@@ -855,7 +1050,25 @@ export class Bot {
     this.target = null
     this.position.copy(this.getRandomSpawn(this.team))
     this.position.y = 0
-    this.group.rotation.z = 0
+    this.velocity.set(0, 0, 0)
+    this.yaw = Math.random() * Math.PI * 2
+    this.deathTime = -1
+    this.moveBlend = 0
+    this.aimPose = 0
+    this.reloadPose = 0
+    this.fireKick = 0
+    this.body.position.y = 0.78
+    this.body.rotation.set(0, 0, 0)
+    this.head.rotation.set(0, 0, 0)
+    this.leftLeg.rotation.set(0, 0, 0)
+    this.rightLeg.rotation.set(0, 0, 0)
+    this.leftArm.rotation.set(0, 0, 0)
+    this.rightArm.rotation.set(0, 0, 0)
+    this.rifle.position.set(0.22, 0.46, -0.38)
+    this.rifle.rotation.set(0, 0, 0)
+    this.marker.position.y = 2.06
+    this.marker.visible = true
+    this.group.rotation.set(0, this.yaw, 0)
     this.group.position.copy(this.position)
     this.patrolTarget = this.getRandomPatrolPoint()
   }

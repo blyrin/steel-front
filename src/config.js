@@ -195,7 +195,7 @@ export const CFG = {
     // Bot 技能值随机范围的宽度。
     skillRange: 0.35,
     // Bot 最大视野距离。
-    viewDistance: 70,
+    viewDistance: 60,
     // Bot 发现目标后的反应时间基准。
     reactionTime: 0.5,
     // 视野判定：前方夹角阈值、视线起点高度和最小侧视距离。
@@ -375,7 +375,7 @@ export const CFG = {
     // 子弹曳光线的显示时长。
     tracerLife: 0.05,
     // 子弹曳光线的初始透明度。
-    tracerOpacity: 0.6,
+    tracerOpacity: 0.65,
     // 第一人称枪口火光的显示时长。
     firstPersonMuzzleLife: 0.05,
     // Bot 枪口火光的显示时长。
