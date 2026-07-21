@@ -6,14 +6,14 @@ function loadSettings() {
   const raw = localStorage.getItem(SETTINGS_KEY)
   if (!raw) {
     return {
-      masterVolume: CFG.masterVolume,
-      mouseSensitivity: CFG.mouseSensitivity,
+      masterVolume: CFG.settings.masterVolume,
+      mouseSensitivity: CFG.settings.mouseSensitivity,
     }
   }
   const data = JSON.parse(raw)
   return {
-    masterVolume: data.masterVolume ?? CFG.masterVolume,
-    mouseSensitivity: data.mouseSensitivity ?? CFG.mouseSensitivity,
+    masterVolume: data.masterVolume ?? CFG.settings.masterVolume,
+    mouseSensitivity: data.mouseSensitivity ?? CFG.settings.mouseSensitivity,
   }
 }
 

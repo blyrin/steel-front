@@ -19,16 +19,16 @@ export function createGame() {
   const dom = getDom()
   const state = createGameState()
   const deploy = createDeployState()
-  const runtime = createSceneRuntime()
-  const audio = new AudioSystem(runtime.camera, AUDIO_FILES)
+  const runtime = createSceneRuntime(CFG)
+  const audio = new AudioSystem(runtime.camera, AUDIO_FILES, CFG)
   const world = createWorldSystem({
     scene: runtime.scene,
     matLib: runtime.matLib,
     state,
     config: CFG,
   })
-  const effects = createEffectsSystem({ scene: runtime.scene, state, audio })
-  const hud = createHud({ dom, state, deploy, audio })
+  const effects = createEffectsSystem({ scene: runtime.scene, state, audio, config: CFG })
+  const hud = createHud({ dom, state, deploy, audio, config: CFG })
   const maps = createMapSystem({ dom, state, config: CFG })
   let deployment
   let input
@@ -66,7 +66,7 @@ export function createGame() {
     input.updateTouchUi()
   }
 
-  input = createInputSystem({ state, deploy, onPause: togglePause, dom })
+  input = createInputSystem({ state, deploy, onPause: togglePause, dom, config: CFG })
   deployment = createDeploymentSystem({
     dom,
     state,
@@ -79,22 +79,22 @@ export function createGame() {
     config: CFG,
   })
 
-  const combat = createCombatSystem({ state, effects, audio, hud })
+  const combat = createCombatSystem({ state, effects, audio, hud, config: CFG })
   const scoring = createScoringSystem({ state, hud, checkVictory })
 
   function getRandomSpawn(team) {
     const points = SPAWN_POINTS[team]
     const spawn = points[Math.floor(Math.random() * points.length)]
     return new THREE.Vector3(
-      spawn.x + (Math.random() - 0.5) * 4,
+      spawn.x + (Math.random() - 0.5) * CFG.match.spawnScatter,
       0,
-      spawn.z + (Math.random() - 0.5) * 4
+      spawn.z + (Math.random() - 0.5) * CFG.match.spawnScatter
     )
   }
 
   function checkVictory() {
-    if (state.alliesScore >= CFG.killTarget) hud.showEndScreen(true)
-    else if (state.axisScore >= CFG.killTarget) hud.showEndScreen(false)
+    if (state.alliesScore >= CFG.match.killTarget) hud.showEndScreen(true)
+    else if (state.axisScore >= CFG.match.killTarget) hud.showEndScreen(false)
   }
 
   function initGame() {
@@ -126,16 +126,16 @@ export function createGame() {
       scoring,
       getRandomSpawn,
     }
-    for (let i = 0; i < CFG.teamSize - 1; i++) {
+    for (let i = 0; i < CFG.match.teamSize - 1; i++) {
       state.bots.push(new Bot('allies', getRandomSpawn('allies'), botServices))
     }
-    for (let i = 0; i < CFG.teamSize; i++) {
+    for (let i = 0; i < CFG.match.teamSize; i++) {
       state.bots.push(new Bot('axis', getRandomSpawn('axis'), botServices))
     }
     state.startTime = performance.now()
     state.running = true
     dom.hud.classList.add('show')
-    dom.targetKill.textContent = `达到 ${CFG.killTarget} 杀`
+    dom.targetKill.textContent = `达到 ${CFG.match.killTarget} 杀`
     state.player.weapon.setVisible(false)
     state.player.alive = false
     deployment.showScreen()
@@ -146,34 +146,38 @@ export function createGame() {
       dom.bar.style.width = `${Math.min(100, Math.max(0, progress))}%`
       if (text) dom.loadStatus.textContent = text
     }
-    setProgress(4, LOAD_STEPS[0])
+    const boot = CFG.boot
+    setProgress(boot.initialProgress, LOAD_STEPS[0])
     world.buildWorld()
-    runtime.camera.position.y = 4
-    setProgress(18, LOAD_STEPS[1])
-    await new Promise(resolve => setTimeout(resolve, 40))
-    setProgress(28, LOAD_STEPS[2])
-    await new Promise(resolve => setTimeout(resolve, 20))
-    setProgress(36, LOAD_STEPS[3])
-    await new Promise(resolve => setTimeout(resolve, 20))
-    setProgress(42, LOAD_STEPS[4])
-    setProgress(45, LOAD_STEPS[5])
+    runtime.camera.position.y = CFG.match.initialCameraHeight
+    setProgress(boot.worldProgress, LOAD_STEPS[1])
+    await new Promise(resolve => setTimeout(resolve, boot.initialDelay))
+    setProgress(boot.coverProgress, LOAD_STEPS[2])
+    await new Promise(resolve => setTimeout(resolve, boot.coverDelay))
+    setProgress(boot.botProgress, LOAD_STEPS[3])
+    await new Promise(resolve => setTimeout(resolve, boot.coverDelay))
+    setProgress(boot.aiProgress, LOAD_STEPS[4])
+    setProgress(boot.audioProgress, LOAD_STEPS[5])
     await audio.preload(fraction => {
-      setProgress(45 + fraction * 51, `加载战斗音效... ${Math.round(fraction * 100)}%`)
+      setProgress(
+        boot.audioProgress + fraction * boot.audioProgressRange,
+        `加载战斗音效... ${Math.round(fraction * 100)}%`
+      )
     })
     setProgress(100, LOAD_STEPS[6])
-    await new Promise(resolve => setTimeout(resolve, 280))
+    await new Promise(resolve => setTimeout(resolve, boot.readyDelay))
     dom.loader.style.opacity = 0
     setTimeout(() => {
       dom.loader.style.display = 'none'
       dom.menu.classList.add('show')
-    }, 800)
+    }, boot.menuFadeDelay)
   }
 
   let lastTime = performance.now()
   function animate() {
     requestAnimationFrame(animate)
     const now = performance.now()
-    const dt = Math.min(0.05, (now - lastTime) / 1000)
+    const dt = Math.min(CFG.match.maxFrameDelta, (now - lastTime) / 1000)
     lastTime = now
     if (!state.loading && state.running && !state.paused) {
       state.player.update(dt)

@@ -18,6 +18,8 @@ export class Player {
     scoring,
     deployment,
   }) {
+    const playerConfig = config.player
+    const weaponConfig = config.weapon
     this.camera = camera
     this.sun = sun
     this.audio = audio
@@ -31,9 +33,9 @@ export class Player {
     this.scoring = scoring
     this.deployment = deployment
     this.team = 'allies'
-    this.maxHealth = 100
-    this.health = 100
-    this.position = new THREE.Vector3(0, 1.7, 100)
+    this.maxHealth = playerConfig.maxHealth
+    this.health = playerConfig.maxHealth
+    this.position = new THREE.Vector3(0, playerConfig.standHeight, 100)
     this.velocity = new THREE.Vector3()
     this.yaw = 0
     this.pitch = 0
@@ -50,41 +52,51 @@ export class Player {
     this.lookSwayYaw = 0
     this.lookSwayRoll = 0
     this.moveLean = 0
-    this.baseFov = 75
-    this.currentFov = 75
+    this.baseFov = playerConfig.baseFov
+    this.currentFov = playerConfig.baseFov
     this.weapon = new WeaponView({
       camera,
       matLib,
       audio,
-      reloadDuration: config.reloadDuration,
-      emptyReloadDuration: config.emptyReloadDuration,
+      config: weaponConfig,
+      reloadDuration: weaponConfig.reloadDuration,
+      emptyReloadDuration: weaponConfig.emptyReloadDuration,
     })
-    this.ammo = 8
-    this.reserveAmmo = 96
-    this.magSize = 8
-    this.fireDelay = 0.15
+    this.ammo = weaponConfig.magazineSize
+    this.reserveAmmo = weaponConfig.reserveAmmo
+    this.magSize = weaponConfig.magazineSize
+    this.fireDelay = weaponConfig.fireDelay
     this.lastFire = 0
     this.reloading = false
     this.lastMelee = 0
-    this.meleeDelay = 0.72
-    this.meleeRange = 2.55
-    this.meleeDamage = 100
-    this.baseSpread = 0.004
+    this.meleeDelay = weaponConfig.meleeDelay
+    this.meleeRange = weaponConfig.meleeRange
+    this.meleeDamage = weaponConfig.meleeDamage
+    this.baseSpread = weaponConfig.baseSpread
     this.spreadBloom = 0
-    this.currentSpread = 0.004
+    this.currentSpread = this.baseSpread
     this.kills = 0
     this.deaths = 0
     this.alive = true
     this.killStreak = 0
     this.lastKillAt = 0
-    this.radius = 0.4
-    this.standHeight = 1.7
+    this.radius = playerConfig.radius
+    this.standHeight = playerConfig.standHeight
     this.hitboxes = [
-      createCircleHitbox(this.radius, 0, this.standHeight - 0.22),
-      createCircleHitbox(this.radius * 0.78, this.standHeight - 0.32, this.standHeight, true),
+      createCircleHitbox(
+        this.radius,
+        0,
+        this.standHeight - playerConfig.bodyHitboxHeightOffset
+      ),
+      createCircleHitbox(
+        this.radius * playerConfig.headHitboxRadiusMultiplier,
+        this.standHeight - playerConfig.headHitboxHeightOffset,
+        this.standHeight,
+        true
+      ),
     ]
-    this.crouchHeight = 1.1
-    this.currentHeight = 1.7
+    this.crouchHeight = playerConfig.crouchHeight
+    this.currentHeight = this.standHeight
     this._moveDirection = new THREE.Vector3()
     this._moveRotation = new THREE.Euler()
     this._moveAxis = { x: 0, z: 0 }
@@ -93,9 +105,10 @@ export class Player {
   }
 
   getHitboxes() {
+    const playerConfig = this.config.player
     const height = this.currentHeight
-    this.hitboxes[0].maxY = height - 0.22
-    this.hitboxes[1].minY = height - 0.32
+    this.hitboxes[0].maxY = height - playerConfig.bodyHitboxHeightOffset
+    this.hitboxes[1].minY = height - playerConfig.headHitboxHeightOffset
     this.hitboxes[1].maxY = height
     for (const hitbox of this.hitboxes) {
       hitbox.x = this.position.x
@@ -105,18 +118,25 @@ export class Player {
   }
 
   addShake(amount) {
-    this.shakeTrauma = Math.min(1, this.shakeTrauma + amount)
+    this.shakeTrauma = Math.min(this.config.player.shakeTraumaMax, this.shakeTrauma + amount)
   }
 
   takeDamage(amount, fromPos, attacker) {
+    const playerConfig = this.config.player
     if (!this.alive) return
     this.health -= amount
     this.audio.hitFlesh()
     this.hud.showDamageVignette()
-    this.addShake(Math.min(0.55, 0.18 + amount * 0.004))
-    this.viewRecoilPitch += 0.008 + amount * 0.00008
-    this.viewRecoilYaw += (Math.random() - 0.5) * 0.012
-    this.viewRecoilRoll += (Math.random() - 0.5) * 0.01
+    this.addShake(
+      Math.min(
+        playerConfig.damageShakeMax,
+        playerConfig.damageShakeBase + amount * playerConfig.damageShakeScale
+      )
+    )
+    this.viewRecoilPitch +=
+      playerConfig.damageRecoilPitchBase + amount * playerConfig.damageRecoilPitchScale
+    this.viewRecoilYaw += (Math.random() - 0.5) * playerConfig.damageRecoilYaw
+    this.viewRecoilRoll += (Math.random() - 0.5) * playerConfig.damageRecoilRoll
     if (fromPos) {
       const direction = new THREE.Vector3().subVectors(fromPos, this.position).setY(0).normalize()
       this.hud.showDirDamage(Math.atan2(direction.x, -direction.z) + this.yaw)
@@ -125,6 +145,7 @@ export class Player {
   }
 
   die(attacker) {
+    const playerConfig = this.config.player
     if (!this.alive) return
     this.alive = false
     this.killStreak = 0
@@ -136,11 +157,11 @@ export class Player {
     this.input.reset()
     this.input.updateTouchUi?.()
     this.weapon.setVisible(false)
-    this.audio.pain(0.45)
+    this.audio.pain(playerConfig.deathPainChance)
     this.audio.bodyFall()
-    this.addShake(0.4)
+    this.addShake(playerConfig.deathShake)
     this.deploy.phase = 'death'
-    this.deploy.deathTimer = 3
+    this.deploy.deathTimer = playerConfig.deathTimer
     this.hud.showDeathScreen(attacker)
     this.deathCamStart = this.camera.position.clone()
     this.deathCamTime = 0
@@ -148,19 +169,22 @@ export class Player {
   }
 
   getSpread() {
+    const weaponConfig = this.config.weapon
     let spread = this.baseSpread
-    const moving = Math.hypot(this.velocity.x, this.velocity.z) > 0.4
-    if (this.aiming) spread *= 0.28
-    else if (this.crouching) spread *= 0.65
-    if (this.sprinting && moving) spread *= 2.6
-    else if (moving) spread *= 1.55
-    if (!this.onGround) spread *= 1.8
-    if (this.reloading) spread *= 1.35
+    const moving =
+      Math.hypot(this.velocity.x, this.velocity.z) > this.config.weapon.playerMovingThreshold
+    if (this.aiming) spread *= weaponConfig.aimingSpreadMultiplier
+    else if (this.crouching) spread *= weaponConfig.crouchingSpreadMultiplier
+    if (this.sprinting && moving) spread *= weaponConfig.sprintingSpreadMultiplier
+    else if (moving) spread *= weaponConfig.movingSpreadMultiplier
+    if (!this.onGround) spread *= weaponConfig.airborneSpreadMultiplier
+    if (this.reloading) spread *= weaponConfig.reloadingSpreadMultiplier
     spread += this.spreadBloom
-    return Math.min(spread, 0.045)
+    return Math.min(spread, weaponConfig.maxSpread)
   }
 
   fire() {
+    const weaponConfig = this.config.weapon
     if (!this.alive || this.reloading || this.weapon.meleeTime >= 0 || this.ammo <= 0) return
     const now = performance.now()
     if (now - this.lastFire < this.fireDelay * 1000) return
@@ -169,12 +193,22 @@ export class Player {
     this.weapon.triggerFire(this.aiming, this.ammo === 0)
     this.audio.rifleShot()
     const aiming = this.aiming
-    this.viewRecoilPitch += (aiming ? 0.007 : 0.013) + Math.random() * 0.003
-    this.viewRecoilYaw += (Math.random() - 0.5) * (aiming ? 0.0035 : 0.007)
-    this.viewRecoilRoll += (Math.random() - 0.5) * (aiming ? 0.006 : 0.014)
-    this.addShake(aiming ? 0.08 : 0.14)
+    this.viewRecoilPitch +=
+      (aiming ? weaponConfig.aimingRecoilPitch : weaponConfig.hipRecoilPitch) +
+      Math.random() * weaponConfig.recoilPitchRandom
+    this.viewRecoilYaw +=
+      (Math.random() - 0.5) *
+      (aiming ? weaponConfig.aimingRecoilYaw : weaponConfig.hipRecoilYaw)
+    this.viewRecoilRoll +=
+      (Math.random() - 0.5) *
+      (aiming ? weaponConfig.aimingRecoilRoll : weaponConfig.hipRecoilRoll)
+    this.addShake(aiming ? weaponConfig.aimingFireShake : weaponConfig.hipFireShake)
     const spread = this.getSpread()
-    this.spreadBloom = Math.min(0.02, this.spreadBloom + (aiming ? 0.0025 : 0.0045))
+    this.spreadBloom = Math.min(
+      weaponConfig.spreadBloomMax,
+      this.spreadBloom +
+        (aiming ? weaponConfig.aimedSpreadBloomPerShot : weaponConfig.spreadBloomPerShot)
+    )
     const direction = new THREE.Vector3()
     this.camera.getWorldDirection(direction)
     direction.x += (Math.random() - 0.5) * spread * 2
@@ -192,7 +226,7 @@ export class Player {
     if (this.ammo === 0) {
       setTimeout(() => {
         if (this.alive && this.ammo === 0) this.reload()
-      }, 420)
+      }, weaponConfig.emptyReloadDelay * 1000)
     }
     this.hud.updateAmmo()
     this.hud.updateCrosshair()
@@ -286,13 +320,15 @@ export class Player {
   }
 
   update(dt) {
+    const playerConfig = this.config.player
+    const weaponConfig = this.config.weapon
     if (this.deploy.phase === 'death') {
       this.deploy.deathTimer -= dt
       this.deathCamTime += dt
-      const progress = Math.min(1, this.deathCamTime / 1)
-      this.camera.position.y = this.deathCamStart.y - progress * 0.8
-      this.camera.rotation.z = progress * 0.3
-      this.camera.rotation.x = progress * 0.2
+      const progress = Math.min(1, this.deathCamTime / playerConfig.deathCameraDuration)
+      this.camera.position.y = this.deathCamStart.y - progress * playerConfig.deathCameraDrop
+      this.camera.rotation.z = progress * playerConfig.deathCameraRoll
+      this.camera.rotation.x = progress * playerConfig.deathCameraPitch
       if (this.deploy.deathTimer <= 0) {
         this.hud.hideDeathScreen()
         this.deployment.showScreen()
@@ -317,7 +353,10 @@ export class Player {
     this.viewRecoilYaw *= Math.pow(0.0001, dt)
     this.viewRecoilRoll *= Math.pow(0.0002, dt)
     this.shakeTime += dt
-    this.shakeTrauma = Math.max(0, this.shakeTrauma - dt * 1.75)
+    this.shakeTrauma = Math.max(
+      0,
+      this.shakeTrauma - dt * playerConfig.shakeRecovery
+    )
     const lookDelta = this.input.consumeLookDelta()
     if (this.input.consumePressed('KeyC')) this.crouching = !this.crouching
     if (this.input.consumePressed('KeyR')) this.reload()
@@ -334,15 +373,28 @@ export class Player {
     if (this.input.consumePressed('MouseLeft')) this.fire()
 
     const lookSensitivity =
-      0.0011 * this.state.settings.mouseSensitivity * (this.aiming ? 0.5 : 1)
+      playerConfig.lookSensitivity *
+      this.state.settings.mouseSensitivity *
+      (this.aiming ? playerConfig.aimingLookMultiplier : 1)
     this.yaw -= lookDelta.x * lookSensitivity
     this.yaw = Math.atan2(Math.sin(this.yaw), Math.cos(this.yaw))
     this.pitch -= lookDelta.y * lookSensitivity
-    this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch))
+    this.pitch = Math.max(
+      -Math.PI / 2 + playerConfig.pitchLimit,
+      Math.min(Math.PI / 2 - playerConfig.pitchLimit, this.pitch)
+    )
 
     const targetHeight = this.crouching ? this.crouchHeight : this.standHeight
-    this.currentHeight = THREE.MathUtils.lerp(this.currentHeight, targetHeight, dt * 10)
-    const speed = this.crouching ? 2.2 : this.sprinting ? 9.5 : 5.2
+    this.currentHeight = THREE.MathUtils.lerp(
+      this.currentHeight,
+      targetHeight,
+      dt * playerConfig.crouchTransitionSpeed
+    )
+    const speed = this.crouching
+      ? playerConfig.crouchSpeed
+      : this.sprinting
+        ? playerConfig.sprintSpeed
+        : playerConfig.walkSpeed
     const moveAxis = this.input.getMoveAxis()
     const direction = this._moveDirection.set(moveAxis.x, 0, moveAxis.z)
     if (direction.lengthSq() > 0) {
@@ -351,14 +403,14 @@ export class Player {
       this.velocity.x = direction.x * speed
       this.velocity.z = direction.z * speed
     } else {
-      this.velocity.x *= 0.8
-      this.velocity.z *= 0.8
+      this.velocity.x *= playerConfig.movementDamping
+      this.velocity.z *= playerConfig.movementDamping
     }
     if (this.input.consumePressed('Space') && this.onGround) {
-      this.velocity.y = 6
+      this.velocity.y = playerConfig.jumpVelocity
       this.onGround = false
     }
-    this.velocity.y -= 18 * dt
+    this.velocity.y -= playerConfig.gravity * dt
     this.position.x += this.velocity.x * dt
     this.position.z += this.velocity.z * dt
     if (this.onGround) {
@@ -372,7 +424,7 @@ export class Player {
       }
     }
     this.handleCollisions()
-    const half = this.config.mapSize / 2 - 2
+    const half = this.config.match.mapSize / 2 - 2
     this.position.x = Math.max(-half, Math.min(half, this.position.x))
     this.position.z = Math.max(-half, Math.min(half, this.position.z))
 
@@ -447,8 +499,8 @@ export class Player {
     }
     this.camera.rotation.set(rotationX, rotationY, rotationZ)
     let targetFov = this.baseFov
-    if (this.aiming) targetFov = 55
-    else if (this.sprinting && moving) targetFov = 86
+    if (this.aiming) targetFov = playerConfig.aimingFov
+    else if (this.sprinting && moving) targetFov = playerConfig.sprintingFov
     this.currentFov += (targetFov - this.currentFov) * (1 - Math.exp(-7 * dt))
     if (Math.abs(this.camera.fov - this.currentFov) > 0.15) {
       this.camera.fov = this.currentFov
@@ -466,9 +518,13 @@ export class Player {
       this._bobPhase || 0,
       animAxis
     )
-    this.spreadBloom = Math.max(0, this.spreadBloom - dt * 0.035)
+    this.spreadBloom = Math.max(
+      0,
+      this.spreadBloom - dt * weaponConfig.spreadBloomRecovery
+    )
     this.currentSpread = this.getSpread()
-    if (this.health < this.maxHealth) this.health = Math.min(this.maxHealth, this.health + dt * 4)
+    if (this.health < this.maxHealth)
+      this.health = Math.min(this.maxHealth, this.health + dt * playerConfig.healthRegen)
     this.hud.updateHealth()
     this.hud.updateCrosshair()
   }

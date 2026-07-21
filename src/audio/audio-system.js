@@ -1,13 +1,13 @@
 import * as THREE from 'three'
 
 export class AudioSystem {
-  constructor(camera, files) {
+  constructor(camera, files, config) {
     this.camera = camera
     this.files = files
     this.ctx = null
     this.enabled = false
     this.masterGain = null
-    this.masterVolume = 0.62
+    this.masterVolume = config.settings.masterVolume
     this.dryGain = null
     this.wetIn = null
     this.wetGain = null
@@ -22,7 +22,8 @@ export class AudioSystem {
     this._fwd = new THREE.Vector3()
     this._up = new THREE.Vector3()
     this.active = 0
-    this.maxVoices = 24
+    this.maxVoices = config.audio.maxVoices
+    this.overflowVoices = config.audio.overflowVoices
     this._lastWorldShot = 0
   }
 
@@ -205,7 +206,7 @@ export class AudioSystem {
     if (!this.enabled || !this.ready) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
     if (this.active >= this.maxVoices && priority < 1) return
-    if (this.active >= this.maxVoices + 10) return
+    if (this.active >= this.maxVoices + this.overflowVoices) return
 
     if (pos && this.camera.position.distanceTo(pos) > max) return
     const list = Array.isArray(keys) ? keys : [keys]

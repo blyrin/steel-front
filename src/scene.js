@@ -294,18 +294,27 @@ function createMatLib(anisotropy) {
   }
 }
 
-export function createSceneRuntime() {
+export function createSceneRuntime(config) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x68b9dc)
-  scene.fog = new THREE.Fog(0xaed9e2, 155, 470)
+  scene.fog = new THREE.Fog(0xaed9e2, config.render.fogNear, config.render.fogFar)
 
-  const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.04, 1200)
+  const camera = new THREE.PerspectiveCamera(
+    config.player.baseFov,
+    innerWidth / innerHeight,
+    config.render.cameraNear,
+    config.render.cameraFar
+  )
   scene.add(camera)
 
   const touchDevice =
     window.matchMedia('(pointer: coarse)').matches ||
     (navigator.maxTouchPoints > 0 && window.matchMedia('(hover: none)').matches)
-  const pixelRatio = () => Math.min(Math.max(devicePixelRatio, 1), touchDevice ? 2 : 1.25)
+  const pixelRatio = () =>
+    Math.min(
+      Math.max(devicePixelRatio, 1),
+      touchDevice ? config.render.touchPixelRatio : config.render.desktopPixelRatio
+    )
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     powerPreference: 'high-performance',
@@ -320,7 +329,7 @@ export function createSceneRuntime() {
   document.body.appendChild(renderer.domElement)
 
   const maxAniso = renderer.capabilities.getMaxAnisotropy()
-  const matLib = createMatLib(Math.min(4, maxAniso))
+  const matLib = createMatLib(Math.min(config.render.maxAnisotropy, maxAniso))
 
   scene.add(new THREE.AmbientLight(0x7e8daf, 0.38))
   const hemi = new THREE.HemisphereLight(0xd7f0f4, 0x765a6d, 1.35)
@@ -329,13 +338,13 @@ export function createSceneRuntime() {
   const sun = new THREE.DirectionalLight(0xffe5a6, 2.55)
   sun.position.set(90, 95, 55)
   sun.castShadow = true
-  sun.shadow.mapSize.set(2048, 2048)
-  sun.shadow.camera.left = -120
-  sun.shadow.camera.right = 120
-  sun.shadow.camera.top = 120
-  sun.shadow.camera.bottom = -120
-  sun.shadow.camera.near = 10
-  sun.shadow.camera.far = 300
+  sun.shadow.mapSize.set(config.render.shadowMapSize, config.render.shadowMapSize)
+  sun.shadow.camera.left = -config.render.shadowCameraBound
+  sun.shadow.camera.right = config.render.shadowCameraBound
+  sun.shadow.camera.top = config.render.shadowCameraBound
+  sun.shadow.camera.bottom = -config.render.shadowCameraBound
+  sun.shadow.camera.near = config.render.shadowCameraNear
+  sun.shadow.camera.far = config.render.shadowCameraFar
   sun.shadow.bias = -0.00018
   sun.shadow.normalBias = 0.035
   sun.shadow.radius = 1

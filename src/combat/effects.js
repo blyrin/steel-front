@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 
-export function createEffectsSystem({ scene, state, audio }) {
+export function createEffectsSystem({ scene, state, audio, config }) {
+  const effectsConfig = config.effects
   const pools = {
     tracer: [],
     core: [],
@@ -84,15 +85,15 @@ export function createEffectsSystem({ scene, state, audio }) {
     positions.setXYZ(1, end.x - origin.x, end.y - origin.y, end.z - origin.z)
     positions.needsUpdate = true
     tracer.geometry.computeBoundingSphere()
-    tracer.material.opacity = 0.72
+    tracer.material.opacity = effectsConfig.tracerOpacity
     addParticle({
       mesh: tracer,
       poolType: 'tracer',
       type: 'tracer',
-      life: 0.06,
-      maxLife: 0.06,
+      life: effectsConfig.tracerLife,
+      maxLife: effectsConfig.tracerLife,
       update: (dt, time, particle) => {
-        tracer.material.opacity = 0.72 * (1 - time / particle.maxLife)
+        tracer.material.opacity = effectsConfig.tracerOpacity * (1 - time / particle.maxLife)
       },
     })
   }
@@ -153,7 +154,7 @@ export function createEffectsSystem({ scene, state, audio }) {
     scene.add(side)
     if (light) scene.add(light)
 
-    const life = firstPerson ? 0.05 : 0.06
+    const life = firstPerson ? effectsConfig.firstPersonMuzzleLife : effectsConfig.botMuzzleLife
     addParticle({
       mesh: core,
       poolType: 'core',
@@ -190,7 +191,7 @@ export function createEffectsSystem({ scene, state, audio }) {
       },
     })
 
-    const count = firstPerson ? 2 : 3
+    const count = firstPerson ? effectsConfig.firstPersonSmokeCount : effectsConfig.botSmokeCount
     for (let i = 0; i < count; i++) {
       const puff = take(
         'smoke',
@@ -217,7 +218,7 @@ export function createEffectsSystem({ scene, state, audio }) {
             (Math.random() - 0.5) * 0.4
           )
         )
-      const maxLife = 0.4 + i * 0.09
+      const maxLife = effectsConfig.smokeLife + i * effectsConfig.smokeLifeStep
       addParticle({
         mesh: puff,
         poolType: 'smoke',
@@ -259,12 +260,12 @@ export function createEffectsSystem({ scene, state, audio }) {
       mesh: shell,
       poolType: 'shell',
       type: 'shell',
-      life: 1.4,
-      maxLife: 1.4,
+      life: effectsConfig.shellLife,
+      maxLife: effectsConfig.shellLife,
       vel: velocity,
       rotVel: new THREE.Vector3(8 + Math.random() * 10, 6 + Math.random() * 8, 4 + Math.random() * 6),
       update: (dt, time, particle) => {
-        particle.vel.y -= 9.8 * dt
+        particle.vel.y -= effectsConfig.shellGravity * dt
         particle.mesh.position.addScaledVector(particle.vel, dt)
         particle.mesh.rotation.x += particle.rotVel.x * dt
         particle.mesh.rotation.y += particle.rotVel.y * dt
@@ -272,13 +273,13 @@ export function createEffectsSystem({ scene, state, audio }) {
         if (particle.mesh.position.y < 0.02) {
           if (!landed) {
             landed = true
-            if (Math.random() < 0.4) audio.shellDrop(particle.mesh.position)
+            if (Math.random() < effectsConfig.shellDropChance) audio.shellDrop(particle.mesh.position)
           }
           particle.mesh.position.y = 0.02
-          particle.vel.y *= -0.28
-          particle.vel.x *= 0.65
-          particle.vel.z *= 0.65
-          particle.rotVel.multiplyScalar(0.6)
+          particle.vel.y *= effectsConfig.shellBounce
+          particle.vel.x *= effectsConfig.shellHorizontalDamping
+          particle.vel.z *= effectsConfig.shellHorizontalDamping
+          particle.rotVel.multiplyScalar(effectsConfig.shellRotationDamping)
         }
       },
     })
@@ -300,10 +301,10 @@ export function createEffectsSystem({ scene, state, audio }) {
       mesh: puff,
       poolType: 'smoke',
       type: 'smoke',
-      life: 0.55,
-      maxLife: 0.55,
+      life: effectsConfig.smokePuffLife,
+      maxLife: effectsConfig.smokePuffLife,
       update: (dt, time, particle) => {
-        particle.mesh.material.opacity = (1 - time / 0.55) * 0.12
+        particle.mesh.material.opacity = (1 - time / particle.maxLife) * 0.12
         particle.mesh.scale.setScalar(0.06 * (1 + time * 2.6))
         particle.mesh.position.y += dt * 0.18
       },
@@ -311,7 +312,7 @@ export function createEffectsSystem({ scene, state, audio }) {
   }
 
   function spawnSpark(pos, dir) {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < effectsConfig.sparkCount; i++) {
       const spark = take(
         'spark',
         () => createMesh('spark', new THREE.MeshBasicMaterial({ color: 0xffaa30, transparent: true }))
@@ -330,13 +331,13 @@ export function createEffectsSystem({ scene, state, audio }) {
         mesh: spark,
         poolType: 'spark',
         type: 'spark',
-        life: 0.3,
-        maxLife: 0.3,
+        life: effectsConfig.sparkLife,
+        maxLife: effectsConfig.sparkLife,
         vel: velocity,
         update: (dt, time, particle) => {
-          particle.vel.y -= 6 * dt
+          particle.vel.y -= effectsConfig.sparkGravity * dt
           particle.mesh.position.addScaledVector(particle.vel, dt)
-          particle.mesh.material.opacity = 1 - time / 0.3
+          particle.mesh.material.opacity = 1 - time / particle.maxLife
         },
       })
     }
@@ -351,17 +352,17 @@ export function createEffectsSystem({ scene, state, audio }) {
       mesh: dust,
       poolType: 'dust',
       type: 'dust',
-      life: 0.5,
-      maxLife: 0.5,
+      life: effectsConfig.dustLife,
+      maxLife: effectsConfig.dustLife,
       update: (dt, time, particle) => {
-        particle.mesh.material.opacity = (1 - time / 0.5) * 0.5
+        particle.mesh.material.opacity = (1 - time / particle.maxLife) * 0.5
         particle.mesh.scale.setScalar(0.1 * (1 + time * 4))
       },
     })
   }
 
   function spawnBlood(pos) {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < effectsConfig.bloodCount; i++) {
       const blood = take(
         'blood',
         () => createMesh('blood', new THREE.MeshBasicMaterial({ color: 0xe83f5b }))
@@ -377,11 +378,11 @@ export function createEffectsSystem({ scene, state, audio }) {
         mesh: blood,
         poolType: 'blood',
         type: 'blood',
-        life: 0.8,
-        maxLife: 0.8,
+        life: effectsConfig.bloodLife,
+        maxLife: effectsConfig.bloodLife,
         vel: velocity,
         update: (dt, time, particle) => {
-          particle.vel.y -= 9 * dt
+          particle.vel.y -= effectsConfig.bloodGravity * dt
           particle.mesh.position.addScaledVector(particle.vel, dt)
           if (particle.mesh.position.y < 0.02) {
             particle.mesh.position.y = 0.02

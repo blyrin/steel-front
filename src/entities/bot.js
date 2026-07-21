@@ -42,14 +42,16 @@ const BOT_MARKER_MATERIALS = {
 export class Bot {
   constructor(team, spawnPosition, services) {
     Object.assign(this, services)
+    const botConfig = this.config.bot
+    const weaponConfig = this.config.weapon
     this.team = team
     this.position = spawnPosition.clone()
     this.position.y = 0
     this.velocity = new THREE.Vector3()
     this.yaw = Math.random() * Math.PI * 2
     this.alive = true
-    this.health = 100
-    this.maxHealth = 100
+    this.health = botConfig.maxHealth
+    this.maxHealth = botConfig.maxHealth
     this.stateName = 'patrol'
     this.target = null
     this.lastSeenTarget = null
@@ -57,23 +59,34 @@ export class Bot {
     this.stateTimer = Math.random() * 5
     this.reloadTimer = 0
     this.fireTimer = 0
-    this.magazine = 8
+    this.magazine = weaponConfig.magazineSize
     this.reloading = false
-    this.fireDelay = 0.15
+    this.fireDelay = weaponConfig.fireDelay
     this.lastFire = 0
-    this.baseSpread = 0.004
+    this.baseSpread = weaponConfig.botBaseSpread
     this.spreadBloom = 0
     this.coverPos = null
     this.patrolTarget = this.getRandomPatrolPoint()
     this.reactionTimer = 0
     this.searchPos = null
-    this.botSkill = 0.25 + Math.random() * 0.35
+    this.botSkill = botConfig.skillMin + Math.random() * botConfig.skillRange
     this.kills = 0
     this.deaths = 0
-    this.radius = 0.4
+    this.radius = botConfig.radius
     this.hitboxes = [
-      createBoxHitbox(0.77, 0.56, 0, 1.52),
-      createBoxHitbox(0.46, 0.46, 1.5, 1.96, true),
+      createBoxHitbox(
+        botConfig.hitboxBodyWidth,
+        botConfig.hitboxBodyDepth,
+        0,
+        botConfig.hitboxBodyMaxY
+      ),
+      createBoxHitbox(
+        botConfig.hitboxHeadWidth,
+        botConfig.hitboxHeadDepth,
+        botConfig.hitboxHeadMinY,
+        botConfig.hitboxHeadMaxY,
+        true
+      ),
     ]
     this._seeOrigin = new THREE.Vector3()
     this._seeDir = new THREE.Vector3()
@@ -456,7 +469,7 @@ export class Bot {
   }
 
   getRandomPatrolPoint() {
-    const half = this.config.mapSize * 0.42
+    const half = this.config.match.mapSize * this.config.bot.patrolAreaRatio
     return new THREE.Vector3((Math.random() - 0.5) * half * 2, 0, (Math.random() - 0.5) * half * 2)
   }
 
@@ -479,7 +492,7 @@ export class Bot {
     const dx = target.position.x - this.position.x
     const dz = target.position.z - this.position.z
     const distSq = dx * dx + dz * dz
-    const maxDist = this.config.maxBotViewDist
+    const maxDist = this.config.bot.viewDistance
     if (distSq > maxDist * maxDist) return false
     const distance = Math.sqrt(distSq)
     if (distance > 1e-6) {
@@ -488,10 +501,14 @@ export class Bot {
       const dirZ = dz * inv
       const forwardX = -Math.sin(this.yaw)
       const forwardZ = -Math.cos(this.yaw)
-      if (forwardX * dirX + forwardZ * dirZ < 0.3 && distance > 5) return false
+      if (
+        forwardX * dirX + forwardZ * dirZ < this.config.bot.viewForwardThreshold &&
+        distance > this.config.bot.viewForwardMinDistance
+      )
+        return false
       const origin = this._seeOrigin
       const direction = this._seeDir
-      origin.set(this.position.x, 1.6, this.position.z)
+      origin.set(this.position.x, this.config.bot.viewOriginHeight, this.position.z)
       direction.set(dirX, 0, dirZ)
       for (const obstacle of this.gameState.obstacles) {
         if (obstacle.type === 'ground' || obstacle.type === 'crater' || obstacle.type === 'wire')
@@ -526,13 +543,15 @@ export class Bot {
     let bestScore = -Infinity
     for (const cover of this.gameState.coverPoints) {
       const distanceToCover = Math.hypot(cover.x - this.position.x, cover.z - this.position.z)
-      if (distanceToCover > 40 || !this.target) continue
+      if (distanceToCover > this.config.bot.coverSearchDistance || !this.target) continue
       const coverToEnemy = Math.hypot(
         this.target.position.x - cover.x,
         this.target.position.z - cover.z
       )
       const soldierToEnemy = this.position.distanceTo(this.target.position)
-      const score = (soldierToEnemy - coverToEnemy) * 0.5 + (12 - distanceToCover) * 0.3
+      const score =
+        (soldierToEnemy - coverToEnemy) * this.config.bot.coverEnemyWeight +
+        (this.config.bot.coverDistanceBias - distanceToCover) * this.config.bot.coverDistanceWeight
       if (score > bestScore) {
         bestScore = score
         best = cover
@@ -545,12 +564,15 @@ export class Bot {
     if (!this.alive) return
     this.stateTimer += dt
     this.fireTimer += dt
-    this.spreadBloom = Math.max(0, this.spreadBloom - dt * 0.035)
+    this.spreadBloom = Math.max(
+      0,
+      this.spreadBloom - dt * this.config.weapon.spreadBloomRecovery
+    )
     const enemy = this.findNearestEnemy()
     if (enemy) {
       if (this.target !== enemy) {
         this.target = enemy
-        this.reactionTimer = this.config.botReactionTime * (1.5 - this.botSkill)
+        this.reactionTimer = this.config.bot.reactionTime * (1.5 - this.botSkill)
       }
       if (!this.lastSeenTarget) this.lastSeenTarget = new THREE.Vector3()
       this.lastSeenTarget.copy(enemy.position)
@@ -559,7 +581,10 @@ export class Bot {
       if (this.stateName !== 'engage' && this.reactionTimer <= 0) this.stateName = 'engage'
     } else {
       this.targetVisible = false
-      if (this.stateName === 'engage' && this.stateTimer - this.lastSeenTime > 3) {
+      if (
+        this.stateName === 'engage' &&
+        this.stateTimer - this.lastSeenTime > this.config.bot.lostTargetTime
+      ) {
         this.stateName = 'alert'
         this.searchPos = this.lastSeenTarget?.clone() || null
         this.stateTimer = 0
@@ -567,13 +592,13 @@ export class Bot {
     }
     if (this.reactionTimer > 0) this.reactionTimer -= dt
     if (this.stateName === 'patrol') {
-      if (this.position.distanceTo(this.patrolTarget) < 2)
+      if (this.position.distanceTo(this.patrolTarget) < this.config.bot.patrolArrivalDistance)
         this.patrolTarget = this.getRandomPatrolPoint()
-      this.moveToward(this.patrolTarget, 2.9)
+      this.moveToward(this.patrolTarget, this.config.bot.patrolSpeed)
     } else if (this.stateName === 'alert') {
       if (this.searchPos) {
-        this.moveToward(this.searchPos, 4.6)
-        if (this.position.distanceTo(this.searchPos) < 3) {
+        this.moveToward(this.searchPos, this.config.bot.alertSpeed)
+        if (this.position.distanceTo(this.searchPos) < this.config.bot.alertArrivalDistance) {
           this.searchPos = null
           this.stateName = 'patrol'
         }
@@ -587,14 +612,14 @@ export class Bot {
     if (this.magazine === 0 && !this.reloading) this.startReload()
     if (this.reloading) {
       this.reloadTimer += dt
-      if (this.reloadTimer > this.config.emptyReloadDuration) {
-        this.magazine = 8
+      if (this.reloadTimer > this.config.weapon.emptyReloadDuration) {
+        this.magazine = this.config.weapon.magazineSize
         this.reloading = false
         this.reloadTimer = 0
       }
     }
     this.position.addScaledVector(this.velocity, dt)
-    const half = this.config.mapSize / 2 - 2
+    const half = this.config.match.mapSize / 2 - 2
     this.position.x = Math.max(-half, Math.min(half, this.position.x))
     this.position.z = Math.max(-half, Math.min(half, this.position.z))
     this.handleCollisions()
@@ -602,7 +627,7 @@ export class Bot {
     const cameraDeltaX = this.camera.position.x - this.position.x
     const cameraDeltaZ = this.camera.position.z - this.position.z
     this.marker.rotation.y = Math.atan2(cameraDeltaX, cameraDeltaZ) - this.yaw
-    if (this.velocity.lengthSq() > 0.1) {
+    if (this.velocity.lengthSq() > this.config.bot.stationarySpeedThreshold ** 2) {
       this.legPhase += dt * 10
       const swing = Math.sin(this.legPhase) * 0.4
       this.leftLeg.rotation.x = swing
@@ -619,13 +644,13 @@ export class Bot {
         -(this.target.position.x - this.position.x),
         -(this.target.position.z - this.position.z)
       )
-    } else if (this.velocity.lengthSq() > 0.1) {
+    } else if (this.velocity.lengthSq() > this.config.bot.stationarySpeedThreshold ** 2) {
       targetYaw = Math.atan2(-this.velocity.x, -this.velocity.z)
     }
     let difference = targetYaw - this.yaw
     while (difference > Math.PI) difference -= Math.PI * 2
     while (difference < -Math.PI) difference += Math.PI * 2
-    this.yaw += difference * Math.min(1, dt * 6)
+    this.yaw += difference * Math.min(1, dt * this.config.bot.turnSpeed)
     this.group.rotation.y = this.yaw
   }
 
@@ -638,7 +663,10 @@ export class Bot {
     const distance = this.position.distanceTo(this.target.position)
     const deltaX = this.target.position.x - this.position.x
     const deltaZ = this.target.position.z - this.position.z
-    if (this.health < 40 && (!this.coverPos || this.stateTimer % 5 < 0.1)) {
+    if (
+      this.health < this.config.bot.lowHealthThreshold &&
+      (!this.coverPos || this.stateTimer % this.config.bot.coverRefreshInterval < 0.1)
+    ) {
       const cover = this.findCover()
       if (cover) {
         this.coverPos = cover
@@ -646,22 +674,26 @@ export class Bot {
         return
       }
     }
-    if (distance > 50) this.moveToward(this.target.position, 5.2)
-    else if (distance < 14) {
+    if (distance > this.config.bot.engageFarDistance)
+      this.moveToward(this.target.position, this.config.bot.engageFarSpeed)
+    else if (distance < this.config.bot.engageCloseDistance) {
       const away = this._moveDirection.subVectors(this.position, this.target.position).setY(0).normalize()
-      this.velocity.x = away.x * 4.6
-      this.velocity.z = away.z * 4.6
+      this.velocity.x = away.x * this.config.bot.engageCloseSpeed
+      this.velocity.z = away.z * this.config.bot.engageCloseSpeed
     } else {
       const side = this._moveDirection.set(-deltaZ, 0, deltaX).normalize()
-      const sideDirection = Math.sin(this.stateTimer * 0.8) > 0 ? 1 : -1
-      this.velocity.x = side.x * 3.5 * sideDirection
-      this.velocity.z = side.z * 3.5 * sideDirection
+      const sideDirection =
+        Math.sin(this.stateTimer * this.config.bot.engageStrafeFrequency) > 0 ? 1 : -1
+      this.velocity.x = side.x * this.config.bot.engageStrafeSpeed * sideDirection
+      this.velocity.z = side.z * this.config.bot.engageStrafeSpeed * sideDirection
     }
     if (
       this.reactionTimer <= 0 &&
       this.targetVisible &&
       !this.reloading &&
-      this.fireTimer > 0.7 + (1 - this.botSkill) * 0.9
+      this.fireTimer >
+        this.config.bot.engageFireBaseDelay +
+          (1 - this.botSkill) * this.config.bot.engageFireSkillDelay
     ) {
       this.fire()
       this.fireTimer = 0
@@ -674,23 +706,23 @@ export class Bot {
       return
     }
     const target = this._coverTarget.set(this.coverPos.x, 0, this.coverPos.z)
-    if (this.position.distanceTo(target) < 1.5) {
+    if (this.position.distanceTo(target) < this.config.bot.seekCoverArrivalDistance) {
       this.stateName = 'engage'
       this.stateTimer = 0
-      if (Math.random() < 0.3 && this.target) {
+      if (Math.random() < this.config.bot.seekCoverFlankChance && this.target) {
         this.stateName = 'flank'
         this.flankDir = Math.random() > 0.5 ? 1 : -1
         this.stateTimer = 0
       }
       return
     }
-    this.moveToward(target, 5.2)
+    this.moveToward(target, this.config.bot.engageFarSpeed)
     if (
       this.target &&
       this.targetVisible &&
       this.reactionTimer <= 0 &&
       !this.reloading &&
-      this.fireTimer > 1.0
+      this.fireTimer > this.config.bot.seekCoverFireInterval
     ) {
       this.fire()
       this.fireTimer = 0
@@ -698,21 +730,24 @@ export class Bot {
   }
 
   updateFlank() {
-    if (!this.target?.alive || this.stateTimer > 6) {
+    if (!this.target?.alive || this.stateTimer > this.config.bot.flankDuration) {
       this.stateName = 'engage'
       return
     }
     const deltaX = this.target.position.x - this.position.x
     const deltaZ = this.target.position.z - this.position.z
     const side = this._moveDirection.set(-deltaZ, 0, deltaX).normalize().multiplyScalar(this.flankDir)
-    const forward = this._forwardDirection.set(deltaX, 0, deltaZ).normalize().multiplyScalar(-0.3)
-    this.velocity.x = (side.x + forward.x) * 4.6
-    this.velocity.z = (side.z + forward.z) * 4.6
+    const forward = this._forwardDirection
+      .set(deltaX, 0, deltaZ)
+      .normalize()
+      .multiplyScalar(this.config.bot.flankForwardBias)
+    this.velocity.x = (side.x + forward.x) * this.config.bot.flankSpeed
+    this.velocity.z = (side.z + forward.z) * this.config.bot.flankSpeed
     if (
       this.targetVisible &&
       this.reactionTimer <= 0 &&
       !this.reloading &&
-      this.fireTimer > 0.85
+      this.fireTimer > this.config.bot.flankFireInterval
     ) {
       this.fire()
       this.fireTimer = 0
@@ -732,13 +767,16 @@ export class Bot {
   }
 
   getSpread() {
-    let spread = this.baseSpread + (1 - this.botSkill) * 0.01
+    const weaponConfig = this.config.weapon
+    let spread = this.baseSpread + (1 - this.botSkill) * weaponConfig.botSkillSpread
     const speed = Math.hypot(this.velocity.x, this.velocity.z)
-    if (speed > 4) spread *= 2.6
-    else if (speed > 0.4) spread *= 1.55
-    if (this.reloading) spread *= 1.35
+    if (speed > weaponConfig.botMovingFastThreshold)
+      spread *= weaponConfig.botMovingFastMultiplier
+    else if (speed > weaponConfig.botMovingSlowThreshold)
+      spread *= weaponConfig.botMovingSlowMultiplier
+    if (this.reloading) spread *= weaponConfig.reloadingSpreadMultiplier
     spread += this.spreadBloom
-    return Math.min(spread, 0.045)
+    return Math.min(spread, weaponConfig.maxSpread)
   }
 
   fire() {
@@ -747,14 +785,18 @@ export class Bot {
     if (now - this.lastFire < this.fireDelay * 1000) return
     this.lastFire = now
     this.magazine--
+    const targetHeight = this.config.bot.targetHeight
     const muzzle = new THREE.Vector3()
     this.rifle.getWorldPosition(muzzle)
-    muzzle.y = 1.4
+    muzzle.y = targetHeight
     const target = this.target.position.clone()
-    target.y = 1.4
+    target.y = targetHeight
     const direction = new THREE.Vector3().subVectors(target, muzzle).normalize()
     const spread = this.getSpread()
-    this.spreadBloom = Math.min(0.02, this.spreadBloom + 0.0045)
+    this.spreadBloom = Math.min(
+      this.config.weapon.spreadBloomMax,
+      this.spreadBloom + this.config.weapon.spreadBloomPerShot
+    )
     direction.x += (Math.random() - 0.5) * spread * 2
     direction.y += (Math.random() - 0.5) * spread * 2
     direction.z += (Math.random() - 0.5) * spread * 2
@@ -778,12 +820,12 @@ export class Bot {
       this.lastSeenTarget.copy(attacker.position)
       this.lastSeenTime = this.stateTimer
       this.stateName = 'engage'
-      this.reactionTimer = this.config.botReactionTime * 0.5
+      this.reactionTimer = this.config.bot.reactionTime * 0.5
     }
     const hitPosition = this.position.clone().setY(1.2)
     this.audio.hitFlesh(hitPosition)
     if (this.health <= 0) this.die(attacker, isHeadshot)
-    else this.audio.pain(0.25, hitPosition)
+    else this.audio.pain(this.config.bot.painChance, hitPosition)
   }
 
   die(attacker, isHeadshot) {
@@ -793,21 +835,21 @@ export class Bot {
     this.group.position.y = 0.3
     const fallPosition = this.position.clone().setY(0.3)
     this.effects.spawnBlood(this.position.clone().setY(1.2))
-    this.audio.pain(0.4, fallPosition)
+    this.audio.pain(this.config.bot.deathPainChance, fallPosition)
     this.audio.bodyFall(fallPosition)
     this.scoring.recordElimination(this, attacker, isHeadshot)
-    setTimeout(() => this.respawn(), this.config.respawnTime * 1000)
+    setTimeout(() => this.respawn(), this.config.match.respawnTime * 1000)
   }
 
   respawn() {
     if (
-      this.gameState.alliesScore >= this.config.killTarget ||
-      this.gameState.axisScore >= this.config.killTarget
+      this.gameState.alliesScore >= this.config.match.killTarget ||
+      this.gameState.axisScore >= this.config.match.killTarget
     )
       return
     this.alive = true
     this.health = this.maxHealth
-    this.magazine = 8
+    this.magazine = this.config.weapon.magazineSize
     this.reloading = false
     this.stateName = 'patrol'
     this.target = null

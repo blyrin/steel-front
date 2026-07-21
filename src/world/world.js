@@ -88,13 +88,21 @@ export function createWorldSystem({ scene, matLib, state, config }) {
   }
 
   function buildWorld() {
-    const half = config.mapSize / 2
-    const groundGeo = new THREE.PlaneGeometry(config.mapSize * 2, config.mapSize * 2, 64, 64)
+    const half = config.match.mapSize / 2
+    const groundGeo = new THREE.PlaneGeometry(
+      config.match.mapSize * 2,
+      config.match.mapSize * 2,
+      config.world.terrainSegments,
+      config.world.terrainSegments
+    )
     const positions = groundGeo.attributes.position
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i)
       const y = positions.getY(i)
-      if (Math.abs(x) < half + 8 && Math.abs(y) < half + 8) {
+      if (
+        Math.abs(x) < half + config.world.terrainEdgeMargin &&
+        Math.abs(y) < half + config.world.terrainEdgeMargin
+      ) {
         const undulation =
           Math.sin(x * 0.045) * Math.cos(y * 0.038) * 0.55 +
           Math.sin(x * 0.11 + y * 0.07) * 0.22 +
@@ -112,7 +120,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     scene.add(ground)
 
     // 泥地斑块
-    for (let i = 0; i < 36; i++) {
+    for (let i = 0; i < config.world.dirtPatchCount; i++) {
       const patch = enableShadow(
         new THREE.Mesh(
           new THREE.CircleGeometry(3 + Math.random() * 6, 10),
@@ -123,16 +131,16 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       )
       patch.rotation.x = -Math.PI / 2
       patch.position.set(
-        (Math.random() - 0.5) * config.mapSize * 0.85,
+        (Math.random() - 0.5) * config.match.mapSize * 0.85,
         0.015 + Math.random() * 0.01,
-        (Math.random() - 0.5) * config.mapSize * 0.85
+        (Math.random() - 0.5) * config.match.mapSize * 0.85
       )
       patch.rotation.z = Math.random() * Math.PI
       scene.add(patch)
     }
 
     const roadNS = enableShadow(
-      new THREE.Mesh(new THREE.PlaneGeometry(11, config.mapSize), matLib.road),
+      new THREE.Mesh(new THREE.PlaneGeometry(11, config.match.mapSize), matLib.road),
       false,
       true
     )
@@ -141,7 +149,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     scene.add(roadNS)
 
     const roadEW = enableShadow(
-      new THREE.Mesh(new THREE.PlaneGeometry(config.mapSize * 0.72, 9), matLib.road),
+      new THREE.Mesh(new THREE.PlaneGeometry(config.match.mapSize * 0.72, 9), matLib.road),
       false,
       true
     )
@@ -152,7 +160,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     // 路肩碎石
     for (const side of [-1, 1]) {
       const shoulder = enableShadow(
-        new THREE.Mesh(new THREE.PlaneGeometry(2.2, config.mapSize * 0.95), matLib.dirt),
+        new THREE.Mesh(new THREE.PlaneGeometry(2.2, config.match.mapSize * 0.95), matLib.dirt),
         false,
         true
       )
@@ -161,7 +169,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
       scene.add(shoulder)
     }
 
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < config.world.craterCount; i++) {
       const angle = Math.random() * Math.PI * 2
       const radius = 18 + Math.random() * (half - 28)
       createCrater(Math.cos(angle) * radius, Math.sin(angle) * radius)
@@ -214,10 +222,14 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     ]
     sandbags.forEach(({ x, z }) => createSandbags(x, z, Math.random() * Math.PI))
 
-    for (let i = 0; i < 55; i++) {
-      const x = (Math.random() - 0.5) * config.mapSize * 0.9
-      const z = (Math.random() - 0.5) * config.mapSize * 0.9
-      if (Math.abs(x) < 8 && Math.abs(z) < 8) continue
+    for (let i = 0; i < config.world.crateCount; i++) {
+      const x = (Math.random() - 0.5) * config.match.mapSize * 0.9
+      const z = (Math.random() - 0.5) * config.match.mapSize * 0.9
+      if (
+        Math.abs(x) < config.world.centerExclusionRadius &&
+        Math.abs(z) < config.world.centerExclusionRadius
+      )
+        continue
       createCrate(x, z, Math.random() * Math.PI * 2)
     }
 
@@ -227,20 +239,20 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     createWreckTank(70, -55, -0.3)
     createWreckTank(25, -75, 0.4)
 
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < config.world.barbedWireCount; i++) {
       const angle = (i / 14) * Math.PI * 2
       const radius = 55 + (i % 3) * 18
       createBarbedWire(Math.cos(angle) * radius, Math.sin(angle) * radius, angle + Math.PI / 2)
     }
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < config.world.treeCount; i++) {
       const angle = Math.random() * Math.PI * 2
       const radius = half * 0.52 + Math.random() * half * 0.42
       createTree(Math.cos(angle) * radius, Math.sin(angle) * radius)
     }
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < config.world.debrisCount; i++) {
       createDebris(
-        (Math.random() - 0.5) * config.mapSize * 0.85,
-        (Math.random() - 0.5) * config.mapSize * 0.85
+        (Math.random() - 0.5) * config.match.mapSize * 0.85,
+        (Math.random() - 0.5) * config.match.mapSize * 0.85
       )
     }
     createSky()
@@ -902,16 +914,20 @@ export function createWorldSystem({ scene, matLib, state, config }) {
   }
 
   function createSmokeColumns() {
-    for (let i = 0; i < 12; i++) {
-      const x = (Math.random() - 0.5) * config.mapSize * 0.9
-      const z = (Math.random() - 0.5) * config.mapSize * 0.9
-      if (Math.abs(x) < 35 && Math.abs(z) < 35) continue
+    for (let i = 0; i < config.world.smokeColumnCount; i++) {
+      const x = (Math.random() - 0.5) * config.match.mapSize * 0.9
+      const z = (Math.random() - 0.5) * config.match.mapSize * 0.9
+      if (
+        Math.abs(x) < config.world.smokeCenterExclusionRadius &&
+        Math.abs(z) < config.world.smokeCenterExclusionRadius
+      )
+        continue
       createSmokeColumn(x, z)
     }
   }
 
   function createSmokeColumn(x, z) {
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < config.world.smokePuffsPerColumn; i++) {
       const smokeColors = [0x555269, 0x68627a, 0x7d7488]
       const shade = smokeColors[Math.floor(Math.random() * smokeColors.length)]
       const puff = new THREE.Mesh(

@@ -9,7 +9,8 @@ const MULTI_TITLES = [
   '无人能挡',
 ]
 
-export function createHud({ dom, state, deploy, audio }) {
+export function createHud({ dom, state, deploy, audio, config }) {
+  const hudConfig = config.hud
   let healthWidth = ''
   let healthText = ''
   let healthLow = null
@@ -32,7 +33,7 @@ export function createHud({ dom, state, deploy, audio }) {
     const player = state.player
     const width = `${(player.health / player.maxHealth) * 100}%`
     const text = `${Math.ceil(player.health)} / ${player.maxHealth}`
-    const low = player.health < 30
+    const low = player.health < hudConfig.lowHealthThreshold
     if (width !== healthWidth) {
       healthWidth = width
       dom.healthFill.style.width = width
@@ -49,7 +50,7 @@ export function createHud({ dom, state, deploy, audio }) {
 
   function updateAmmo() {
     const player = state.player
-    const lowAmmoVisibleNow = player.ammo <= 2 && !player.reloading
+    const lowAmmoVisibleNow = player.ammo <= hudConfig.lowAmmoThreshold && !player.reloading
     if (player.ammo !== ammoCurrent) {
       ammoCurrent = player.ammo
       dom.ammoCur.textContent = player.ammo
@@ -73,8 +74,11 @@ export function createHud({ dom, state, deploy, audio }) {
     }
     if (aiming) return
     const spread = state.player.currentSpread || state.player.getSpread()
-    const gap = `${(4 + spread * 520).toFixed(1)}px`
-    const size = `${(22 + 2 * (4 + spread * 520)).toFixed(1)}px`
+    const gapValue = hudConfig.crosshairBaseGap + spread * hudConfig.crosshairSpreadScale
+    const gap = `${gapValue.toFixed(1)}px`
+    const size = `${(
+      hudConfig.crosshairBaseSize + 2 * gapValue
+    ).toFixed(1)}px`
     if (gap !== crosshairGap) {
       crosshairGap = gap
       dom.crosshair.style.setProperty('--ch-gap', gap)
@@ -85,7 +89,7 @@ export function createHud({ dom, state, deploy, audio }) {
     }
     if (!crosshairLengthSet) {
       crosshairLengthSet = true
-      dom.crosshair.style.setProperty('--ch-len', '8px')
+      dom.crosshair.style.setProperty('--ch-len', `${hudConfig.crosshairLength}px`)
     }
   }
 
@@ -102,14 +106,14 @@ export function createHud({ dom, state, deploy, audio }) {
     dom.hitMarker.classList.remove('show')
     void dom.hitMarker.offsetWidth
     dom.hitMarker.classList.add('show')
-    addScreenShake(0.08)
+    addScreenShake(hudConfig.hitMarkerShake)
   }
 
   function showKillNotify(victimName, headshot) {
     const player = state.player
     if (!player) return
     const now = performance.now()
-    if (now - (player.lastKillAt || 0) < 3500) player.killStreak = (player.killStreak || 0) + 1
+    if (now - (player.lastKillAt || 0) < hudConfig.killStreakWindow) player.killStreak = (player.killStreak || 0) + 1
     else player.killStreak = 1
     player.lastKillAt = now
     const streak = player.killStreak
@@ -132,30 +136,42 @@ export function createHud({ dom, state, deploy, audio }) {
     dom.killStreak.textContent = streak > 1 ? `${streak} 连杀` : ''
     dom.killNotify.classList.add('show')
     audio.killConfirm(kind)
-    addScreenShake(headshot || streak >= 2 ? 0.22 : 0.14)
+    addScreenShake(
+      headshot
+        ? hudConfig.hitKillShake
+        : streak >= 2
+          ? hudConfig.multiKillShake
+          : hudConfig.normalKillShake
+    )
     clearTimeout(dom.killNotify._timer)
     clearTimeout(dom.killNotify._outTimer)
     dom.killNotify._outTimer = setTimeout(() => {
       dom.killNotify.classList.remove('show')
       dom.killNotify.classList.add('out')
-    }, 1500)
+    }, hudConfig.killNotifyOutDelay)
     dom.killNotify._timer = setTimeout(() => {
       dom.killNotify.classList.remove('out', 'headshot', 'multi')
-    }, 1900)
+    }, hudConfig.killNotifyCleanupDelay)
   }
 
   function showDamageVignette() {
     dom.damageVignette.classList.add('hit')
-    setTimeout(() => dom.damageVignette.classList.remove('hit'), 400)
+    setTimeout(
+      () => dom.damageVignette.classList.remove('hit'),
+      hudConfig.damageVignetteDuration
+    )
   }
 
   function showDirDamage(angle) {
     dom.dirDamage.style.transform = `translate(-50%,-50%) rotate(${angle}rad)`
     dom.dirDamage.classList.add('show')
-    setTimeout(() => dom.dirDamage.classList.remove('show'), 800)
+    setTimeout(
+      () => dom.dirDamage.classList.remove('show'),
+      hudConfig.directionDamageDuration
+    )
   }
 
-  function showCenterMessage(message, duration = 2000, big = '') {
+  function showCenterMessage(message, duration = hudConfig.centerMessageDuration, big = '') {
     dom.centerMsg.replaceChildren()
     if (big) {
       const bigText = document.createElement('span')
@@ -203,8 +219,9 @@ export function createHud({ dom, state, deploy, audio }) {
     victim.textContent = victimName
     item.append(killer, weapon, victim)
     dom.killFeed.insertBefore(item, dom.killFeed.firstChild)
-    setTimeout(() => item.remove(), 5000)
-    while (dom.killFeed.children.length > 6) dom.killFeed.lastChild.remove()
+    setTimeout(() => item.remove(), hudConfig.killFeedItemDuration)
+    while (dom.killFeed.children.length > hudConfig.killFeedMaxItems)
+      dom.killFeed.lastChild.remove()
   }
 
   function showEndScreen(playerWon) {

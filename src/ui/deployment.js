@@ -51,15 +51,19 @@ export function createDeploymentSystem({
     let enemyNear = 0
     for (const bot of state.bots) {
       if (bot.team === state.player.team || !bot.alive) continue
-      if (Math.hypot(bot.position.x - spawn.x, bot.position.z - spawn.z) < 15) enemyNear++
+      if (
+        Math.hypot(bot.position.x - spawn.x, bot.position.z - spawn.z) <
+        config.deployment.contestedRadius
+      )
+        enemyNear++
     }
-    return enemyNear >= 2
+    return enemyNear >= config.deployment.contestedEnemyCount
   }
 
   function getGodHeight() {
-    const half = config.mapSize * 0.5
+    const half = config.match.mapSize * 0.5
     const vFov = THREE.MathUtils.degToRad(camera.fov)
-    const margin = 1.08
+    const margin = config.deployment.cameraMargin
     const heightForZ = (half * margin) / Math.tan(vFov / 2)
     const heightForX = (half * margin) / (Math.tan(vFov / 2) * camera.aspect)
     return Math.max(heightForZ, heightForX)
@@ -134,9 +138,12 @@ export function createDeploymentSystem({
     startRoll = camera.rotation.z
     godPos.set(0, getGodHeight(), 0)
     midPos.set(
-      startPos.x * 0.35,
-      Math.max(startPos.y + 18, godPos.y * 0.45),
-      startPos.z * 0.35
+      startPos.x * config.deployment.toScreenMidPositionRatio,
+      Math.max(
+        startPos.y + config.deployment.toScreenMidHeightOffset,
+        godPos.y * config.deployment.toScreenMidHeightRatio
+      ),
+      startPos.z * config.deployment.toScreenMidPositionRatio
     )
 
     screenAnimTime = 0
@@ -148,14 +155,22 @@ export function createDeploymentSystem({
 
   function updateToScreen(dt) {
     screenAnimTime += dt
-    const duration = 1.15
+    const duration = config.deployment.toScreenDuration
     const progress = Math.min(1, screenAnimTime / duration)
     const t = progress * progress * (3 - 2 * progress)
 
     bezier2(camPos, startPos, midPos, godPos, t)
-    const pitch = THREE.MathUtils.lerp(startPitch, -Math.PI / 2, smoothstep(0, 0.95, progress))
-    const yaw = lerpAngle(startYaw, 0, smoothstep(0, 0.95, progress))
-    const roll = THREE.MathUtils.lerp(startRoll, 0, smoothstep(0, 0.85, progress))
+    const pitch = THREE.MathUtils.lerp(
+      startPitch,
+      -Math.PI / 2,
+      smoothstep(0, config.deployment.toScreenPitchResetStart, progress)
+    )
+    const yaw = lerpAngle(startYaw, 0, smoothstep(0, config.deployment.toScreenPitchResetStart, progress))
+    const roll = THREE.MathUtils.lerp(
+      startRoll,
+      0,
+      smoothstep(0, config.deployment.toScreenRollResetStart, progress)
+    )
 
     camera.up.copy(worldUp)
     camera.position.copy(camPos)
@@ -173,15 +188,22 @@ export function createDeploymentSystem({
     deploy.animTime = 0
     deploy.spawnPoint = spawn
     landed = false
-    endYaw = Math.atan2(Math.sin(state.player.yaw), Math.cos(state.player.yaw))
+    endYaw = Math.atan2(spawn.x, spawn.z)
     state.player.yaw = endYaw
     markers = []
     dom.spawnMarkers.replaceChildren()
     dom.deployScreen.classList.remove('show')
 
     startPos.copy(camera.position)
-    midPos.set(spawn.x, Math.min(startPos.y * 0.55, 72), spawn.z)
-    endPos.set(spawn.x, 1.7, spawn.z)
+    midPos.set(
+      spawn.x,
+      Math.min(
+        startPos.y * config.deployment.deployMidHeightRatio,
+        config.deployment.deployMidHeightMax
+      ),
+      spawn.z
+    )
+    endPos.set(spawn.x, config.player.standHeight, spawn.z)
 
     state.player.weapon.setVisible(false)
     audio.whoosh()
@@ -189,7 +211,7 @@ export function createDeploymentSystem({
 
   function update(dt) {
     deploy.animTime += dt
-    const duration = 1.45
+    const duration = config.deployment.deployDuration
     const progress = Math.min(1, deploy.animTime / duration)
     const spawn = deploy.spawnPoint
     const t = progress * progress * (3 - 2 * progress)
@@ -197,17 +219,33 @@ export function createDeploymentSystem({
     bezier2(camPos, startPos, midPos, endPos, t)
 
     // 前半段保持俯视；先抬 pitch，再短路径回正 yaw，避免顶视时原地转圈
-    const pitch = THREE.MathUtils.lerp(-Math.PI / 2, 0, smoothstep(0.5, 0.95, progress))
-    const yaw = lerpAngle(0, endYaw, smoothstep(0.68, 0.98, progress))
+    const pitch = THREE.MathUtils.lerp(
+      -Math.PI / 2,
+      0,
+      smoothstep(
+        config.deployment.deployPitchResetStart,
+        config.deployment.deployPitchResetEnd,
+        progress
+      )
+    )
+    const yaw = lerpAngle(
+      0,
+      endYaw,
+      smoothstep(
+        config.deployment.deployYawResetStart,
+        config.deployment.deployYawResetEnd,
+        progress
+      )
+    )
 
     camera.up.copy(worldUp)
     camera.position.copy(camPos)
     camera.rotation.order = 'YXZ'
     camera.rotation.set(pitch, yaw, 0)
 
-    if (progress > 0.86) {
+    if (progress > config.deployment.landingVignetteStart) {
       dom.deployVignette.classList.add('landing')
-      if (!landed && progress > 0.88) {
+      if (!landed && progress > config.deployment.landingImpactStart) {
         landed = true
         audio.impact()
         state.player.addShake(0.4)
@@ -216,17 +254,28 @@ export function createDeploymentSystem({
 
     if (progress < 1) return
 
+    const player = state.player
+    player.yaw = endYaw
+    player.pitch = 0
+    player.viewRecoilPitch = 0
+    player.viewRecoilYaw = 0
+    player.viewRecoilRoll = 0
+    player.lookSwayPitch = 0
+    player.lookSwayYaw = 0
+    player.lookSwayRoll = 0
+    player.moveLean = 0
+
     camera.up.copy(worldUp)
     camera.rotation.order = 'YXZ'
     camera.rotation.set(0, endYaw, 0)
     camera.position.copy(endPos)
     deploy.phase = 'none'
-    state.player.alive = true
-    state.player.health = state.player.maxHealth
-    state.player.ammo = state.player.magSize
-    state.player.reserveAmmo = 96
-    state.player.position.set(spawn.x, 1.7, spawn.z)
-    state.player.velocity.set(0, 0, 0)
+    player.alive = true
+    player.health = player.maxHealth
+    player.ammo = player.magSize
+    player.reserveAmmo = config.weapon.reserveAmmo
+    player.position.set(spawn.x, config.player.standHeight, spawn.z)
+    player.velocity.set(0, 0, 0)
     state.player.weapon.setVisible(true)
     dom.deployVignette.classList.remove('landing')
     dom.crosshair.classList.remove('hidden')

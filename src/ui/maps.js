@@ -1,7 +1,7 @@
 export function createMapSystem({ dom, state, config }) {
   const width = 180
   const height = 180
-  const scale = width / config.mapSize
+  const scale = width / config.match.mapSize
   const centerX = width / 2
   const centerY = height / 2
   const miniCtx = dom.miniCanvas.getContext('2d')

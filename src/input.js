@@ -63,13 +63,6 @@ const TOUCH_PRESS_CODES = {
   scoreboard: 'Tab',
 }
 
-// 触摸像素位移相对鼠标 movement 更“钝”，放大后再乘设置灵敏度
-const TOUCH_LOOK_SCALE = 5
-// 陀螺仪相对姿态（弧度）→ lookDelta，最终仍乘菜单灵敏度
-const GYRO_LOOK_SCALE = 500
-const GYRO_DEADZONE = 0.0015
-const GYRO_SMOOTHING = 0.3
-const GYRO_MAX_STEP = 0.08
 const GYRO_SCREEN_AXIS = new THREE.Vector3(0, 0, 1)
 const GYRO_CAMERA_QUATERNION = new THREE.Quaternion(
   -Math.SQRT1_2,
@@ -90,7 +83,8 @@ function screenAngle() {
   return window.innerWidth >= window.innerHeight ? 90 : 0
 }
 
-export function createInputSystem({ state, deploy, onPause, dom }) {
+export function createInputSystem({ state, deploy, onPause, dom, config }) {
+  const inputConfig = config.input
   const heldKeys = new Set()
   const pressed = new Set()
   const mouseDown = { left: false, right: false }
@@ -121,7 +115,7 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
   let lookPointerId = null
   let stickOriginX = 0
   let stickOriginY = 0
-  let stickRadius = 56
+  let stickRadius = inputConfig.touchStickRadius
   let lookLastX = 0
   let lookLastY = 0
 
@@ -186,9 +180,17 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
 
   function applyGyroLook(yaw, pitch) {
     if (!canControl()) return
-    if (Math.abs(yaw) < GYRO_DEADZONE && Math.abs(pitch) < GYRO_DEADZONE) return
-    gyroPendingX += THREE.MathUtils.clamp(yaw, -GYRO_MAX_STEP, GYRO_MAX_STEP) * GYRO_LOOK_SCALE
-    gyroPendingY += THREE.MathUtils.clamp(pitch, -GYRO_MAX_STEP, GYRO_MAX_STEP) * GYRO_LOOK_SCALE
+    if (
+      Math.abs(yaw) < inputConfig.gyroDeadzone &&
+      Math.abs(pitch) < inputConfig.gyroDeadzone
+    )
+      return
+    gyroPendingX +=
+      THREE.MathUtils.clamp(yaw, -inputConfig.gyroMaxStep, inputConfig.gyroMaxStep) *
+      inputConfig.gyroLookScale
+    gyroPendingY +=
+      THREE.MathUtils.clamp(pitch, -inputConfig.gyroMaxStep, inputConfig.gyroMaxStep) *
+      inputConfig.gyroLookScale
   }
 
   function onDeviceOrientation(event) {
@@ -285,8 +287,11 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
   }
 
   function getStickRadius() {
-    if (!dom?.touchStickBase) return 56
-    return Math.max(40, dom.touchStickBase.clientWidth * 0.5)
+    if (!dom?.touchStickBase) return inputConfig.touchStickRadius
+    return Math.max(
+      inputConfig.touchStickMinRadius,
+      dom.touchStickBase.clientWidth * 0.5
+    )
   }
 
   function setStickVisual(dx, dy) {
@@ -305,7 +310,7 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
     setStickVisual(cx, cy)
     const nx = cx / radius
     const nz = cy / radius
-    const dead = 0.12
+    const dead = inputConfig.touchStickDeadzone
     const mag = Math.hypot(nx, nz)
     if (mag < dead) {
       moveAxisX = 0
@@ -316,7 +321,7 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
     const scale = Math.min(1, (mag - dead) / (1 - dead))
     moveAxisX = (nx / mag) * scale
     moveAxisZ = (nz / mag) * scale
-    stickSprint = scale >= 0.82
+    stickSprint = scale >= inputConfig.touchSprintThreshold
   }
 
   function bindHoldButton(el, onDown, onUp) {
@@ -390,8 +395,8 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
     }
     if (entry.kind === 'look' && event.pointerId === lookPointerId) {
       if (!canControl()) return
-      mouseDeltaX += (event.clientX - lookLastX) * TOUCH_LOOK_SCALE
-      mouseDeltaY += (event.clientY - lookLastY) * TOUCH_LOOK_SCALE
+      mouseDeltaX += (event.clientX - lookLastX) * inputConfig.touchLookScale
+      mouseDeltaY += (event.clientY - lookLastY) * inputConfig.touchLookScale
       lookLastX = event.clientX
       lookLastY = event.clientY
     }
@@ -570,19 +575,22 @@ export function createInputSystem({ state, deploy, onPause, dom }) {
       return pressed.delete(code)
     },
     consumeLookDelta() {
-      gyroSmoothX += (gyroPendingX - gyroSmoothX) * GYRO_SMOOTHING
-      gyroSmoothY += (gyroPendingY - gyroSmoothY) * GYRO_SMOOTHING
+      gyroSmoothX += (gyroPendingX - gyroSmoothX) * inputConfig.gyroSmoothing
+      gyroSmoothY += (gyroPendingY - gyroSmoothY) * inputConfig.gyroSmoothing
       const delta = { x: mouseDeltaX + gyroSmoothX, y: mouseDeltaY + gyroSmoothY }
       mouseDeltaX = 0
       mouseDeltaY = 0
       gyroPendingX = 0
       gyroPendingY = 0
-      if (Math.abs(gyroSmoothX) < 0.001) gyroSmoothX = 0
-      if (Math.abs(gyroSmoothY) < 0.001) gyroSmoothY = 0
+      if (Math.abs(gyroSmoothX) < inputConfig.inputEpsilon) gyroSmoothX = 0
+      if (Math.abs(gyroSmoothY) < inputConfig.inputEpsilon) gyroSmoothY = 0
       return delta
     },
     getMoveAxis() {
-      if (Math.abs(moveAxisX) > 0.001 || Math.abs(moveAxisZ) > 0.001) {
+      if (
+        Math.abs(moveAxisX) > inputConfig.inputEpsilon ||
+        Math.abs(moveAxisZ) > inputConfig.inputEpsilon
+      ) {
         return { x: moveAxisX, z: moveAxisZ }
       }
       let x = 0

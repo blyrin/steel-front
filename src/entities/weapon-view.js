@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 
 export class WeaponView {
-  constructor({ camera, matLib, audio, reloadDuration, emptyReloadDuration }) {
+  constructor({ config, camera, matLib, audio, reloadDuration, emptyReloadDuration }) {
     this.camera = camera
     this.matLib = matLib
     this.audio = audio
@@ -10,13 +10,13 @@ export class WeaponView {
     this.boltTime = -1
     this.reloadTime = -1
     this.meleeTime = -1
-    this.meleeDuration = 0.58
+    this.meleeDuration = config.meleeAnimationDuration
     this.reloadDuration = reloadDuration
     this.emptyReloadDuration = emptyReloadDuration
     this.emptyReload = false
     this.boltLocksOpen = false
     this.emptyEjectPlayed = false
-    this.boltDuration = 0.36
+    this.boltDuration = config.boltAnimationDuration
     this.aiming = false
     this.swayX = 0
     this.swayY = 0
