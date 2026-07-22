@@ -250,29 +250,51 @@
         ><span><b>E</b> 补给</span><span><b>TAB</b> 计分板</span><span><b>ESC</b> 暂停</span>
       </div>
       <div id="touchControls">
-        <div id="touchLookPad"></div>
-        <div id="touchStick">
+        <div id="touchLookPad" aria-hidden="true"></div>
+        <div id="touchStick" aria-hidden="true">
           <div id="touchStickBase">
             <div id="touchStickKnob"></div>
           </div>
         </div>
-        <button type="button" class="touch-btn touch-fire" id="touchFire" data-touch-action>
-          开火
-        </button>
-        <button type="button" class="touch-btn" id="touchAim" data-touch-action>瞄准</button>
-        <button type="button" class="touch-btn" id="touchJump" data-touch-action>跳</button>
-        <button type="button" class="touch-btn" id="touchCrouch" data-touch-action>蹲</button>
-        <button type="button" class="touch-btn" id="touchReload" data-touch-action>装弹</button>
-        <button type="button" class="touch-btn" id="touchMelee" data-touch-action>刺刀</button>
-        <button type="button" class="touch-btn" id="touchGrenade" data-touch-action>雷</button>
-        <button type="button" class="touch-btn" id="touchItem" data-touch-action>道具</button>
-        <button type="button" class="touch-btn" id="touchSupply" data-touch-action>补给</button>
-        <button type="button" class="touch-btn touch-top" id="touchScoreboard" data-touch-action>
-          战况
-        </button>
-        <button type="button" class="touch-btn touch-top" id="touchPause" data-touch-action>
-          暂停
-        </button>
+        <div class="touch-cluster touch-primary">
+          <button type="button" class="touch-btn touch-fire" id="touchFire" data-touch-action aria-label="开火">
+            <span class="touch-icon" aria-hidden="true">●</span><span class="touch-label">开火</span>
+          </button>
+          <button type="button" class="touch-btn touch-aim" id="touchAim" data-touch-action aria-label="瞄准">
+            <span class="touch-icon" aria-hidden="true">◎</span><span class="touch-label">瞄准</span>
+          </button>
+          <button type="button" class="touch-btn touch-jump" id="touchJump" data-touch-action aria-label="跳跃">
+            <span class="touch-icon" aria-hidden="true">↑</span><span class="touch-label">跳</span>
+          </button>
+          <button type="button" class="touch-btn touch-crouch" id="touchCrouch" data-touch-action aria-label="下蹲">
+            <span class="touch-icon" aria-hidden="true">↓</span><span class="touch-label">蹲</span>
+          </button>
+        </div>
+        <div class="touch-cluster touch-utility">
+          <button type="button" class="touch-btn" id="touchSupply" data-touch-action aria-label="补给">
+            <span class="touch-icon" aria-hidden="true">+</span><span class="touch-label">补给</span>
+          </button>
+          <button type="button" class="touch-btn" id="touchItem" data-touch-action aria-label="道具">
+            <span class="touch-icon" aria-hidden="true">□</span><span class="touch-label">道具</span>
+          </button>
+          <button type="button" class="touch-btn" id="touchGrenade" data-touch-action aria-label="手雷">
+            <span class="touch-icon" aria-hidden="true">◇</span><span class="touch-label">手雷</span>
+          </button>
+          <button type="button" class="touch-btn" id="touchMelee" data-touch-action aria-label="刺刀">
+            <span class="touch-icon" aria-hidden="true">✦</span><span class="touch-label">刺刀</span>
+          </button>
+          <button type="button" class="touch-btn" id="touchReload" data-touch-action aria-label="装弹">
+            <span class="touch-icon" aria-hidden="true">↻</span><span class="touch-label">装弹</span>
+          </button>
+        </div>
+        <div class="touch-meta">
+          <button type="button" class="touch-btn touch-top" id="touchScoreboard" data-touch-action aria-label="查看战况">
+            <span class="touch-icon" aria-hidden="true">≡</span><span class="touch-label">战况</span>
+          </button>
+          <button type="button" class="touch-btn touch-top" id="touchPause" data-touch-action aria-label="暂停">
+            <span class="touch-icon" aria-hidden="true">Ⅱ</span><span class="touch-label">暂停</span>
+          </button>
+        </div>
       </div>
     </div>
 

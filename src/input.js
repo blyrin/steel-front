@@ -334,14 +334,21 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
     stickSprint = scale >= inputConfig.touchSprintThreshold
   }
 
-  function bindHoldButton(el, onDown, onUp) {
+  function bindHoldButton(el, onDown, onUp, onMove) {
     if (!el) return
     el.addEventListener('pointerdown', event => {
       if (!isAllowedPointer(event)) return
       event.preventDefault()
       event.stopPropagation()
       el.setPointerCapture(event.pointerId)
-      activePointers.set(event.pointerId, { kind: 'button', el, onUp })
+      activePointers.set(event.pointerId, {
+        kind: 'button',
+        el,
+        onUp,
+        onMove,
+        lastX: event.clientX,
+        lastY: event.clientY,
+      })
       onDown()
     })
   }
@@ -409,6 +416,11 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
       mouseDeltaY += (event.clientY - lookLastY) * inputConfig.touchLookScale
       lookLastX = event.clientX
       lookLastY = event.clientY
+      return
+    }
+    if (entry.kind === 'button' && entry.onMove) {
+      if (!canControl()) return
+      entry.onMove(event.clientX, event.clientY, entry)
     }
   }
 
@@ -542,6 +554,17 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
     },
     () => {
       mouseDown.left = false
+    },
+    (clientX, clientY, entry) => {
+      if (lookPointerId != null) {
+        entry.lastX = clientX
+        entry.lastY = clientY
+        return
+      }
+      mouseDeltaX += (clientX - entry.lastX) * inputConfig.touchLookScale
+      mouseDeltaY += (clientY - entry.lastY) * inputConfig.touchLookScale
+      entry.lastX = clientX
+      entry.lastY = clientY
     }
   )
   if (dom?.touchAim) {
