@@ -331,13 +331,51 @@ export class AudioSystem {
     )
   }
 
-  rifleShot() {
-    this.play('rifle_01', {
-      vol: 0.9,
-      rateJitter: 0.025,
-      wet: 0.2,
+  garandShot() {
+    this.play('bar_shot', {
+      vol: 0.85,
+      rate: 1.02,
+      rateJitter: 0.035,
+      wet: 0.18,
       slap: true,
       priority: 2,
+    })
+  }
+  thompsonShot() {
+    this.play(['thompson_shot_01', 'thompson_shot_02'], {
+      vol: 0.6,
+      rate: 0.98,
+      rateJitter: 0.03,
+      wet: 0.16,
+      slap: true,
+      priority: 2,
+    })
+  }
+  barShot() {
+    this.play('bar_shot', {
+      vol: 0.8,
+      rate: 1.02,
+      rateJitter: 0.035,
+      wet: 0.18,
+      slap: true,
+      priority: 2,
+    })
+  }
+  shotgunShot() {
+    this.play(['shotgun_shot_01', 'shotgun_shot_02'], {
+      vol: 0.85,
+      rate: 0.94,
+      rateJitter: 0.035,
+      wet: 0.24,
+      slap: true,
+      priority: 2,
+    })
+  }
+  shotgunPump() {
+    this.play('shotgun_pump', {
+      vol: 0.8,
+      rateJitter: 0.04,
+      priority: 1,
     })
   }
   reload() {
@@ -410,16 +448,72 @@ export class AudioSystem {
     })
   }
 
-  botShot(pos) {
+  botShot(pos, modelId = 'rifle') {
     if (!pos) return
     const now = performance.now()
     if (now - this._lastWorldShot < 40) return
     const distance = this.camera.position.distanceTo(pos)
     if (distance > 120) return
     this._lastWorldShot = now
+    if (modelId === 'shotgun') {
+      this.play(['shotgun_shot_01', 'shotgun_shot_02'], {
+        vol: distance > 55 ? 0.5 : 0.6,
+        rate: 0.94,
+        rateJitter: 0.04,
+        pos,
+        ref: 24,
+        max: 140,
+        rolloff: 0.26,
+        wet: 0.18,
+        priority: 1,
+      })
+      return
+    }
+    if (modelId === 'garand') {
+      this.play('bar_shot', {
+        vol: distance > 55 ? 0.5 : 0.6,
+        rate: 1.02,
+        rateJitter: 0.04,
+        pos,
+        ref: 28,
+        max: 145,
+        rolloff: 0.25,
+        wet: 0.16,
+        priority: 1,
+      })
+      return
+    }
+    if (modelId === 'thompson') {
+      this.play(['thompson_shot_01', 'thompson_shot_02'], {
+        vol: distance > 55 ? 0.4 : 0.5,
+        rate: 0.98,
+        rateJitter: 0.035,
+        pos,
+        ref: 24,
+        max: 140,
+        rolloff: 0.26,
+        wet: 0.14,
+        priority: 1,
+      })
+      return
+    }
+    if (modelId === 'bar') {
+      this.play('bar_shot', {
+        vol: distance > 55 ? 0.5 : 0.6,
+        rate: 1.02,
+        rateJitter: 0.04,
+        pos,
+        ref: 28,
+        max: 145,
+        rolloff: 0.25,
+        wet: 0.16,
+        priority: 1,
+      })
+      return
+    }
     if (distance > 55)
       this.play(['distant_01', 'distant_02'], {
-        vol: 0.72,
+        vol: 0.5,
         rateJitter: 0.05,
         pos,
         ref: 35,
@@ -429,7 +523,7 @@ export class AudioSystem {
       })
     else if (distance > 28)
       this.play(['rifle_03', 'rifle_04', 'distant_01'], {
-        vol: 0.78,
+        vol: 0.6,
         rateJitter: 0.05,
         pos,
         ref: 28,
@@ -440,7 +534,7 @@ export class AudioSystem {
       })
     else
       this.play(['rifle_01', 'rifle_02', 'rifle_03', 'rifle_04'], {
-        vol: 0.84,
+        vol: 0.6,
         rateJitter: 0.05,
         pos,
         ref: 22,

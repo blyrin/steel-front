@@ -229,7 +229,10 @@ export class Player {
       at: now,
     }
     this.ammo--
-    this.audio.rifleShot()
+    if (this.weaponData.modelId === 'shotgun') this.audio.shotgunShot()
+    else if (this.weaponData.modelId === 'thompson') this.audio.thompsonShot()
+    else if (this.weaponData.modelId === 'bar') this.audio.barShot()
+    else this.audio.garandShot()
     const aiming = this.aiming
     const recoilMultiplier = this.weaponData.recoilMultiplier
     const recoilImpulse = {
@@ -261,26 +264,30 @@ export class Player {
           ? this.weaponData.aimedSpreadBloomPerShot
           : this.weaponData.spreadBloomPerShot)
     )
-    const direction = new THREE.Vector3()
-    this.camera.getWorldDirection(direction)
-    direction.x += (Math.random() - 0.5) * spread * 2
-    direction.y += (Math.random() - 0.5) * spread * 2
-    direction.z += (Math.random() - 0.5) * spread * 2
-    direction.normalize()
+    const aimDirection = new THREE.Vector3()
+    this.camera.getWorldDirection(aimDirection)
     const muzzle = this.weapon.muzzlePos.getWorldPosition(new THREE.Vector3())
-    this.combat.fireBullet(
-      this.camera.position.clone(),
-      direction,
-      'allies',
-      this,
-      muzzle,
-      this.weaponData
-    )
+    const pelletCount = this.weaponData.pellets ?? 1
+    for (let pellet = 0; pellet < pelletCount; pellet++) {
+      const direction = aimDirection.clone()
+      direction.x += (Math.random() - 0.5) * spread * 2
+      direction.y += (Math.random() - 0.5) * spread * 2
+      direction.z += (Math.random() - 0.5) * spread * 2
+      direction.normalize()
+      this.combat.fireBullet(
+        this.camera.position.clone(),
+        direction,
+        'allies',
+        this,
+        muzzle,
+        this.weaponData
+      )
+    }
     const eject = this.weapon.group.localToWorld(new THREE.Vector3(0.06, 0.02, -0.08))
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion)
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion)
     this.effects.spawnShell(eject, right, up)
-    this.effects.spawnMuzzleFlash(muzzle, direction, true)
+    this.effects.spawnMuzzleFlash(muzzle, aimDirection, true)
     this.effects.spawnSmokePuff(muzzle)
     if (this.ammo === 0) {
       setTimeout(() => {

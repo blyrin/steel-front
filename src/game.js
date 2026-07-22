@@ -86,7 +86,6 @@ export function createGame() {
     deploy,
     getSpawnPoints: team => mode.getSpawnPoints(team),
     camera: runtime.camera,
-    scene: runtime.scene,
     renderer: runtime.renderer,
     audio,
     input,

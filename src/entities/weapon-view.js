@@ -264,6 +264,7 @@ export class WeaponView {
     parts.receiver.scale.set(1, 1, 1)
     parts.magWell.position.set(0, -0.012, -0.1)
     parts.magWell.scale.set(1, 1, 1)
+    parts.magWell.visible = true
     parts.barrel.position.set(0, 0.016, -0.58)
     parts.barrel.scale.set(1, 1, 1)
     parts.muzzle.position.set(0, 0.016, -0.96)
@@ -278,28 +279,32 @@ export class WeaponView {
     this.magBase.set(0, -0.002, -0.1)
     this.magBaseScale.set(1, 1, 1)
     this.mag.material = parts.brass
+    this.mag.visible = true
     this.bayonetBaseZ = -0.98
 
-    if (weapon.modelId === 'carbine') {
-      parts.buttPad.position.z = 0.25
-      parts.butt.position.z = 0.17
-      parts.butt.scale.z = 0.72
-      parts.comb.position.z = 0.13
-      parts.comb.scale.z = 0.72
-      parts.forend.position.z = -0.23
-      parts.forend.scale.z = 0.65
-      parts.handguard.position.z = -0.25
-      parts.handguard.scale.z = 0.58
-      parts.receiver.scale.z = 0.82
-      this.boltBase.z = -0.26
-      parts.barrel.position.z = -0.42
-      parts.barrel.scale.y = 0.62
-      parts.muzzle.position.z = -0.66
-      this.muzzlePos.position.z = -0.72
-      this.bayonetBaseZ = -0.68
-      parts.frontSightBase.position.z = -0.61
-      parts.frontSightPost.position.z = -0.61
-      for (const wing of parts.frontSightWings) wing.position.z = -0.61
+    if (weapon.modelId === 'shotgun') {
+      parts.buttPad.position.z = 0.27
+      parts.butt.position.z = 0.19
+      parts.butt.scale.z = 0.82
+      parts.comb.position.z = 0.14
+      parts.comb.scale.z = 0.8
+      parts.forend.position.z = -0.27
+      parts.forend.scale.z = 0.8
+      parts.handguard.position.z = -0.31
+      parts.handguard.scale.z = 0.72
+      parts.receiver.scale.set(1.15, 1.1, 0.86)
+      this.boltBase.z = -0.22
+      parts.barrel.position.z = -0.5
+      parts.barrel.scale.set(1.5, 0.85, 1.5)
+      parts.muzzle.position.z = -0.78
+      parts.muzzle.scale.set(1.55, 1.1, 1.55)
+      this.muzzlePos.position.z = -0.86
+      this.bayonetBaseZ = -0.82
+      parts.frontSightBase.position.z = -0.74
+      parts.frontSightPost.position.z = -0.74
+      for (const wing of parts.frontSightWings) wing.position.z = -0.74
+      parts.magWell.visible = false
+      this.mag.visible = false
       this.magBase.set(0, -0.025, -0.09)
       this.magBaseScale.set(1.35, 2.3, 1.2)
       this.mag.material = parts.dark
@@ -483,6 +488,7 @@ export class WeaponView {
         this.boltTime = -1
         this.bolt.position.set(x, y, z + (this.boltLocksOpen ? 0.06 : 0))
         this.bolt.rotation.set(0, 0, 0)
+        if (this.weaponModelId === 'shotgun') this.audio.shotgunPump()
         if (!this.boltLocksOpen) {
           const boltKick = this.aiming ? this.aimingViewModelRecoilMultiplier : 1
           this.kickZ += 0.004 * boltKick
@@ -558,13 +564,13 @@ export class WeaponView {
       const handlingArc = Math.sin(
         Math.PI * THREE.MathUtils.clamp((progress - 0.08) / 0.76, 0, 1)
       )
-      if (modelId === 'carbine') {
-        reloadRotationX = 0.16 * pose
-        reloadRotationY = 0.22 * pose + 0.08 * handlingArc
-        reloadRotationZ = -0.16 * pose
-        reloadPositionX = 0.035 * pose + 0.025 * handlingArc
-        reloadPositionY = 0.055 * pose
-        reloadPositionZ = 0.085 * pose
+      if (modelId === 'shotgun') {
+        reloadRotationX = 0.2 * pose
+        reloadRotationY = 0.18 * pose + 0.06 * handlingArc
+        reloadRotationZ = -0.2 * pose
+        reloadPositionX = 0.02 * pose + 0.02 * handlingArc
+        reloadPositionY = 0.06 * pose
+        reloadPositionZ = 0.1 * pose
       } else if (modelId === 'thompson') {
         reloadRotationX = 0.34 * pose
         reloadRotationY = 0.28 * pose
@@ -646,13 +652,8 @@ export class WeaponView {
           const time = smooth((progress - insertStart) / (insertEnd - insertStart))
           const remaining = 1 - time
           this.mag.visible = true
-          if (modelId === 'carbine') {
-            this.mag.position.set(
-              this.magBase.x - 0.018 * remaining,
-              this.magBase.y - drop * remaining,
-              this.magBase.z + 0.004 * remaining
-            )
-            this.mag.rotation.set(0.04 * remaining, 0.02 * remaining, -0.08 * remaining)
+          if (modelId === 'shotgun') {
+            this.mag.visible = false
           } else {
             this.mag.position.set(
               this.magBase.x - 0.045 * remaining,
@@ -810,6 +811,7 @@ export class WeaponView {
         this.bayonet.position.z = this.bayonetBaseZ
       }
     }
+    if (this.weaponModelId === 'shotgun') this.mag.visible = false
     this.group.rotation.set(rotationX, rotationY, rotationZ)
   }
 
@@ -834,7 +836,7 @@ export class WeaponView {
     this.reloadTime = 0
     this.boltTime = -1
     this.reloadFlags = createReloadFlags()
-    this.mag.visible = this.weaponModelId !== 'garand' || !empty
+    this.mag.visible = this.weaponModelId !== 'shotgun' && (this.weaponModelId !== 'garand' || !empty)
     this.mag.position.copy(this.magBase)
     this.mag.rotation.set(0, 0, 0)
     this.setMagazineScale()

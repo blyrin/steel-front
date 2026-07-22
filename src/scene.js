@@ -380,7 +380,7 @@ export function createSceneRuntime(config) {
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.05
+  renderer.toneMappingExposure = 1.15
   renderer.outputColorSpace = THREE.SRGBColorSpace
   document.body.appendChild(renderer.domElement)
 
@@ -388,11 +388,11 @@ export function createSceneRuntime(config) {
   const maxAniso = renderer.capabilities.getMaxAnisotropy()
   const matLib = createMatLib(Math.min(config.render.maxAnisotropy, maxAniso))
 
-  scene.add(new THREE.AmbientLight(0x758697, 0.22))
-  const hemi = new THREE.HemisphereLight(0xb9c9d1, 0x3c3038, 0.78)
+  scene.add(new THREE.AmbientLight(0x758697, 0.28))
+  const hemi = new THREE.HemisphereLight(0xb9c9d1, 0x3c3038, 0.9)
   scene.add(hemi)
 
-  const sun = new THREE.DirectionalLight(0xffe0ad, 1.65)
+  const sun = new THREE.DirectionalLight(0xffe0ad, 1.85)
   sun.position.set(90, 95, 55)
   sun.castShadow = true
   sun.shadow.mapSize.set(config.render.shadowMapSize, config.render.shadowMapSize)
@@ -408,11 +408,11 @@ export function createSceneRuntime(config) {
   scene.add(sun)
   scene.add(sun.target)
 
-  const fill = new THREE.DirectionalLight(0x7fa6c0, 0.26)
+  const fill = new THREE.DirectionalLight(0x7fa6c0, 0.34)
   fill.position.set(-70, 45, -40)
   scene.add(fill)
 
-  const rim = new THREE.DirectionalLight(0xd78275, 0.2)
+  const rim = new THREE.DirectionalLight(0xd78275, 0.26)
   rim.position.set(-30, 12, 80)
   scene.add(rim)
 

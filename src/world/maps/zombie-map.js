@@ -412,10 +412,10 @@ export function createZombieMap({ scene, matLib, state, config, objectives }) {
     )
     lamp.material.color.set(0xffb86b)
     lamp.material.emissive.set(0xff7a3d)
-    lamp.material.emissiveIntensity = 2.4
+    lamp.material.emissiveIntensity = 3.2
     lamp.position.set(0.95, 4.42, 0)
     group.add(lamp)
-    const light = new THREE.PointLight(0xffb86b, 4.5, 26, 1.5)
+    const light = new THREE.PointLight(0xffb86b, 6, 26, 1.5)
     light.position.set(0.95, 4.32, 0)
     group.add(light)
     addMesh(group)
@@ -452,14 +452,14 @@ export function createZombieMap({ scene, matLib, state, config, objectives }) {
     scene.traverse(object => {
       if (object.isAmbientLight) {
         object.color.set(0x344247)
-        object.intensity = 0.24
+        object.intensity = 0.32
       } else if (object.isHemisphereLight) {
         object.color.set(0x9aaeb2)
         object.groundColor.set(0x1d2524)
-        object.intensity = 0.62
+        object.intensity = 0.78
       } else if (object.isDirectionalLight) {
         object.color.set(object.castShadow ? 0xb8c8c1 : 0x6b8588)
-        object.intensity = object.castShadow ? 1.1 : 0.22
+        object.intensity = object.castShadow ? 1.35 : 0.3
       }
     })
     scene.background = new THREE.Color(ZOMBIE_COLORS.fog)

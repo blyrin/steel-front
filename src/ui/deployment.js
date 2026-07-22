@@ -27,7 +27,6 @@ export function createDeploymentSystem({
   deploy,
   getSpawnPoints,
   camera,
-  scene,
   renderer,
   audio,
   input,
@@ -50,19 +49,6 @@ export function createDeploymentSystem({
   let startRoll = 0
   let screenAnimTime = 0
   let loadoutBuilt = false
-  let gameplayFogDensity = null
-
-  function enableDeploymentFog() {
-    if (!scene?.fog || gameplayFogDensity !== null) return
-    gameplayFogDensity = scene.fog.density
-    scene.fog.density = 0.00035
-  }
-
-  function restoreGameplayFog() {
-    if (!scene?.fog || gameplayFogDensity === null) return
-    scene.fog.density = gameplayFogDensity
-    gameplayFogDensity = null
-  }
 
   function refreshLoadoutSelection() {
     const selected = state.settings.loadout
@@ -128,10 +114,14 @@ export function createDeploymentSystem({
   function getGodHeight() {
     const half = config.match.mapSize * 0.5
     const vFov = THREE.MathUtils.degToRad(camera.fov)
+    const heightScale =
+      state.mapId === 'zombie'
+        ? config.deployment.zombieCameraHeightScale
+        : config.deployment.cameraHeightScale
     const margin = config.deployment.cameraMargin
     const heightForZ = (half * margin) / Math.tan(vFov / 2)
     const heightForX = (half * margin) / (Math.tan(vFov / 2) * camera.aspect)
-    return Math.max(heightForZ, heightForX)
+    return Math.max(heightForZ, heightForX) * heightScale
   }
 
   function setGodCamera() {
@@ -197,7 +187,6 @@ export function createDeploymentSystem({
   }
 
   function showScreen() {
-    enableDeploymentFog()
     input.reset()
     input.updateTouchUi?.()
     if (document.pointerLockElement) document.exitPointerLock()
@@ -263,7 +252,6 @@ export function createDeploymentSystem({
     const spawn = getSpawnPoints(state.player.team)[index]
     deploy.phase = 'deploying'
     deploy.animTime = 0
-    restoreGameplayFog()
     deploy.spawnPoint = spawn
     landed = false
     endYaw = Math.atan2(spawn.x, spawn.z)

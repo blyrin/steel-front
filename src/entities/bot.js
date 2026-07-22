@@ -143,6 +143,7 @@ export class Bot {
   }
 
   selectRole() {
+    if (this.weaponData.modelId === 'shotgun') return 'assault'
     if (this.weaponData.modelId === 'thompson') return 'assault'
     if (this.weaponData.modelId === 'bar') return 'support'
     if (this.weaponData.modelId === 'garand' && this.botSkill > 0.42) return 'marksman'
@@ -574,15 +575,15 @@ export class Bot {
     this.rifleGrip.visible = false
     this.rifleMuzzle.position.set(0, 0.02, -0.72)
 
-    if (modelId === 'carbine') {
-      this.rifleBarrel.position.z = -0.27
-      this.rifleBarrel.scale.y = 0.72
-      this.rifleBody.scale.z = 0.82
-      this.rifleStock.position.z = 0.18
-      this.rifleStock.scale.z = 0.76
-      this.rifleMag.scale.set(0.78, 0.72, 0.72)
-      this.rifleMag.visible = true
-      this.rifleMuzzle.position.z = -0.54
+    if (modelId === 'shotgun') {
+      this.rifleBarrel.position.z = -0.35
+      this.rifleBarrel.scale.set(1.45, 0.85, 1.45)
+      this.rifleBody.position.z = -0.06
+      this.rifleBody.scale.set(1.2, 1.1, 0.9)
+      this.rifleStock.position.z = 0.2
+      this.rifleStock.scale.z = 0.82
+      this.rifleMag.visible = false
+      this.rifleMuzzle.position.z = -0.68
     } else if (modelId === 'thompson') {
       this.rifleBarrel.position.z = -0.2
       this.rifleBarrel.scale.set(1.3, 0.48, 1.3)
@@ -1459,7 +1460,8 @@ export class Bot {
       this.rifleClip.position.y = 0.12 - this.reloadPose * 0.055
     } else {
       this.rifleClip.visible = false
-      this.rifleMag.visible = !this.reloading || this.reloadPose < 0.72
+      this.rifleMag.visible =
+        modelId !== 'shotgun' && (!this.reloading || this.reloadPose < 0.72)
       this.rifleMag.position.y =
         (modelId === 'thompson' ? -0.13 : -0.1) - this.reloadPose * 0.16
     }
@@ -1494,11 +1496,11 @@ export class Bot {
     let reloadRightX = 0.38
     let reloadLeftZ = 0.78
     let reloadRightZ = -0.42
-    if (modelId === 'carbine') {
-      reloadLeftX = 0.35
-      reloadRightX = 0.55
-      reloadLeftZ = 0.5
-      reloadRightZ = -0.2
+    if (modelId === 'shotgun') {
+      reloadLeftX = 0.25
+      reloadRightX = 0.62
+      reloadLeftZ = 0.72
+      reloadRightZ = -0.35
     } else if (modelId === 'thompson') {
       reloadLeftX = 0.05
       reloadRightX = 0.65
@@ -1569,13 +1571,13 @@ export class Bot {
     let reloadPitchOffset = -0.48
     let reloadYawOffset = 0
     let reloadRollOffset = 0.28
-    if (modelId === 'carbine') {
-      reloadRifleX = 0.25
-      reloadRifleY = 0.35
-      reloadRifleZ = -0.18
-      reloadPitchOffset = -0.28
-      reloadYawOffset = -0.22
-      reloadRollOffset = -0.18
+    if (modelId === 'shotgun') {
+      reloadRifleX = 0.2
+      reloadRifleY = 0.32
+      reloadRifleZ = -0.16
+      reloadPitchOffset = -0.34
+      reloadYawOffset = -0.16
+      reloadRollOffset = -0.24
     } else if (modelId === 'thompson') {
       reloadRifleX = 0.07
       reloadRifleY = 0.23
@@ -1912,7 +1914,10 @@ export class Bot {
     if (now - this.lastFire < this.fireDelay * 1000) return false
     this.lastFire = now
     this.magazine--
-    this.fireKick = Math.min(1, this.fireKick + 0.72)
+    this.fireKick = Math.min(
+      1,
+      this.fireKick + (this.weaponData.modelId === 'shotgun' ? 1 : 0.72)
+    )
     const targetHeight = this.config.bot.targetHeight
     const muzzle = new THREE.Vector3()
     this.rifleMuzzle.getWorldPosition(muzzle)
@@ -1932,19 +1937,23 @@ export class Bot {
       target.x += this.target.velocity.x * leadTime
       target.z += this.target.velocity.z * leadTime
     }
-    const direction = new THREE.Vector3().subVectors(target, muzzle).normalize()
+    const aimDirection = new THREE.Vector3().subVectors(target, muzzle).normalize()
     const spread = this.getSpread()
     this.spreadBloom = Math.min(
       this.config.weapon.spreadBloomMax,
       this.spreadBloom + this.weaponData.spreadBloomPerShot
     )
-    direction.x += (Math.random() - 0.5) * spread * 2
-    direction.y += (Math.random() - 0.5) * spread * 2
-    direction.z += (Math.random() - 0.5) * spread * 2
-    direction.normalize()
-    this.combat.fireBullet(muzzle, direction, this.team, this, muzzle, this.weaponData)
-    this.effects.spawnMuzzleFlash(muzzle, direction)
-    this.audio.botShot(muzzle)
+    const pelletCount = this.weaponData.pellets ?? 1
+    for (let pellet = 0; pellet < pelletCount; pellet++) {
+      const direction = aimDirection.clone()
+      direction.x += (Math.random() - 0.5) * spread * 2
+      direction.y += (Math.random() - 0.5) * spread * 2
+      direction.z += (Math.random() - 0.5) * spread * 2
+      direction.normalize()
+      this.combat.fireBullet(muzzle, direction, this.team, this, muzzle, this.weaponData)
+    }
+    this.effects.spawnMuzzleFlash(muzzle, aimDirection)
+    this.audio.botShot(muzzle, this.weaponData.modelId)
     return true
   }
 
