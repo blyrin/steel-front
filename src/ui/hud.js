@@ -196,13 +196,10 @@ export function createHud({ dom, state, deploy, audio, config }) {
     dom.killStreak.textContent = streak > 1 ? `${streak} 连杀` : ''
     dom.killNotify.classList.add('show')
     audio.killConfirm(kind)
-    addScreenShake(
-      headshot
-        ? hudConfig.hitKillShake
-        : streak >= 2
-          ? hudConfig.multiKillShake
-          : hudConfig.normalKillShake
-    )
+    let shake = hudConfig.normalKillShake
+    if (headshot) shake = hudConfig.hitKillShake
+    else if (streak >= 2) shake = hudConfig.multiKillShake
+    addScreenShake(shake)
     clearTimeout(dom.killNotify._timer)
     clearTimeout(dom.killNotify._outTimer)
     dom.killNotify._outTimer = setTimeout(() => {
@@ -286,7 +283,10 @@ export function createHud({ dom, state, deploy, audio, config }) {
     const item = document.createElement('div')
     item.className = `kill-msg${type === 'player' ? ' player' : ''}`
     const killer = document.createElement('span')
-    killer.className = type === 'player' ? 'me' : type === 'ally' ? 'ally' : 'enemy'
+    let killerClass = 'enemy'
+    if (type === 'player') killerClass = 'me'
+    else if (type === 'ally') killerClass = 'ally'
+    killer.className = killerClass
     killer.textContent = killerName
     const weapon = document.createElement('span')
     weapon.style.color = '#6a5a40'

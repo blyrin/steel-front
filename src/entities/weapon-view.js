@@ -1,5 +1,9 @@
 import * as THREE from 'three'
 
+function createReloadFlags() {
+  return { eject: false, open: false, insert: false, seat: false, close: false }
+}
+
 export class WeaponView {
   constructor({ config, camera, matLib, audio, reloadDuration, emptyReloadDuration }) {
     this.camera = camera
@@ -143,7 +147,7 @@ export class WeaponView {
     this.mag.position.copy(this.magBase)
     const clipLip = add(new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.006, 0.046), metal), this.mag)
     clipLip.position.set(0, 0.016, 0)
-    this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
+    this.reloadFlags = createReloadFlags()
 
     this.bolt = new THREE.Group()
     const opRod = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.012, 0.36), metal)
@@ -382,7 +386,7 @@ export class WeaponView {
     this.kickRoll = 0
     this.kickVelZ = 0
     this.kickVelY = 0
-    this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
+    this.reloadFlags = createReloadFlags()
     this.mag.visible = true
     this.mag.position.copy(this.magBase)
     this.mag.rotation.set(0, 0, 0)
@@ -397,14 +401,24 @@ export class WeaponView {
     if (!this.group.visible) return
     this.aiming = aiming
     const aimMultiplier = aiming ? 0.08 : 1
-    const bobAmplitude = (sprinting ? 0.0075 : moving ? 0.0042 : 0.0008) * aimMultiplier
+    let bobAmplitude = 0.0008
+    let bobRollScale = 0.004
+    let bobPitchScale = 0.002
+    if (sprinting) {
+      bobAmplitude = 0.0075
+      bobRollScale = 0.028
+      bobPitchScale = 0.012
+    } else if (moving) {
+      bobAmplitude = 0.0042
+      bobRollScale = 0.016
+      bobPitchScale = 0.007
+    }
+    bobAmplitude *= aimMultiplier
     const bobX = Math.sin(bobPhase) * bobAmplitude
     const bobY = (1 - Math.cos(bobPhase * 2)) * bobAmplitude * 0.55
     const bobZ = Math.sin(bobPhase * 2) * bobAmplitude * 0.35
-    const bobRoll =
-      Math.sin(bobPhase) * (sprinting ? 0.028 : moving ? 0.016 : 0.004) * aimMultiplier
-    const bobPitch =
-      Math.cos(bobPhase * 2) * (sprinting ? 0.012 : moving ? 0.007 : 0.002) * aimMultiplier
+    const bobRoll = Math.sin(bobPhase) * bobRollScale * aimMultiplier
+    const bobPitch = Math.cos(bobPhase * 2) * bobPitchScale * aimMultiplier
     this.bobTime += dt
     const breathY = aiming
       ? Math.sin(this.bobTime * 1.1) * 0.00008
@@ -420,8 +434,10 @@ export class WeaponView {
     this.swayTilt += (targetTilt - this.swayTilt) * swayEase
     this.swayPitch += (targetPitch - this.swayPitch) * swayEase
     const targetLean = THREE.MathUtils.clamp(moveAxis.x * 0.03 * aimMultiplier, -0.02, 0.02)
-    const targetDip =
-      (moveAxis.z < 0 ? (sprinting ? 0.012 : 0.006) : moveAxis.z > 0 ? -0.004 : 0) * aimMultiplier
+    let targetDip = 0
+    if (moveAxis.z < 0) targetDip = sprinting ? 0.012 : 0.006
+    else if (moveAxis.z > 0) targetDip = -0.004
+    targetDip *= aimMultiplier
     this.strafeLean += (targetLean - this.strafeLean) * (1 - Math.exp(-8 * dt))
     this.sprintDip += (targetDip - this.sprintDip) * (1 - Math.exp(-7 * dt))
 
@@ -721,7 +737,7 @@ export class WeaponView {
         this.setMagazineScale()
         this.bolt.position.set(x, y, z)
         this.bolt.rotation.set(0, 0, 0)
-        this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
+        this.reloadFlags = createReloadFlags()
       }
     }
 
@@ -817,7 +833,7 @@ export class WeaponView {
     this.emptyReload = empty
     this.reloadTime = 0
     this.boltTime = -1
-    this.reloadFlags = { eject: false, open: false, insert: false, seat: false, close: false }
+    this.reloadFlags = createReloadFlags()
     this.mag.visible = this.weaponModelId !== 'garand' || !empty
     this.mag.position.copy(this.magBase)
     this.mag.rotation.set(0, 0, 0)

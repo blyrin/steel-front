@@ -42,29 +42,36 @@ function loadRecords() {
   }
 }
 
-function loadSettings() {
-  const defaultLoadout = {
-    weapon: CFG.loadout.defaultWeapon,
-    grenade: CFG.loadout.defaultGrenade,
-    item: CFG.loadout.defaultItem,
-  }
-  const raw = localStorage.getItem(SETTINGS_KEY)
-  if (!raw) {
-    return {
-      masterVolume: CFG.settings.masterVolume,
-      mouseSensitivity: CFG.settings.mouseSensitivity,
-      loadout: defaultLoadout,
-    }
-  }
-  const data = JSON.parse(raw)
-  const loadout = data.loadout || defaultLoadout
+function createDefaultSettings() {
   return {
-    masterVolume: data.masterVolume ?? CFG.settings.masterVolume,
-    mouseSensitivity: data.mouseSensitivity ?? CFG.settings.mouseSensitivity,
+    masterVolume: CFG.settings.masterVolume,
+    mouseSensitivity: CFG.settings.mouseSensitivity,
     loadout: {
-      weapon: Object.hasOwn(CFG.weapons, loadout.weapon) ? loadout.weapon : defaultLoadout.weapon,
-      grenade: Object.hasOwn(CFG.grenades, loadout.grenade) ? loadout.grenade : defaultLoadout.grenade,
-      item: Object.hasOwn(CFG.items, loadout.item) ? loadout.item : defaultLoadout.item,
+      weapon: CFG.loadout.defaultWeapon,
+      grenade: CFG.loadout.defaultGrenade,
+      item: CFG.loadout.defaultItem,
+    },
+  }
+}
+
+function loadSettings() {
+  const defaults = createDefaultSettings()
+  const raw = localStorage.getItem(SETTINGS_KEY)
+  if (!raw) return defaults
+
+  const data = JSON.parse(raw)
+  const loadout = data.loadout || defaults.loadout
+  return {
+    masterVolume: data.masterVolume ?? defaults.masterVolume,
+    mouseSensitivity: data.mouseSensitivity ?? defaults.mouseSensitivity,
+    loadout: {
+      weapon: Object.hasOwn(CFG.weapons, loadout.weapon)
+        ? loadout.weapon
+        : defaults.loadout.weapon,
+      grenade: Object.hasOwn(CFG.grenades, loadout.grenade)
+        ? loadout.grenade
+        : defaults.loadout.grenade,
+      item: Object.hasOwn(CFG.items, loadout.item) ? loadout.item : defaults.loadout.item,
     },
   }
 }

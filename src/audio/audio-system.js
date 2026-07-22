@@ -316,20 +316,28 @@ export class AudioSystem {
     this.play('reload_insert', { vol: 0.7, rateJitter: 0.02, priority: 1 })
   }
   reloadStage(stage) {
-    if (stage === 'open')
-      this.play(['reload_click', 'bolt_release'], {
-        vol: 0.55,
-        rateJitter: 0.03,
-        priority: 1,
-      })
-    else if (stage === 'insert')
-      this.play(['reload_insert', 'reload_lock'], {
-        vol: 0.72,
-        rateJitter: 0.02,
-        priority: 1,
-      })
-    else if (stage === 'seat') this.play('reload_click2', { vol: 0.5, rate: 0.95, priority: 1 })
-    else if (stage === 'close') this.play('bolt_release', { vol: 0.62, rate: 1.05, priority: 1 })
+    switch (stage) {
+      case 'open':
+        this.play(['reload_click', 'bolt_release'], {
+          vol: 0.55,
+          rateJitter: 0.03,
+          priority: 1,
+        })
+        break
+      case 'insert':
+        this.play(['reload_insert', 'reload_lock'], {
+          vol: 0.72,
+          rateJitter: 0.02,
+          priority: 1,
+        })
+        break
+      case 'seat':
+        this.play('reload_click2', { vol: 0.5, rate: 0.95, priority: 1 })
+        break
+      case 'close':
+        this.play('bolt_release', { vol: 0.62, rate: 1.05, priority: 1 })
+        break
+    }
   }
   ping() {
     this.play('ping', { vol: 0.72, rateJitter: 0.04, priority: 2 })

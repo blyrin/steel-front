@@ -500,11 +500,9 @@ export class Player {
       targetHeight,
       dt * playerConfig.crouchTransitionSpeed
     )
-    const speed = this.crouching
-      ? playerConfig.crouchSpeed
-      : this.sprinting
-        ? playerConfig.sprintSpeed
-        : playerConfig.walkSpeed
+    let speed = playerConfig.walkSpeed
+    if (this.crouching) speed = playerConfig.crouchSpeed
+    else if (this.sprinting) speed = playerConfig.sprintSpeed
     const moveAxis = this.input.getMoveAxis()
     const direction = this._moveDirection.set(moveAxis.x, 0, moveAxis.z)
     if (direction.lengthSq() > 0) {
@@ -546,15 +544,26 @@ export class Player {
     let bobPitch = 0
     let bobRoll = 0
     if (moving) {
-      const bobRate = this.sprinting ? 12.5 : this.crouching ? 5.2 : 7.8
+      let bobRate = 7.8
+      let amplitude = 0.011
+      let bobPitchScale = 0.0032
+      let bobRollScale = 0.0045
+      if (this.sprinting) {
+        bobRate = 12.5
+        amplitude = 0.018
+        bobPitchScale = 0.0055
+        bobRollScale = 0.008
+      } else if (this.crouching) {
+        bobRate = 5.2
+        amplitude = 0.006
+      }
       const previousPhase = this._bobPhase || 0
       this._bobPhase = previousPhase + dt * bobRate
       const previousSin = Math.sin(previousPhase)
       const currentSin = Math.sin(this._bobPhase)
-      const amplitude = this.sprinting ? 0.018 : this.crouching ? 0.006 : 0.011
       headBobY = currentSin * amplitude
-      bobPitch = Math.cos(this._bobPhase * 2) * (this.sprinting ? 0.0055 : 0.0032)
-      bobRoll = Math.sin(this._bobPhase) * (this.sprinting ? 0.008 : 0.0045)
+      bobPitch = Math.cos(this._bobPhase * 2) * bobPitchScale
+      bobRoll = Math.sin(this._bobPhase) * bobRollScale
       if ((previousSin <= 0 && currentSin > 0) || (previousSin >= 0 && currentSin < 0))
         this.audio.step()
     } else {

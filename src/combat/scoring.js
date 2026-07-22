@@ -31,16 +31,16 @@ export function createScoringSystem({ state, hud, checkVictory, saveRecords }) {
   function recordElimination(victim, attacker, headshot = false, attackType = 'weapon') {
     victim.deaths++
 
-    const scoringTeam = attacker
-      ? attacker.team
-      : victim.team === 'allies'
-        ? 'axis'
-        : 'allies'
+    let scoringTeam
+    if (attacker) scoringTeam = attacker.team
+    else if (victim.team === 'allies') scoringTeam = 'axis'
+    else scoringTeam = 'allies'
 
     if (attacker) {
       attacker.kills++
-      const type =
-        attacker === state.player ? 'player' : attacker.team === 'allies' ? 'ally' : 'enemy'
+      let type = 'enemy'
+      if (attacker === state.player) type = 'player'
+      else if (attacker.team === 'allies') type = 'ally'
       hud.addKillFeed(type, getActorName(attacker), getActorName(victim), victim.team)
       if (attacker === state.player) hud.showKillNotify(getActorName(victim), headshot)
     }

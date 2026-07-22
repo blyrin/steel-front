@@ -89,6 +89,10 @@ function screenAngle() {
   return window.innerWidth >= window.innerHeight ? 90 : 0
 }
 
+function isAllowedPointer(event) {
+  return event.button === 0 || event.pointerType !== 'mouse'
+}
+
 export function createInputSystem({ state, deploy, onPause, dom, config }) {
   const inputConfig = config.input
   const heldKeys = new Set()
@@ -333,7 +337,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
   function bindHoldButton(el, onDown, onUp) {
     if (!el) return
     el.addEventListener('pointerdown', event => {
-      if (event.button !== 0 && event.pointerType === 'mouse') return
+      if (!isAllowedPointer(event)) return
       event.preventDefault()
       event.stopPropagation()
       el.setPointerCapture(event.pointerId)
@@ -356,7 +360,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
   function bindTogglePress(el, code) {
     if (!el) return
     el.addEventListener('pointerdown', event => {
-      if (event.button !== 0 && event.pointerType === 'mouse') return
+      if (!isAllowedPointer(event)) return
       event.preventDefault()
       event.stopPropagation()
       if (!canControl()) return
@@ -366,7 +370,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
 
   function onStickDown(event) {
     if (!canControl() || stickPointerId != null) return
-    if (event.button !== 0 && event.pointerType === 'mouse') return
+    if (!isAllowedPointer(event)) return
     event.preventDefault()
     event.stopPropagation()
     stickPointerId = event.pointerId
@@ -382,7 +386,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
   function onLookDown(event) {
     if (!canControl() || lookPointerId != null) return
     if (event.target.closest('[data-touch-action], #touchStick')) return
-    if (event.button !== 0 && event.pointerType === 'mouse') return
+    if (!isAllowedPointer(event)) return
     event.preventDefault()
     lookPointerId = event.pointerId
     lookLastX = event.clientX
@@ -542,7 +546,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
   )
   if (dom?.touchAim) {
     dom.touchAim.addEventListener('pointerdown', event => {
-      if (event.button !== 0 && event.pointerType === 'mouse') return
+      if (!isAllowedPointer(event)) return
       event.preventDefault()
       event.stopPropagation()
       if (!canControl()) return

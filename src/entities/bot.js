@@ -310,7 +310,6 @@ export class Bot {
     const markerMat = isAlly ? BOT_MARKER_MATERIALS.allies : BOT_MARKER_MATERIALS.axis
     const markerCoreMat = isAlly ? BOT_MARKER_MATERIALS.alliesCore : BOT_MARKER_MATERIALS.axisCore
     const bootMat = this.matLib.metalDark
-    const packMat = isAlly ? this.matLib.allyUniform : this.matLib.axisUniform
 
     this.body = new THREE.Group()
     this.body.position.y = 0.78
@@ -353,7 +352,7 @@ export class Bot {
       this.body.add(pouch)
     }
 
-    const pack = new THREE.Mesh(BOT_GEOMETRY.pack, packMat)
+    const pack = new THREE.Mesh(BOT_GEOMETRY.pack, uniform)
     pack.position.set(0, 0.44, 0.2)
     pack.castShadow = true
     this.body.add(pack)
@@ -759,7 +758,8 @@ export class Bot {
     if (this.magazine === 0 && this.reserveAmmo === 0) {
       if (!this.useItem() && this.stateName !== 'resupply') this.stateName = 'resupply'
     }
-    const enemy = this.stateName === 'resupply' ? null : this.findNearestEnemy()
+    let enemy = null
+    if (this.stateName !== 'resupply') enemy = this.findNearestEnemy()
     if (enemy) {
       if (this.target !== enemy) {
         this.target = enemy
@@ -782,24 +782,36 @@ export class Bot {
       }
     }
     if (this.reactionTimer > 0) this.reactionTimer -= dt
-    if (this.stateName === 'patrol') {
-      if (this.position.distanceTo(this.patrolTarget) < this.config.bot.patrolArrivalDistance)
-        this.patrolTarget = this.getRandomPatrolPoint()
-      this.moveToward(this.patrolTarget, this.config.bot.patrolSpeed)
-    } else if (this.stateName === 'alert') {
-      if (this.searchPos) {
-        this.moveToward(this.searchPos, this.config.bot.alertSpeed)
-        if (this.position.distanceTo(this.searchPos) < this.config.bot.alertArrivalDistance) {
-          this.searchPos = null
+    switch (this.stateName) {
+      case 'patrol':
+        if (this.position.distanceTo(this.patrolTarget) < this.config.bot.patrolArrivalDistance)
+          this.patrolTarget = this.getRandomPatrolPoint()
+        this.moveToward(this.patrolTarget, this.config.bot.patrolSpeed)
+        break
+      case 'alert':
+        if (this.searchPos) {
+          this.moveToward(this.searchPos, this.config.bot.alertSpeed)
+          if (this.position.distanceTo(this.searchPos) < this.config.bot.alertArrivalDistance) {
+            this.searchPos = null
+            this.stateName = 'patrol'
+          }
+        } else {
           this.stateName = 'patrol'
         }
-      } else {
-        this.stateName = 'patrol'
-      }
-    } else if (this.stateName === 'engage') this.updateEngage(dt)
-    else if (this.stateName === 'seek_cover') this.updateSeekCover()
-    else if (this.stateName === 'flank') this.updateFlank()
-    else if (this.stateName === 'resupply') this.updateResupply()
+        break
+      case 'engage':
+        this.updateEngage(dt)
+        break
+      case 'seek_cover':
+        this.updateSeekCover()
+        break
+      case 'flank':
+        this.updateFlank()
+        break
+      case 'resupply':
+        this.updateResupply()
+        break
+    }
 
     if (this.magazine === 0 && this.reserveAmmo > 0 && !this.reloading) this.startReload()
     if (this.reloading) {

@@ -31,13 +31,14 @@ function createToonGradient() {
 }
 
 function paintGrass(ctx, size) {
+  const strokeColors = ['#4f8d57', '#a6d36d', '#68a95d']
   ctx.fillStyle = '#7fba62'
   ctx.fillRect(0, 0, size, size)
   ctx.lineCap = 'round'
   for (let i = 0; i < 260; i++) {
     const x = Math.random() * size
     const y = Math.random() * size
-    ctx.strokeStyle = i % 3 === 0 ? '#4f8d57' : i % 3 === 1 ? '#a6d36d' : '#68a95d'
+    ctx.strokeStyle = strokeColors[i % strokeColors.length]
     ctx.lineWidth = 2
     ctx.beginPath()
     ctx.moveTo(x, y + 5)

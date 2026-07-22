@@ -218,7 +218,7 @@ export function createDeploymentSystem({
     screenAnimTime += dt
     const duration = config.deployment.toScreenDuration
     const progress = Math.min(1, screenAnimTime / duration)
-    const t = progress * progress * (3 - 2 * progress)
+    const t = smoothstep(0, 1, progress)
 
     bezier2(camPos, startPos, midPos, godPos, t)
     const pitch = THREE.MathUtils.lerp(
@@ -275,7 +275,7 @@ export function createDeploymentSystem({
     const duration = config.deployment.deployDuration
     const progress = Math.min(1, deploy.animTime / duration)
     const spawn = deploy.spawnPoint
-    const t = progress * progress * (3 - 2 * progress)
+    const t = smoothstep(0, 1, progress)
 
     bezier2(camPos, startPos, midPos, endPos, t)
 

@@ -104,12 +104,21 @@ export function createEffectsSystem({ scene, state, audio, config }) {
 
   function spawnMuzzleFlash(pos, dir, firstPerson = false) {
     const direction = dir.clone().normalize()
+    const coreOffset = firstPerson ? 0.04 : 0.08
+    const coreScale = firstPerson ? 0.065 : 0.11
+    const flareOffset = firstPerson ? 0.11 : 0.15
+    const flareRadius = firstPerson ? 0.055 : 0.1
+    const flareHeight = firstPerson ? 0.18 : 0.26
+    const sideOffset = firstPerson ? 0.02 : 0.05
+    const sideScale = firstPerson ? 0.085 : 0.128
+    const sideThickness = firstPerson ? 0.025 : 0.037
+    const smokeOpacity = firstPerson ? 0.22 : 0.4
     const core = take(
       'core',
       () => createMesh('core', new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true }))
     )
-    core.position.copy(pos).addScaledVector(direction, firstPerson ? 0.04 : 0.08)
-    core.scale.setScalar(firstPerson ? 0.065 : 0.11)
+    core.position.copy(pos).addScaledVector(direction, coreOffset)
+    core.scale.setScalar(coreScale)
     core.material.opacity = 0.98
 
     const flare = take(
@@ -125,18 +134,16 @@ export function createEffectsSystem({ scene, state, audio, config }) {
           })
         )
     )
-    flare.position.copy(pos).addScaledVector(direction, firstPerson ? 0.11 : 0.15)
+    flare.position.copy(pos).addScaledVector(direction, flareOffset)
     flare.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction)
-    const flareRadius = firstPerson ? 0.055 : 0.1
-    const flareHeight = firstPerson ? 0.18 : 0.26
     flare.scale.set(flareRadius, flareHeight, flareRadius)
 
     const side = take(
       'side',
       () => createMesh('side', new THREE.MeshBasicMaterial({ color: 0xffc45a, transparent: true }))
     )
-    side.position.copy(pos).addScaledVector(direction, firstPerson ? 0.02 : 0.05)
-    side.scale.set(firstPerson ? 0.085 : 0.128, firstPerson ? 0.025 : 0.037, firstPerson ? 0.025 : 0.037)
+    side.position.copy(pos).addScaledVector(direction, sideOffset)
+    side.scale.set(sideScale, sideThickness, sideThickness)
     side.material.opacity = 0.75
 
     const light = firstPerson
@@ -164,7 +171,7 @@ export function createEffectsSystem({ scene, state, audio, config }) {
       update: (dt, time) => {
         const progress = 1 - time / life
         core.material.opacity = progress * 0.98
-        core.scale.setScalar((firstPerson ? 0.065 : 0.11) * (0.65 + (1 - progress) * 2.0))
+        core.scale.setScalar(coreScale * (0.65 + (1 - progress) * 2.0))
         flare.material.opacity = progress * 0.8
         flare.scale.set(
           flareRadius * (0.8 + (1 - progress) * 1.55),
@@ -173,9 +180,9 @@ export function createEffectsSystem({ scene, state, audio, config }) {
         )
         side.material.opacity = progress * 0.75
         side.scale.set(
-          (firstPerson ? 0.085 : 0.128) * (1.7 + (1 - progress) * 1.1),
-          (firstPerson ? 0.025 : 0.037) * (0.5 + (1 - progress) * 0.45),
-          (firstPerson ? 0.025 : 0.037) * (0.5 + (1 - progress) * 0.45)
+          sideScale * (1.7 + (1 - progress) * 1.1),
+          sideThickness * (0.5 + (1 - progress) * 0.45),
+          sideThickness * (0.5 + (1 - progress) * 0.45)
         )
         light && (light.intensity = progress * 2.8)
       },
@@ -207,7 +214,7 @@ export function createEffectsSystem({ scene, state, audio, config }) {
       )
       puff.position.copy(pos).addScaledVector(direction, 0.08 + i * 0.04)
       puff.scale.setScalar(0.045)
-      puff.material.opacity = firstPerson ? 0.22 : 0.4
+      puff.material.opacity = smokeOpacity
       const velocity = direction
         .clone()
         .multiplyScalar(0.55 + Math.random() * 0.45)
@@ -229,7 +236,7 @@ export function createEffectsSystem({ scene, state, audio, config }) {
         update: (dt, time, particle) => {
           particle.mesh.position.addScaledVector(particle.vel, dt)
           particle.vel.multiplyScalar(0.91)
-          particle.mesh.material.opacity = (1 - time / particle.maxLife) * (firstPerson ? 0.22 : 0.4)
+          particle.mesh.material.opacity = (1 - time / particle.maxLife) * smokeOpacity
           particle.mesh.scale.setScalar(0.045 * (1 + time * 2.6))
         },
       })

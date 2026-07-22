@@ -107,8 +107,9 @@ export function createWorldSystem({ scene, matLib, state, config }) {
           Math.sin(x * 0.045) * Math.cos(y * 0.038) * 0.55 +
           Math.sin(x * 0.11 + y * 0.07) * 0.22 +
           Math.cos(x * 0.19 - y * 0.13) * 0.12
-        const roadDip =
-          Math.abs(x) < 6 || Math.abs(y) < 5 ? -0.08 : Math.abs(x) < 12 || Math.abs(y) < 10 ? -0.03 : 0
+        let roadDip = 0
+        if (Math.abs(x) < 6 || Math.abs(y) < 5) roadDip = -0.08
+        else if (Math.abs(x) < 12 || Math.abs(y) < 10) roadDip = -0.03
         positions.setZ(i, undulation + roadDip + (Math.random() - 0.5) * 0.08)
       } else {
         positions.setZ(i, -1.5 + Math.random() * 0.4)
@@ -682,9 +683,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     topBand.position.set(0, size + 0.01, 0)
     group.add(topBand)
 
-    let lidOpen = false
     if (Math.random() > 0.7) {
-      lidOpen = true
       const lid = enableShadow(
         new THREE.Mesh(new THREE.BoxGeometry(size * 0.95, 0.06, size * 0.95), matLib.wood),
         true,
@@ -987,8 +986,8 @@ export function createWorldSystem({ scene, matLib, state, config }) {
   }
 
   function createSmokeColumn(x, z) {
+    const smokeColors = [0x555269, 0x68627a, 0x7d7488]
     for (let i = 0; i < config.world.smokePuffsPerColumn; i++) {
-      const smokeColors = [0x555269, 0x68627a, 0x7d7488]
       const shade = smokeColors[Math.floor(Math.random() * smokeColors.length)]
       const puff = new THREE.Mesh(
         new THREE.SphereGeometry(1.8 + i * 0.55, 8, 6),

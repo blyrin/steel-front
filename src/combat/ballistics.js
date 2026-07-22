@@ -4,6 +4,12 @@ import { rayHitObstacle } from './collision.js'
 export function createCombatSystem({ state, effects, audio, hud, config }) {
   const combatConfig = config.combat
 
+  function getEnemyTargets(team) {
+    const targets = state.bots.filter(bot => bot.alive && bot.team !== team)
+    if (state.player.alive && state.player.team !== team) targets.push(state.player)
+    return targets
+  }
+
   function fireBullet(origin, direction, team, owner, muzzle, attack) {
     let hit = false
     let hitPoint = origin.clone().add(direction.clone().multiplyScalar(combatConfig.bulletRange))
@@ -17,11 +23,10 @@ export function createCombatSystem({ state, effects, audio, hud, config }) {
       hit = true
     }
 
-    const targets = state.bots.filter(bot => bot.alive && bot.team !== team)
-    if (state.player.alive && state.player.team !== team) targets.push(state.player)
+    const targets = getEnemyTargets(team)
     let hitTarget = null
     let headshot = false
-    let closestTarget = hit ? closestObstacle : combatConfig.bulletRange
+    let closestTarget = closestObstacle
     for (const target of targets) {
       for (const hitbox of target.getHitboxes()) {
         const t = rayHitObstacle(origin, direction, hitbox, closestTarget)
@@ -34,11 +39,9 @@ export function createCombatSystem({ state, effects, audio, hud, config }) {
       }
     }
 
-    const lineEnd =
-      hit ? hitPoint : origin.clone().add(direction.clone().multiplyScalar(combatConfig.bulletRange))
     effects.addTracer(
       muzzle.clone().addScaledVector(direction, combatConfig.tracerOriginOffset),
-      lineEnd
+      hitPoint
     )
     if (hitTarget) {
       const falloffProgress = THREE.MathUtils.clamp(
@@ -95,8 +98,7 @@ export function createCombatSystem({ state, effects, audio, hud, config }) {
 
     effects.spawnExplosion(position, grenade.radius)
     audio.grenadeExplosion(position)
-    const targets = state.bots.filter(bot => bot.alive && bot.team !== team)
-    if (state.player.alive && state.player.team !== team) targets.push(state.player)
+    const targets = getEnemyTargets(team)
     let ownerHitTarget = false
     for (const target of targets) {
       const targetY =
