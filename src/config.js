@@ -29,7 +29,7 @@ export const CFG = {
       spawnScatter: 3,
       // 第一波丧尸数量、每波增量和生成节奏。
       waveStartCount: 32,
-      waveIncrement: 16,
+      waveIncrement: 4,
       waveSpawnInterval: 0.5,
       waveIntermission: 15,
       // 同时存活的丧尸上限。
@@ -39,7 +39,7 @@ export const CFG = {
       fortress: {
         x: 0,
         z: 0,
-        maxHealth: 1000,
+        maxHealth: 2000,
         radius: 16,
         attackRadius: 11,
         bottomRadius: 21,
@@ -48,9 +48,9 @@ export const CFG = {
       },
       enemy: {
         maxHealth: 100,
-        speed: 3.6,
+        speed: 3.2,
         radius: 0.46,
-        attackRange: 2.1,
+        attackRange: 2.0,
         targetSearchRadius: 42,
         // 丧尸主动重新选择目标的间隔。
         perceptionInterval: 0.16,
