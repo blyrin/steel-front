@@ -75,6 +75,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
   }
 
   function setupMatch() {
+    services.audio.setAmbience('zombie_ambience')
     state.match.modeId = 'zombie'
     state.match.score.allies = 0
     state.match.score.axis = 0
@@ -123,6 +124,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     data.waveDefeated = 0
     data.phase = 'assault'
     selectWaveSpawnPoints()
+    services.audio.zombieWave()
     spawnTimer = modeConfig.waveSpawnInterval
     services.hud.showCenterMessage(`第 ${data.wave} 波`, 1400, '丧尸来袭')
   }
@@ -142,6 +144,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     })
     state.actors.push(zombie)
     zombies.push(zombie)
+    services.audio.zombieGroan(zombie.position)
     state.modeState.waveSpawned++
   }
 
@@ -162,6 +165,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
 
   function damageFortress(amount) {
     if (outcome || fortress.health <= 0) return
+    services.audio.fortressHit(fortress.position)
     fortress.health = Math.max(0, fortress.health - amount)
     if (fortress.health <= 0) {
       state.modeState.phase = 'defeat'

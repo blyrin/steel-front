@@ -460,7 +460,10 @@ export class Zombie {
       this.velocity.set(0, 0, 0)
       if (this.attackTimer <= 0) {
         if (target) this.attackTarget(target)
-        else this.mode.damageFortress(this.enemyConfig.attackDamage)
+        else {
+          this.audio.zombieAttack(this.position, fortress.position)
+          this.mode.damageFortress(this.enemyConfig.attackDamage)
+        }
         this.attackTimer = this.enemyConfig.attackInterval
       }
     } else {
@@ -500,7 +503,7 @@ export class Zombie {
     const targetGroundHeight = target.position.y - (target.currentHeight ?? 0)
     const hitPosition = target.position.clone().setY(targetGroundHeight + 1.1)
     this.effects.spawnBlood(hitPosition)
-    this.audio.stabHitFlesh(hitPosition)
+    this.audio.zombieAttack(this.position, hitPosition)
   }
 
   takeDamage(amount, attacker, isHeadshot = false, attackType = 'weapon') {
@@ -514,9 +517,8 @@ export class Zombie {
       this.targetScanTimer = this.enemyConfig.perceptionInterval
     }
     const hitPosition = this.position.clone().setY(this.position.y + 1.2)
-    this.audio.hitFlesh(hitPosition)
+    this.audio.zombieHit(hitPosition)
     if (this.health <= 0) this.die(attacker, isHeadshot, attackType)
-    else this.audio.pain(this.config.bot.painChance, hitPosition)
   }
 
   die(attacker, isHeadshot, attackType = 'weapon') {
@@ -527,8 +529,7 @@ export class Zombie {
     this.targetVisible = false
     this.velocity.set(0, 0, 0)
     this.effects.spawnBlood(this.position.clone().setY(this.position.y + 1.2))
-    this.audio.pain(this.config.bot.deathPainChance, this.position.clone().setY(this.position.y + 0.3))
-    this.audio.bodyFall(this.position.clone().setY(this.position.y + 0.3))
+    this.audio.zombieDeath(this.position.clone().setY(this.position.y + 0.3))
     this.scoring.recordElimination(this, attacker, isHeadshot, attackType)
   }
 
@@ -544,7 +545,17 @@ export class Zombie {
     const speed = Math.hypot(this.velocity.x, this.velocity.z)
     const blend = THREE.MathUtils.clamp(speed / this.enemyConfig.speed, 0, 1)
     this.moveBlend += (blend - this.moveBlend) * (1 - Math.exp(-9 * dt))
-    if (this.moveBlend > 0.01) this.legPhase += dt * 8
+    const previousLegSin = Math.sin(this.legPhase)
+    if (this.moveBlend > 0.01) {
+      this.legPhase += dt * 8
+      const currentLegSin = Math.sin(this.legPhase)
+      if (
+        this.moveBlend > 0.12 &&
+        ((previousLegSin <= 0 && currentLegSin > 0) ||
+          (previousLegSin >= 0 && currentLegSin < 0))
+      )
+        this.audio.zombieStep(this.position)
+    }
     const stride = Math.sin(this.legPhase) * 0.55 * this.moveBlend
     const armReach = this.moveBlend * 0.35
     const ease = 1 - Math.exp(-12 * dt)

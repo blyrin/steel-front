@@ -19,12 +19,18 @@ export class AudioSystem {
     this.graphReady = false
     this.ambienceGain = null
     this.ambienceSrc = null
+    this.ambienceName = null
     this._fwd = new THREE.Vector3()
     this._up = new THREE.Vector3()
     this.active = 0
     this.maxVoices = config.audio.maxVoices
     this.overflowVoices = config.audio.overflowVoices
     this._lastWorldShot = 0
+    this._lastZombieStep = 0
+    this._lastZombieVoice = 0
+    this._lastZombieImpact = 0
+    this._lastZombieFall = 0
+    this._lastFortressHit = 0
   }
 
   _ensureGraph() {
@@ -257,9 +263,9 @@ export class AudioSystem {
     return src
   }
 
-  startAmbience() {
+  startAmbience(name = 'ambience') {
     if (!this.ready || this.ambienceSrc) return
-    const buf = this.buffers.ambience
+    const buf = this.buffers[name]
     if (!buf) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
     this.ambienceGain = this.ctx.createGain()
@@ -283,8 +289,30 @@ export class AudioSystem {
     ambWet.connect(this.wetIn)
     src.start(0)
     this.ambienceSrc = src
+    this.ambienceName = name
     this.ambienceVol = 0.28
     this.ambienceGain.gain.linearRampToValueAtTime(this.ambienceVol, this.ctx.currentTime + 1.4)
+  }
+
+  setAmbience(name) {
+    if (!this.ready || name === this.ambienceName) return
+    if (!this.ambienceSrc) {
+      this.startAmbience(name)
+      return
+    }
+    const buffer = this.buffers[name]
+    if (!buffer) return
+    const previousSrc = this.ambienceSrc
+    const previousGain = this.ambienceGain
+    const time = this.ctx.currentTime
+    previousGain.gain.cancelScheduledValues(time)
+    previousGain.gain.setValueAtTime(previousGain.gain.value, time)
+    previousGain.gain.linearRampToValueAtTime(0, time + 0.6)
+    previousSrc.stop(time + 0.65)
+    this.ambienceSrc = null
+    this.ambienceGain = null
+    this.ambienceName = null
+    this.startAmbience(name)
   }
 
   setMasterVolume(volume) {
@@ -423,6 +451,126 @@ export class AudioSystem {
       })
   }
 
+  zombieStep(pos) {
+    if (!pos) return
+    const now = performance.now()
+    if (now - this._lastZombieStep < 85) return
+    if (this.camera.position.distanceTo(pos) > 52) return
+    this._lastZombieStep = now
+    this.play(['zombie_step_01', 'zombie_step_02', 'zombie_step_03'], {
+      vol: 0.24,
+      rate: 0.9,
+      rateJitter: 0.12,
+      pos,
+      ref: 10,
+      max: 58,
+      rolloff: 0.35,
+      wet: 0.05,
+    })
+  }
+
+  zombieGroan(pos) {
+    const now = performance.now()
+    if (now - this._lastZombieVoice < 280) return
+    if (pos && this.camera.position.distanceTo(pos) > 68) return
+    this._lastZombieVoice = now
+    this.play(['zombie_groan_01', 'zombie_groan_02', 'zombie_groan_03'], {
+      vol: 0.2,
+      rate: 0.88,
+      rateJitter: 0.12,
+      pos,
+      ref: 16,
+      max: 80,
+      rolloff: 0.32,
+      wet: 0.18,
+    })
+  }
+
+  zombieRoar(pos = null) {
+    const now = performance.now()
+    if (now - this._lastZombieVoice < 200) return
+    if (pos && this.camera.position.distanceTo(pos) > 90) return
+    this._lastZombieVoice = now
+    this.play(['zombie_roar_01', 'zombie_roar_02'], {
+      vol: pos ? 0.3 : 0.5,
+      rate: 0.86,
+      rateJitter: 0.08,
+      pos,
+      ref: 18,
+      max: 110,
+      rolloff: 0.24,
+      wet: 0.25,
+      priority: 1,
+    })
+  }
+
+  zombieImpact(pos) {
+    if (!pos) return
+    const now = performance.now()
+    if (now - this._lastZombieImpact < 60) return
+    if (this.camera.position.distanceTo(pos) > 45) return
+    this._lastZombieImpact = now
+    this.play(['zombie_hit_01', 'zombie_hit_02'], {
+      vol: 0.48,
+      rate: 0.94,
+      rateJitter: 0.08,
+      pos,
+      ref: 8,
+      max: 45,
+      rolloff: 0.42,
+      wet: 0.05,
+      priority: 1,
+    })
+  }
+
+  zombieHit(pos) {
+    this.zombieImpact(pos)
+  }
+
+  zombieAttack(sourcePos, hitPos) {
+    this.zombieRoar(sourcePos)
+    this.zombieImpact(hitPos)
+  }
+
+  zombieDeath(pos) {
+    const now = performance.now()
+    if (now - this._lastZombieFall < 55) return
+    if (pos && this.camera.position.distanceTo(pos) > 65) return
+    this._lastZombieFall = now
+    this.play('zombie_fall', {
+      vol: 0.42,
+      rate: 0.94,
+      rateJitter: 0.08,
+      pos,
+      ref: 14,
+      max: 72,
+      rolloff: 0.36,
+      wet: 0.08,
+    })
+  }
+
+  zombieWave() {
+    this.zombieRoar()
+  }
+
+  fortressHit(pos) {
+    const now = performance.now()
+    if (now - this._lastFortressHit < 110) return
+    if (pos && this.camera.position.distanceTo(pos) > 110) return
+    this._lastFortressHit = now
+    this.play(['fortress_hit_01', 'fortress_hit_02'], {
+      vol: 0.58,
+      rate: 0.92,
+      rateJitter: 0.06,
+      pos,
+      ref: 18,
+      max: 110,
+      rolloff: 0.3,
+      wet: 0.16,
+      priority: 1,
+    })
+  }
+
   hitFlesh(pos) {
     this.play(['hit_01', 'hit_02', 'hit_03'], {
       vol: 0.38,
@@ -468,7 +616,7 @@ export class AudioSystem {
   }
   ricochet(pos) {
     this.play('ricochet', {
-      vol: 0.45,
+      vol: 0.3,
       rateJitter: 0.1,
       pos: pos || null,
       ref: 20,
