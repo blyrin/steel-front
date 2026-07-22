@@ -167,12 +167,6 @@ export class Player {
     this.health -= amount
     this.audio.hitFlesh()
     this.hud.showDamageVignette()
-    this.addShake(
-      Math.min(
-        playerConfig.damageShakeMax,
-        playerConfig.damageShakeBase + amount * playerConfig.damageShakeScale
-      )
-    )
     this.viewRecoilPitch +=
       playerConfig.damageRecoilPitchBase + amount * playerConfig.damageRecoilPitchScale
     this.viewRecoilYaw += (Math.random() - 0.5) * playerConfig.damageRecoilYaw
@@ -229,6 +223,11 @@ export class Player {
     const now = performance.now()
     if (now - this.lastFire < this.fireDelay * 1000) return
     this.lastFire = now
+    this.state.lastPlayerShot = {
+      x: this.position.x,
+      z: this.position.z,
+      at: now,
+    }
     this.ammo--
     this.audio.rifleShot()
     const aiming = this.aiming
@@ -441,7 +440,6 @@ export class Player {
       this.effects.spawnBlood(hitPosition)
       this.hud.showHitMarker()
       this.viewRecoilPitch += 0.032
-      this.addShake(0.5)
       this.weapon.kickZ += 0.036
       this.weapon.kickPitch += 0.022
       return
@@ -454,7 +452,6 @@ export class Player {
       const hitPoint = origin.clone().add(direction.clone().multiplyScalar(t))
       this.audio.stabHitMetal(hitPoint)
       this.viewRecoilPitch += 0.02
-      this.addShake(0.36)
       this.weapon.kickZ += 0.045
       this.weapon.kickPitch += 0.018
       break

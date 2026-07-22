@@ -28,12 +28,12 @@ export const CFG = {
       // 盟军出生点和敌方生成点的随机散布范围。
       spawnScatter: 3,
       // 第一波丧尸数量、每波增量和生成节奏。
-      waveStartCount: 12,
-      waveIncrement: 5,
-      waveSpawnInterval: 1.5,
+      waveStartCount: 32,
+      waveIncrement: 16,
+      waveSpawnInterval: 0.5,
       waveIntermission: 15,
       // 同时存活的丧尸上限。
-      maxConcurrent: 64,
+      maxConcurrent: 128,
       // 盟军 AI 的活动范围中心与半径。
       guardRadius: 32,
       fortress: {
@@ -52,6 +52,22 @@ export const CFG = {
         radius: 0.46,
         attackRange: 2.1,
         targetSearchRadius: 42,
+        // 丧尸主动重新选择目标的间隔。
+        perceptionInterval: 0.16,
+        // 丧尸丢失人类后的追踪记忆时间。
+        targetMemory: 1.5,
+        // 新目标至少近多少米才会打断当前追踪，避免目标抖动。
+        targetSwitchBias: 2.4,
+        // 丧尸听到玩家开火声的最大距离与记忆时间。
+        playerShotHearingDistance: 64,
+        playerShotMemory: 3.5,
+        // 丧尸局部绕障和同类分离参数。
+        movementLookAhead: 2.4,
+        movementProbeAngle: 0.72,
+        separationDistance: 1.15,
+        separationWeight: 1.25,
+        stuckTimeout: 0.65,
+        stuckDistance: 0.22,
         attackInterval: 1.1,
         attackDamage: 12,
       },
@@ -93,7 +109,7 @@ export const CFG = {
     // 玩家静止时的基础射击散布。
     baseSpread: 0.005,
     // Bot 静止时的基础射击散布。
-    botBaseSpread: 0.018,
+    botBaseSpread: 0.015,
     // 射击散布的最大值。
     maxSpread: 0.08,
     // 连续射击额外散布的上限。
@@ -117,7 +133,7 @@ export const CFG = {
     // 换弹状态下的散布倍率。
     reloadingSpreadMultiplier: 1.35,
     // Bot 技能不足时额外增加的散布系数。
-    botSkillSpread: 0.01,
+    botSkillSpread: 0.006,
     // Bot 被视为快速移动的速度阈值。
     botMovingFastThreshold: 4,
     // Bot 被视为普通移动的速度阈值。
@@ -167,11 +183,10 @@ export const CFG = {
       effectiveRange: 72,
       minDamageMultiplier: 0.78,
       baseSpread: 0.005,
-      botBaseSpread: 0.018,
+      botBaseSpread: 0.015,
       spreadBloomPerShot: 0.005,
       aimedSpreadBloomPerShot: 0.004,
       recoilMultiplier: 1,
-      aiCadenceMultiplier: 1,
       modelScale: [1, 1, 1],
       bayonet: true,
     },
@@ -190,11 +205,10 @@ export const CFG = {
       effectiveRange: 55,
       minDamageMultiplier: 0.7,
       baseSpread: 0.007,
-      botBaseSpread: 0.021,
+      botBaseSpread: 0.018,
       spreadBloomPerShot: 0.0045,
       aimedSpreadBloomPerShot: 0.0035,
       recoilMultiplier: 0.76,
-      aiCadenceMultiplier: 0.72,
       modelScale: [0.96, 0.96, 0.96],
       bayonet: true,
     },
@@ -213,11 +227,10 @@ export const CFG = {
       effectiveRange: 28,
       minDamageMultiplier: 0.5,
       baseSpread: 0.011,
-      botBaseSpread: 0.026,
+      botBaseSpread: 0.022,
       spreadBloomPerShot: 0.004,
       aimedSpreadBloomPerShot: 0.003,
       recoilMultiplier: 0.68,
-      aiCadenceMultiplier: 0.32,
       modelScale: [1.02, 1.02, 1.02],
       bayonet: true,
     },
@@ -236,11 +249,10 @@ export const CFG = {
       effectiveRange: 60,
       minDamageMultiplier: 0.72,
       baseSpread: 0.009,
-      botBaseSpread: 0.024,
+      botBaseSpread: 0.021,
       spreadBloomPerShot: 0.0065,
       aimedSpreadBloomPerShot: 0.005,
       recoilMultiplier: 1.18,
-      aiCadenceMultiplier: 0.46,
       modelScale: [1.04, 1.04, 1.04],
       bayonet: true,
     },
@@ -343,12 +355,6 @@ export const CFG = {
     aimingLookMultiplier: 0.5,
     // 视角上下旋转距离垂直方向的保留角度。
     pitchLimit: 0.1,
-    // 玩家受击时的基础屏幕震动。
-    damageShakeBase: 0.18,
-    // 玩家受击震动随伤害增加的倍率。
-    damageShakeScale: 0.004,
-    // 玩家单次受击屏幕震动上限。
-    damageShakeMax: 0.55,
     // 玩家受击时的基础垂直视角后坐力。
     damageRecoilPitchBase: 0.008,
     // 玩家受击后坐力随伤害增加的倍率。
@@ -388,6 +394,18 @@ export const CFG = {
     skillRange: 0.35,
     // Bot 最大视野距离。
     viewDistance: 70,
+    // Bot 两次主动扫描之间的时间，避免每帧重复遍历整张地图。
+    perceptionInterval: 0.14,
+    // 每次扫描最多进行精确视线检测的候选数。
+    maxPerceptionTargets: 8,
+    // 队友共享可疑目标的最大距离。
+    communicationRadius: 38,
+    // 队友共享情报的保留时间。
+    sharedContactMemory: 2.4,
+    // Bot 听到玩家开火声的最大距离。
+    playerShotHearingDistance: 90,
+    // Bot 根据玩家开火声搜索的最长时间。
+    playerShotMemory: 4,
     // Bot 发现目标后的反应时间基准。
     reactionTime: 0.5,
     // 视野判定：前方夹角阈值、视线起点高度和最小侧视距离。
@@ -423,6 +441,16 @@ export const CFG = {
     lowHealthThreshold: 40,
     // Bot 重新评估掩体的时间间隔。
     coverRefreshInterval: 5,
+    // Bot 站到掩体背后的额外安全距离。
+    coverStandOff: 0.65,
+    // Bot 探身点相对掩体边缘的距离。
+    coverPeekOffset: 0.9,
+    // Bot 到达掩体后等待探身的最短时间。
+    coverPeekIntervalMin: 0.8,
+    // Bot 到达掩体后等待探身的随机时间范围。
+    coverPeekIntervalRange: 1.2,
+    // Bot 单次探身的最长时间。
+    coverPeekDuration: 1.15,
     // Bot 与目标距离超过该值时向目标靠近。
     engageFarDistance: 50,
     // Bot 远距离接敌时的移动速度。
@@ -435,6 +463,12 @@ export const CFG = {
     engageStrafeSpeed: 3.5,
     // Bot 横向走位切换频率。
     engageStrafeFrequency: 0.8,
+    // Bot 相对武器有效射程的理想交战距离倍率。
+    idealRangeMultiplier: 0.62,
+    // Bot 低于弹匣该比例时，在安全状态主动换弹。
+    tacticalReloadThreshold: 0.32,
+    // Bot 感到敌人数量优势时触发撤退或找掩体的倍率。
+    outnumberedRatio: 1.35,
     // Bot 接敌后首次射击的基础延迟。
     engageFireBaseDelay: 0.7,
     // Bot 技能对射击延迟的影响范围。
@@ -443,16 +477,30 @@ export const CFG = {
     seekCoverArrivalDistance: 1.5,
     // Bot 到达掩体后转入侧翼状态的概率。
     seekCoverFlankChance: 0.3,
-    // Bot 移动到掩体途中再次射击的间隔。
-    seekCoverFireInterval: 1,
     // Bot 侧翼状态的持续时间。
     flankDuration: 6,
     // Bot 侧翼移动速度。
     flankSpeed: 4.6,
     // Bot 侧翼移动时沿目标方向的偏移。
     flankForwardBias: -0.3,
-    // Bot 侧翼状态的射击间隔。
-    flankFireInterval: 0.85,
+    // Bot 射击后短时间内的压制累积衰减速度。
+    suppressionRecovery: 0.8,
+    // Bot 进入脱困处理前允许被卡住的时间。
+    stuckTimeout: 0.7,
+    // Bot 判定为没有前进的最小位移。
+    stuckDistance: 0.28,
+    // Bot 局部避障的前视距离。
+    movementLookAhead: 2.8,
+    // Bot 局部避障候选方向的最大偏转角。
+    movementProbeAngle: 0.62,
+    // Bot 与队友保持的最小距离。
+    separationDistance: 1.35,
+    // Bot 队友分离力的强度。
+    separationWeight: 1.7,
+    // Bot 低于该生命值或没有弹药时会考虑前往补给站。
+    resupplyHealthThreshold: 28,
+    // Bot 备用弹药低于该比例时会考虑前往补给站。
+    resupplyAmmoRatio: 0.18,
     // Bot 的转身、命中体和受伤音效触发概率。
     // Bot 低于该速度时视为静止。
     stationarySpeedThreshold: 0.1,
@@ -487,12 +535,6 @@ export const CFG = {
     headDamage: 100,
     // 子弹曳光线相对枪口的起始偏移。
     tracerOriginOffset: 0.1,
-    // 玩家爆头命中时的屏幕震动。
-    headshotHitShake: 0.16,
-    // 玩家身体命中时的屏幕震动。
-    bodyHitShake: 0.1,
-    // 玩家击中障碍物时的屏幕震动。
-    obstacleHitShake: 0.04,
     // 子弹经过玩家附近时播放掠过音效的最大距离。
     bulletWhizDistance: 30,
     // 子弹掠过判定的最小方向点积。
@@ -623,8 +665,6 @@ export const CFG = {
     crosshairBaseSize: 22,
     // 准星线段长度。
     crosshairLength: 8,
-    // 命中标记触发的屏幕震动。
-    hitMarkerShake: 0.08,
     // 连杀统计的有效时间窗口。
     killStreakWindow: 3500,
     // 击杀提示开始淡出的延迟。
@@ -765,10 +805,21 @@ export const ZOMBIE_SPAWN_POINTS = {
   ],
   axis: [
     { x: 0, z: -108, name: '北侧来袭点', id: 'N' },
-    { x: -104, z: -62, name: '西北来袭点', id: 'W' },
-    { x: 104, z: -62, name: '东北来袭点', id: 'E' },
-    { x: -96, z: 78, name: '西侧来袭点', id: 'S-W' },
-    { x: 96, z: 78, name: '东侧来袭点', id: 'S-E' },
+    { x: 41, z: -100, name: '北偏东来袭点', id: 'NNE' },
+    { x: 76, z: -76, name: '东北来袭点', id: 'NE' },
+    { x: 100, z: -41, name: '东偏北来袭点', id: 'ENE' },
+    { x: 108, z: 0, name: '东侧来袭点', id: 'E' },
+    { x: 100, z: 41, name: '东偏南来袭点', id: 'ESE' },
+    { x: 76, z: 76, name: '东南来袭点', id: 'SE' },
+    { x: 41, z: 100, name: '南偏东来袭点', id: 'SSE' },
+    { x: 0, z: 108, name: '南侧来袭点', id: 'S' },
+    { x: -41, z: 100, name: '南偏西来袭点', id: 'SSW' },
+    { x: -76, z: 76, name: '西南来袭点', id: 'SW' },
+    { x: -100, z: 41, name: '西偏南来袭点', id: 'WSW' },
+    { x: -108, z: 0, name: '西侧来袭点', id: 'W' },
+    { x: -100, z: -41, name: '西偏北来袭点', id: 'WNW' },
+    { x: -76, z: -76, name: '西北来袭点', id: 'NW' },
+    { x: -41, z: -100, name: '北偏西来袭点', id: 'NNW' },
   ],
 }
 

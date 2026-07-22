@@ -9,18 +9,17 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
   let fortress = null
   let zombies = []
   let spawnTimer = 0
-  let zombieSpawnOrder = []
-  let zombieSpawnCursor = 0
+  let waveSpawnPoints = []
 
-  function shuffleZombieSpawnOrder() {
-    zombieSpawnOrder = spawnPoints.axis.map((_, index) => index)
-    for (let i = zombieSpawnOrder.length - 1; i > 0; i--) {
+  function selectWaveSpawnPoints() {
+    const shuffled = spawnPoints.axis.slice()
+    for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
-      const swap = zombieSpawnOrder[i]
-      zombieSpawnOrder[i] = zombieSpawnOrder[j]
-      zombieSpawnOrder[j] = swap
+      const swap = shuffled[i]
+      shuffled[i] = shuffled[j]
+      shuffled[j] = swap
     }
-    zombieSpawnCursor = 0
+    waveSpawnPoints = shuffled.slice(0, Math.ceil(shuffled.length / 3))
   }
 
   function getRandomSpawn(team) {
@@ -34,8 +33,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
   }
 
   function getRandomZombieSpawn() {
-    if (zombieSpawnCursor >= zombieSpawnOrder.length) shuffleZombieSpawnOrder()
-    const spawn = spawnPoints.axis[zombieSpawnOrder[zombieSpawnCursor++]]
+    const spawn = waveSpawnPoints[Math.floor(Math.random() * waveSpawnPoints.length)]
     return new THREE.Vector3(
       spawn.x + (Math.random() - 0.5) * modeConfig.spawnScatter,
       0,
@@ -90,7 +88,6 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
       nextWaveAt: 0,
     }
     fortress = state.objectives.fortress
-    shuffleZombieSpawnOrder()
     state.player = new Player({
       camera: services.camera,
       sun: services.sun,
@@ -125,6 +122,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     data.waveSpawned = 0
     data.waveDefeated = 0
     data.phase = 'assault'
+    selectWaveSpawnPoints()
     spawnTimer = modeConfig.waveSpawnInterval
     services.hud.showCenterMessage(`第 ${data.wave} 波`, 1400, '丧尸来袭')
   }

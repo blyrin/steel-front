@@ -57,15 +57,11 @@ export function createCombatSystem({ state, effects, audio, hud, config, getMode
         (headshot ? attack.headDamage : attack.bodyDamage) * damageMultiplier
       if (hitTarget === state.player) hitTarget.takeDamage(damage, origin, owner)
       else hitTarget.takeDamage(damage, owner, headshot)
-      if (owner === state.player) {
-        hud.showHitMarker()
-        hud.addScreenShake(headshot ? combatConfig.headshotHitShake : combatConfig.bodyHitShake)
-      }
+      if (owner === state.player) hud.showHitMarker()
       effects.spawnBlood(hitPoint)
     } else if (hit) {
       effects.spawnSpark(hitPoint, direction)
       audio.ricochet(hitPoint)
-      if (owner === state.player) hud.addScreenShake(combatConfig.obstacleHitShake)
     }
 
     if (owner !== state.player && state.player.alive && !hitTarget) {

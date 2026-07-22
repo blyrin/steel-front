@@ -1,5 +1,9 @@
 import * as THREE from 'three'
-import { createBoxHitbox, resolveObstacleCollision } from '../combat/collision.js'
+import {
+  createBoxHitbox,
+  rayHitObstacle,
+  resolveObstacleCollision,
+} from '../combat/collision.js'
 
 const GEOMETRY = {
   leg: new THREE.BoxGeometry(0.2, 0.7, 0.22),
@@ -43,13 +47,30 @@ export class Zombie {
     this.maxHealth = this.enemyConfig.maxHealth
     this.radius = this.enemyConfig.radius
     this.target = null
+    this.targetVisible = false
+    this.aiTime = 0
+    this.targetScanTimer = Math.random() * this.enemyConfig.perceptionInterval
+    this.lastTargetSeenAt = -Infinity
+    this.lastKnownTarget = new THREE.Vector3()
     this.attackTimer = Math.random() * this.enemyConfig.attackInterval
+    this.stuckTimer = 0
+    this.stuckSampleTimer = 0
+    this.unstuckTimer = 0
+    this.unstuckSign = Math.random() > 0.5 ? 1 : -1
+    this.lastPosition = this.position.clone()
     this.kills = 0
     this.deaths = 0
     this.deathTime = -1
     this.animationTime = Math.random() * Math.PI * 2
     this.legPhase = Math.random() * Math.PI * 2
     this.moveBlend = 0
+    this._seeOrigin = new THREE.Vector3()
+    this._seeDir = new THREE.Vector3()
+    this._seeTarget = new THREE.Vector3()
+    this._desiredDirection = new THREE.Vector3()
+    this._movementProbe = new THREE.Vector3()
+    this._movementBest = new THREE.Vector3()
+    this._separation = new THREE.Vector3()
     this.hitboxes = [
       createBoxHitbox(0.8, 0.58, 0, 1.5),
       createBoxHitbox(0.5, 0.5, 1.48, 1.95, true),
@@ -194,20 +215,196 @@ export class Zombie {
     return this.hitboxes
   }
 
-  findNearestTarget() {
+  selectTarget() {
+    const searchRadiusSq = this.enemyConfig.targetSearchRadius ** 2
     let nearest = null
-    let minDistanceSq = Infinity
+    let nearestDistance = Infinity
     for (const actor of this.mode.getHostileActors(this.team)) {
+      if (!actor.alive) continue
       const distanceSq = this.position.distanceToSquared(actor.position)
-      if (
-        distanceSq < minDistanceSq &&
-        distanceSq <= this.enemyConfig.targetSearchRadius ** 2
-      ) {
-        minDistanceSq = distanceSq
+      if (distanceSq > searchRadiusSq) continue
+      const distance = Math.sqrt(distanceSq)
+      let score = distance
+      if (actor === this.gameState.player) score -= 1.8
+      if (actor.health < actor.maxHealth * 0.35) score -= 0.8
+      if (score < nearestDistance) {
         nearest = actor
+        nearestDistance = distance
       }
     }
+
+    if (this.target?.alive) {
+      const currentDistanceSq = this.position.distanceToSquared(this.target.position)
+      if (
+        currentDistanceSq <= searchRadiusSq &&
+        (!nearest ||
+          Math.sqrt(currentDistanceSq) <=
+            nearestDistance + this.enemyConfig.targetSwitchBias)
+      )
+        return { target: this.target, heard: false }
+    }
+
+    const player = this.gameState.player
+    const playerShot = this.gameState.lastPlayerShot
+    if (player?.alive && player.team !== this.team && playerShot) {
+      const age = (performance.now() - playerShot.at) / 1000
+      const distance = Math.hypot(
+        playerShot.x - this.position.x,
+        playerShot.z - this.position.z
+      )
+      if (
+        age <= this.enemyConfig.playerShotMemory &&
+        distance <= this.enemyConfig.playerShotHearingDistance &&
+        (!nearest || distance < nearestDistance)
+      )
+        return { target: player, heard: true, position: playerShot }
+    }
     return nearest
+      ? { target: nearest, heard: false, position: nearest.position }
+      : null
+  }
+
+  canReachTarget(target) {
+    const origin = this._seeOrigin.set(
+      this.position.x,
+      this.position.y + 1.05,
+      this.position.z
+    )
+    const targetGroundY = target.position.y - (target.currentHeight ?? 0)
+    const point = this._seeTarget.set(
+      target.position.x,
+      targetGroundY + 1.05,
+      target.position.z
+    )
+    const direction = this._seeDir.subVectors(point, origin)
+    const distance = direction.length()
+    if (distance < 1e-6) return true
+    direction.multiplyScalar(1 / distance)
+    for (const obstacle of this.gameState.obstacles) {
+      if (obstacle.type === 'ground' || obstacle.type === 'crater' || obstacle.type === 'wire')
+        continue
+      if (rayHitObstacle(origin, direction, obstacle, distance) != null) return false
+    }
+    return true
+  }
+
+  isDirectionBlocked(direction) {
+    const origin = this._seeOrigin.set(
+      this.position.x,
+      this.position.y + 0.65,
+      this.position.z
+    )
+    const lookAhead = this.enemyConfig.movementLookAhead
+    for (const obstacle of this.gameState.obstacles) {
+      if (
+        obstacle.type === 'ground' ||
+        obstacle.type === 'crater' ||
+        obstacle.type === 'wire' ||
+        obstacle.shape === 'frustum'
+      )
+        continue
+      const hit = rayHitObstacle(origin, direction, obstacle, lookAhead)
+      if (hit != null && hit < lookAhead * 0.92) return true
+    }
+    return false
+  }
+
+  chooseMovementDirection(direction) {
+    const desired = this._desiredDirection.copy(direction).setY(0)
+    if (desired.lengthSq() < 1e-8) return this._movementBest.set(0, 0, 0)
+    desired.normalize()
+    const baseAngle = Math.atan2(desired.z, desired.x)
+    const probeAngle = this.enemyConfig.movementProbeAngle
+    const unstuckOffset = this.unstuckTimer > 0 ? this.unstuckSign * 1.1 : 0
+    const angles = [
+      unstuckOffset,
+      probeAngle + unstuckOffset,
+      -probeAngle + unstuckOffset,
+      probeAngle * 2 + unstuckOffset,
+      -probeAngle * 2 + unstuckOffset,
+      Math.PI * 0.78 + unstuckOffset,
+      -Math.PI * 0.78 + unstuckOffset,
+    ]
+    let bestScore = -Infinity
+    for (const offset of angles) {
+      const angle = baseAngle + offset
+      this._movementProbe.set(Math.cos(angle), 0, Math.sin(angle))
+      const blocked = this.isDirectionBlocked(this._movementProbe)
+      let score = this._movementProbe.dot(desired) * 5
+      if (blocked) score -= 8
+      else score += 2
+      if (this.unstuckTimer > 0 && Math.sign(offset || 1) === this.unstuckSign)
+        score += 1.5
+      if (score > bestScore) {
+        bestScore = score
+        this._movementBest.copy(this._movementProbe)
+      }
+    }
+    return this._movementBest
+  }
+
+  addSeparation(direction) {
+    this._separation.set(0, 0, 0)
+    const minDistance = this.enemyConfig.separationDistance
+    const minDistanceSq = minDistance * minDistance
+    for (const actor of this.gameState.actors) {
+      if (!actor.alive || actor === this || actor.team !== this.team) continue
+      const dx = this.position.x - actor.position.x
+      const dz = this.position.z - actor.position.z
+      const distanceSq = dx * dx + dz * dz
+      if (distanceSq < 1e-8 || distanceSq >= minDistanceSq) continue
+      const distance = Math.sqrt(distanceSq)
+      const strength = 1 - distance / minDistance
+      this._separation.x += (dx / distance) * strength
+      this._separation.z += (dz / distance) * strength
+    }
+    if (this._separation.lengthSq() > 1e-8) {
+      direction.addScaledVector(this._separation, this.enemyConfig.separationWeight)
+      direction.normalize()
+    }
+  }
+
+  moveWithDirection(direction, speed) {
+    const movement = this.chooseMovementDirection(direction)
+    if (movement.lengthSq() < 1e-8) {
+      this.velocity.set(0, 0, 0)
+      return
+    }
+    this.addSeparation(movement)
+    this.velocity.set(movement.x * speed, 0, movement.z * speed)
+  }
+
+  moveToward(target, speed) {
+    const dx = target.x - this.position.x
+    const dz = target.z - this.position.z
+    if (dx * dx + dz * dz < 0.01) {
+      this.velocity.set(0, 0, 0)
+      return
+    }
+    this._desiredDirection.set(dx, 0, dz)
+    this.moveWithDirection(this._desiredDirection, speed)
+  }
+
+  updateStuck(dt) {
+    this.stuckSampleTimer += dt
+    if (this.stuckSampleTimer < 0.28) return
+    const moved = Math.hypot(
+      this.position.x - this.lastPosition.x,
+      this.position.z - this.lastPosition.z
+    )
+    if (
+      Math.hypot(this.velocity.x, this.velocity.z) > 1 &&
+      moved < this.enemyConfig.stuckDistance
+    )
+      this.stuckTimer += this.stuckSampleTimer
+    else this.stuckTimer = Math.max(0, this.stuckTimer - this.stuckSampleTimer * 1.5)
+    if (this.stuckTimer > this.enemyConfig.stuckTimeout) {
+      this.unstuckTimer = 1.1
+      this.unstuckSign *= -1
+      this.stuckTimer = 0
+    }
+    this.lastPosition.copy(this.position)
+    this.stuckSampleTimer = 0
   }
 
   update(dt) {
@@ -216,18 +413,50 @@ export class Zombie {
       return
     }
 
+    this.aiTime += dt
     this.attackTimer -= dt
-    this.target = this.findNearestTarget()
+    this.unstuckTimer = Math.max(0, this.unstuckTimer - dt)
+    this.targetScanTimer -= dt
+    if (this.targetScanTimer <= 0) {
+      this.targetScanTimer =
+        this.enemyConfig.perceptionInterval * (0.85 + Math.random() * 0.3)
+      const contact = this.selectTarget()
+      if (contact) {
+        this.target = contact.target
+        this.targetVisible = !contact.heard
+        this.lastKnownTarget.copy(contact.position || contact.target.position)
+        this.lastTargetSeenAt = this.aiTime
+      } else {
+        this.targetVisible = false
+        if (
+          this.target &&
+          this.aiTime - this.lastTargetSeenAt > this.enemyConfig.targetMemory
+        )
+          this.target = null
+      }
+    }
+    if (this.target && !this.target.alive) {
+      this.target = null
+      this.targetVisible = false
+    }
+
     const fortress = this.mode.getFortress()
     const target = this.target
-    const targetPosition = target?.position || fortress.position
+    let targetPosition = fortress.position
+    if (target) {
+      targetPosition = this.targetVisible ? target.position : this.lastKnownTarget
+    }
     const targetDistance = Math.hypot(
       targetPosition.x - this.position.x,
       targetPosition.z - this.position.z
     )
-    const attackDistance = target ? this.enemyConfig.attackRange : fortress.attackRadius
+    const canAttackTarget =
+      target &&
+      this.targetVisible &&
+      targetDistance <= this.enemyConfig.attackRange &&
+      this.canReachTarget(target)
 
-    if (targetDistance <= attackDistance) {
+    if (canAttackTarget || (!target && targetDistance <= fortress.attackRadius)) {
       this.velocity.set(0, 0, 0)
       if (this.attackTimer <= 0) {
         if (target) this.attackTarget(target)
@@ -244,10 +473,18 @@ export class Zombie {
     this.position.x = Math.max(-half, Math.min(half, this.position.x))
     this.position.z = Math.max(-half, Math.min(half, this.position.z))
     this.handleCollisions()
+    this.updateStuck(dt)
     this.group.position.copy(this.position)
 
     let targetYaw = this.yaw
-    if (this.velocity.lengthSq() > 0.01) targetYaw = Math.atan2(-this.velocity.x, -this.velocity.z)
+    if (target) {
+      targetYaw = Math.atan2(
+        -(targetPosition.x - this.position.x),
+        -(targetPosition.z - this.position.z)
+      )
+    } else if (this.velocity.lengthSq() > 0.01) {
+      targetYaw = Math.atan2(-this.velocity.x, -this.velocity.z)
+    }
     let difference = targetYaw - this.yaw
     while (difference > Math.PI) difference -= Math.PI * 2
     while (difference < -Math.PI) difference += Math.PI * 2
@@ -266,20 +503,16 @@ export class Zombie {
     this.audio.stabHitFlesh(hitPosition)
   }
 
-  moveToward(target, speed) {
-    const dx = target.x - this.position.x
-    const dz = target.z - this.position.z
-    const distance = Math.hypot(dx, dz)
-    if (distance < 0.1) {
-      this.velocity.set(0, 0, 0)
-      return
-    }
-    this.velocity.set((dx / distance) * speed, 0, (dz / distance) * speed)
-  }
-
   takeDamage(amount, attacker, isHeadshot = false, attackType = 'weapon') {
     if (!this.alive) return
     this.health -= amount
+    if (attacker?.alive && attacker.team !== this.team) {
+      this.target = attacker
+      this.targetVisible = true
+      this.lastKnownTarget.copy(attacker.position)
+      this.lastTargetSeenAt = this.aiTime
+      this.targetScanTimer = this.enemyConfig.perceptionInterval
+    }
     const hitPosition = this.position.clone().setY(this.position.y + 1.2)
     this.audio.hitFlesh(hitPosition)
     if (this.health <= 0) this.die(attacker, isHeadshot, attackType)
@@ -291,6 +524,7 @@ export class Zombie {
     this.alive = false
     this.deathTime = 0
     this.target = null
+    this.targetVisible = false
     this.velocity.set(0, 0, 0)
     this.effects.spawnBlood(this.position.clone().setY(this.position.y + 1.2))
     this.audio.pain(this.config.bot.deathPainChance, this.position.clone().setY(this.position.y + 0.3))

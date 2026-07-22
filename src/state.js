@@ -134,6 +134,7 @@ export function createGameState() {
     ammoStations: [],
     medicalStations: [],
     smokeClouds: [],
+    lastPlayerShot: null,
     records: loadRecords(),
     settings: loadSettings(),
   }

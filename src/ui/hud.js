@@ -170,15 +170,10 @@ export function createHud({ dom, state, deploy, audio, config, getMode }) {
     )
   }
 
-  function addScreenShake(amount) {
-    state.player?.addShake(amount)
-  }
-
   function showHitMarker() {
     dom.hitMarker.classList.remove('show')
     void dom.hitMarker.offsetWidth
     dom.hitMarker.classList.add('show')
-    addScreenShake(hudConfig.hitMarkerShake)
   }
 
   function showKillNotify(victimName, headshot) {
@@ -465,7 +460,6 @@ export function createHud({ dom, state, deploy, audio, config, getMode }) {
     updateAmmo,
     updateCrosshair,
     updateScores,
-    addScreenShake,
     showHitMarker,
     showKillNotify,
     showDamageVignette,
