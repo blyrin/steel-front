@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { createCircleHitbox, rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
 import { WeaponView } from './weapon-view.js'
+import { attachFlashlight } from './flashlight.js'
 
 export class Player {
   constructor({
@@ -17,6 +18,7 @@ export class Player {
     combat,
     scoring,
     deployment,
+    mode,
   }) {
     const playerConfig = config.player
     const weaponConfig = config.weapon
@@ -32,6 +34,7 @@ export class Player {
     this.combat = combat
     this.scoring = scoring
     this.deployment = deployment
+    this.mode = mode
     this.team = 'allies'
     this.maxHealth = playerConfig.maxHealth
     this.health = playerConfig.maxHealth
@@ -111,6 +114,13 @@ export class Player {
     this._moveAxis = { x: 0, z: 0 }
     camera.position.copy(this.position)
     camera.rotation.order = 'YXZ'
+    if (this.mode?.id === 'zombie') {
+      attachFlashlight(
+        camera,
+        new THREE.Vector3(0.12, -0.1, -0.28),
+        new THREE.Vector3(0.12, -0.08, -18)
+      )
+    }
   }
 
   applyLoadout(loadout, preserveHealth = true) {
@@ -135,9 +145,11 @@ export class Player {
   getHitboxes() {
     const playerConfig = this.config.player
     const height = this.currentHeight
-    this.hitboxes[0].maxY = height - playerConfig.bodyHitboxHeightOffset
-    this.hitboxes[1].minY = height - playerConfig.headHitboxHeightOffset
-    this.hitboxes[1].maxY = height
+    const groundHeight = this.position.y - height
+    this.hitboxes[0].minY = groundHeight
+    this.hitboxes[0].maxY = groundHeight + height - playerConfig.bodyHitboxHeightOffset
+    this.hitboxes[1].minY = groundHeight + height - playerConfig.headHitboxHeightOffset
+    this.hitboxes[1].maxY = groundHeight + height
     for (const hitbox of this.hitboxes) {
       hitbox.x = this.position.x
       hitbox.z = this.position.z
@@ -340,21 +352,45 @@ export class Player {
     this.hud.updateAmmo()
   }
 
-  useAmmoStation() {
-    const isNearAmmoStation = this.state.ammoStations.some(
+  isNearStation(stations) {
+    return stations.some(
       station => this.position.distanceTo(station.position) <= this.config.supply.interactRadius
     )
-    if (!isNearAmmoStation) return
-    if (this.ammo === this.magSize && this.reserveAmmo === this.weaponData.reserveAmmo) {
-      this.hud.showActionMessage('弹药已满')
-      return
-    }
+  }
+
+  refillSupplies() {
+    const wasFull =
+      this.ammo === this.magSize &&
+      this.reserveAmmo === this.weaponData.reserveAmmo &&
+      this.grenadeCount === this.grenadeData.count &&
+      this.itemUses === this.itemData.uses
     this.ammo = this.magSize
     this.reserveAmmo = this.weaponData.reserveAmmo
+    this.grenadeCount = this.grenadeData.count
+    this.itemUses = this.itemData.uses
     this.reloading = false
     this.weapon.resetActions()
+    return !wasFull
+  }
+
+  useMedicalStation() {
+    if (!this.isNearStation(this.state.medicalStations)) return false
+    if (this.health >= this.maxHealth) {
+      this.hud.showActionMessage('生命值已满')
+      return true
+    }
+    this.health = this.maxHealth
+    this.hud.updateHealth()
+    this.hud.showActionMessage('医疗补给完成')
+    return true
+  }
+
+  useAmmoStation() {
+    if (!this.isNearStation(this.state.ammoStations)) return false
+    const suppliesChanged = this.refillSupplies()
     this.hud.updateAmmo()
-    this.hud.showActionMessage('弹药补给完成')
+    this.hud.showActionMessage(suppliesChanged ? '补给完成' : '补给已满')
+    return true
   }
 
   melee() {
@@ -389,7 +425,7 @@ export class Player {
     this.camera.getWorldDirection(direction)
     let hitBot = null
     let hitDistance = this.meleeRange
-    for (const bot of this.state.bots) {
+    for (const bot of this.state.actors) {
       if (!bot.alive || bot.team === this.team) continue
       for (const hitbox of bot.getHitboxes()) {
         const t = rayHitObstacle(origin, direction, hitbox, hitDistance)
@@ -469,7 +505,9 @@ export class Player {
     if (this.input.consumePressed('KeyF')) this.melee()
     if (this.input.consumePressed('KeyG')) this.throwGrenade()
     if (this.input.consumePressed('KeyH')) this.useItem()
-    if (this.input.consumePressed('KeyE')) this.useAmmoStation()
+    if (this.input.consumePressed('KeyE')) {
+      if (!this.useMedicalStation()) this.useAmmoStation()
+    }
 
     const aiming = this.input.isMouseDown('right') && !this.weapon.isBusy()
     const sprintHeld =
@@ -521,12 +559,14 @@ export class Player {
     this.velocity.y -= playerConfig.gravity * dt
     this.position.x += this.velocity.x * dt
     this.position.z += this.velocity.z * dt
+    const groundHeight = this.state.groundHeightAt(this.position.x, this.position.z)
+    const standingY = groundHeight + this.currentHeight
     if (this.onGround) {
-      this.position.y = this.currentHeight
+      this.position.y = standingY
     } else {
       this.position.y += this.velocity.y * dt
-      if (this.position.y < this.currentHeight) {
-        this.position.y = this.currentHeight
+      if (this.position.y < standingY) {
+        this.position.y = standingY
         this.velocity.y = 0
         this.onGround = true
       }
@@ -642,7 +682,7 @@ export class Player {
       this.spreadBloom - dt * weaponConfig.spreadBloomRecovery
     )
     this.currentSpread = this.getSpread()
-    if (this.health < this.maxHealth)
+    if (this.mode?.id !== 'zombie' && this.health < this.maxHealth)
       this.health = Math.min(this.maxHealth, this.health + dt * playerConfig.healthRegen)
     this.hud.updateHealth()
     this.hud.updateCrosshair()

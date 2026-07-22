@@ -90,7 +90,10 @@
 
     <div id="menu">
       <h1>STEEL FRONT</h1>
-      <div class="sub">1 9 4 4 · 诺 曼 底</div>
+      <section id="modePanel" aria-label="作战模式">
+        <div class="mode-heading">作战模式</div>
+        <div id="modeOptions"></div>
+      </section>
       <button class="btn" id="startBtn">进入战场</button>
       <div class="settings">
         <label class="setting">
@@ -123,7 +126,6 @@
           刺刀　<span>G</span> 手雷　<span>H</span> 道具　<span>E</span> 补给　<span>TAB</span>
           计分板　<span>ESC</span> 暂停
         </div>
-        <div class="battle-info">盟军部队与轴心国部队在法国北部村庄激战</div>
       </div>
     </div>
 
@@ -135,17 +137,17 @@
         <div class="team allies">
           <div>
             <div class="score" id="alliesScore">0</div>
-            <div class="team-name allies-name">盟军</div>
+            <div class="team-name allies-name" id="alliesLabel">盟军</div>
           </div>
         </div>
         <div class="score-target">
-          <div class="vs">对战</div>
+          <div class="vs" id="scoreStatus">对战</div>
           <div id="targetKill">达到 100 杀</div>
         </div>
         <div class="team axis">
           <div class="axis-score">
             <div class="score" id="axisScore">0</div>
-            <div class="team-name axis-name">轴心</div>
+            <div class="team-name axis-name" id="axisLabel">轴心</div>
           </div>
         </div>
       </div>
@@ -196,25 +198,25 @@
       <div id="scoreboard">
         <div class="sb-head">
           <div class="sb-team allies">
-            <span class="sb-label">盟军</span>
+            <span class="sb-label" id="sbAlliesLabel">盟军</span>
             <span class="sb-score" id="sbAlliesScore">0</span>
           </div>
           <div class="sb-title">战况</div>
           <div class="sb-team axis">
             <span class="sb-score" id="sbAxisScore">0</span>
-            <span class="sb-label">轴心</span>
+            <span class="sb-label" id="sbAxisLabel">轴心</span>
           </div>
         </div>
         <div class="sb-body">
           <div class="sb-col">
             <div class="sb-col-head allies">
-              <span>#</span><span>盟军</span><span>K</span><span>D</span>
+              <span>#</span><span id="sbAlliesColumnLabel">盟军</span><span>K</span><span>D</span>
             </div>
             <div class="sb-rows" id="sbAlliesRows"></div>
           </div>
           <div class="sb-col">
             <div class="sb-col-head axis">
-              <span>#</span><span>轴心</span><span>K</span><span>D</span>
+              <span>#</span><span id="sbAxisColumnLabel">轴心</span><span>K</span><span>D</span>
             </div>
             <div class="sb-rows" id="sbAxisRows"></div>
           </div>
@@ -233,6 +235,7 @@
           </label>
         </div>
         <button class="btn" id="resumeBtn">继续战斗</button>
+        <button class="btn redeploy-btn" id="redeployBtn">重新部署</button>
         <button class="btn quit-btn" id="quitBtn">退出战场</button>
       </div>
       <div id="endScreen">

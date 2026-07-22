@@ -15,21 +15,6 @@ function createCanvasTexture(size, paint, options = {}) {
   return texture
 }
 
-function createToonGradient() {
-  const colors = new Uint8Array([
-    62, 68, 86, 255,
-    126, 134, 154, 255,
-    204, 210, 220, 255,
-    255, 255, 255, 255,
-  ])
-  const texture = new THREE.DataTexture(colors, 4, 1, THREE.RGBAFormat)
-  texture.minFilter = THREE.NearestFilter
-  texture.magFilter = THREE.NearestFilter
-  texture.generateMipmaps = false
-  texture.needsUpdate = true
-  return texture
-}
-
 function paintGrass(ctx, size) {
   const strokeColors = ['#4f8d57', '#a6d36d', '#68a95d']
   ctx.fillStyle = '#7fba62'
@@ -214,7 +199,6 @@ function paintRust(ctx, size) {
 }
 
 function createMatLib(anisotropy) {
-  const gradientMap = createToonGradient()
   const texture = (paint, repeat, size = 256) =>
     createCanvasTexture(size, paint, { anisotropy, repeat })
   const textures = {
@@ -229,8 +213,15 @@ function createMatLib(anisotropy) {
     plaster: texture(paintPlaster, 2, 128),
     rust: texture(paintRust, 3),
   }
-  const toon = (color, map = null, options = {}) =>
-    new THREE.MeshToonMaterial({ color, map, gradientMap, ...options })
+  const surface = (color, map = null, options = {}) =>
+    new THREE.MeshStandardMaterial({
+      color,
+      map,
+      roughness: 0.82,
+      metalness: 0.04,
+      envMapIntensity: 0.16,
+      ...options,
+    })
   const outline = new THREE.MeshBasicMaterial({
     color: 0x20233a,
     side: THREE.BackSide,
@@ -240,7 +231,7 @@ function createMatLib(anisotropy) {
   function addOutline(root, scale = 1.035) {
     const meshes = []
     root.traverse(object => {
-      if (!object.isMesh || !object.material?.isMeshToonMaterial) return
+      if (!object.isMesh || !object.material?.isMeshStandardMaterial) return
       if (!object.geometry.boundingSphere) object.geometry.computeBoundingSphere()
       if (object.geometry.boundingSphere.radius >= 0.075) meshes.push(object)
     })
@@ -258,47 +249,110 @@ function createMatLib(anisotropy) {
   return {
     addOutline,
     outline,
-    metal: toon(0xb9cbd4, textures.metal),
-    metalDark: toon(0x34465d, textures.metal),
-    blued: toon(0x273b55),
-    brass: toon(0xe6ae35),
-    blade: toon(0xdbecef),
-    wood: toon(0xd99b4f, textures.wood),
-    brick: toon(0xe48672, textures.brick),
-    plaster: toon(0xe9c99f, textures.plaster),
-    sandbag: toon(0xd6b552, textures.sandbag),
-    dirt: toon(0xc87855, textures.dirt),
-    grass: toon(0x72ad5a, textures.grass),
-    road: toon(0x9e94aa, textures.road),
-    roof: toon(0x347183, textures.roof),
-    rust: toon(0xb95345, textures.rust),
-    allyUniform: toon(0x2f8198),
-    axisUniform: toon(0xa0445c),
-    allyAccent: toon(0xffd447),
-    axisAccent: toon(0xff7a67),
-    skin: toon(0xeeb091),
-    helmetAlly: toon(0x225d73),
-    helmetAxis: toon(0x71364f),
-    glass: toon(0x9ee9f2, null, {
+    metal: surface(0xb9cbd4, textures.metal, {
+      roughness: 0.32,
+      metalness: 0.84,
+      envMapIntensity: 0.72,
+    }),
+    metalDark: surface(0x34465d, textures.metal, {
+      roughness: 0.46,
+      metalness: 0.72,
+      envMapIntensity: 0.5,
+    }),
+    blued: surface(0x273b55, null, {
+      roughness: 0.3,
+      metalness: 0.82,
+      envMapIntensity: 0.56,
+    }),
+    brass: surface(0xe6ae35, null, {
+      roughness: 0.28,
+      metalness: 0.78,
+      envMapIntensity: 0.68,
+    }),
+    blade: surface(0xdbecef, null, {
+      roughness: 0.18,
+      metalness: 0.9,
+      envMapIntensity: 0.75,
+    }),
+    wood: surface(0xd99b4f, textures.wood, { roughness: 0.86 }),
+    brick: surface(0xe48672, textures.brick, { roughness: 0.92 }),
+    plaster: surface(0xe9c99f, textures.plaster, { roughness: 0.94 }),
+    sandbag: surface(0xd6b552, textures.sandbag, { roughness: 0.96 }),
+    dirt: surface(0xc87855, textures.dirt, { roughness: 0.98 }),
+    grass: surface(0x72ad5a, textures.grass, { roughness: 0.96 }),
+    road: surface(0x9e94aa, textures.road, { roughness: 0.78 }),
+    roof: surface(0x347183, textures.roof, { roughness: 0.76 }),
+    rust: surface(0xb95345, textures.rust, {
+      roughness: 0.68,
+      metalness: 0.24,
+      envMapIntensity: 0.22,
+    }),
+    allyUniform: surface(0x2f8198, null, { roughness: 0.82 }),
+    axisUniform: surface(0xa0445c, null, { roughness: 0.82 }),
+    allyAccent: surface(0xffd447, null, { roughness: 0.48 }),
+    axisAccent: surface(0xff7a67, null, { roughness: 0.5 }),
+    skin: surface(0xeeb091, null, { roughness: 0.9 }),
+    helmetAlly: surface(0x225d73, null, {
+      roughness: 0.42,
+      metalness: 0.42,
+      envMapIntensity: 0.32,
+    }),
+    helmetAxis: surface(0x71364f, null, {
+      roughness: 0.42,
+      metalness: 0.42,
+      envMapIntensity: 0.32,
+    }),
+    glass: surface(0x9ee9f2, null, {
       transparent: true,
       opacity: 0.42,
       side: THREE.DoubleSide,
       depthWrite: false,
+      roughness: 0.12,
+      metalness: 0.06,
+      envMapIntensity: 0.48,
     }),
-    concrete: toon(0x8e91a1, textures.plaster),
-    treeTrunk: toon(0x70444a),
-    treeBranch: toon(0x4f3340),
-    treeFoliage: toon(0x337d59, null, { flatShading: true }),
-    hill: toon(0x477b63, null, { flatShading: true }),
-    crater: toon(0x73495a),
-    scorch: toon(0x343347),
+    concrete: surface(0x8e91a1, textures.plaster, { roughness: 0.88 }),
+    treeTrunk: surface(0x70444a, null, { roughness: 0.94 }),
+    treeBranch: surface(0x4f3340, null, { roughness: 0.94 }),
+    treeFoliage: surface(0x337d59, null, { flatShading: true, roughness: 0.98 }),
+    hill: surface(0x477b63, null, { flatShading: true, roughness: 0.98 }),
+    crater: surface(0x73495a, null, { roughness: 0.96 }),
+    scorch: surface(0x343347, null, { roughness: 0.98 }),
   }
+}
+
+function createEnvironmentMap(renderer) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 256
+  const context = canvas.getContext('2d')
+  const gradient = context.createLinearGradient(0, 0, 0, canvas.height)
+  gradient.addColorStop(0, '#102033')
+  gradient.addColorStop(0.3, '#3a5267')
+  gradient.addColorStop(0.52, '#a8a09a')
+  gradient.addColorStop(0.66, '#5a5b5a')
+  gradient.addColorStop(1, '#141a1d')
+  context.fillStyle = gradient
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.fillStyle = 'rgba(255, 225, 181, 0.18)'
+  context.fillRect(0, 126, canvas.width, 16)
+  context.fillStyle = 'rgba(255, 255, 255, 0.08)'
+  context.fillRect(0, 96, canvas.width, 4)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.mapping = THREE.EquirectangularReflectionMapping
+  const pmrem = new THREE.PMREMGenerator(renderer)
+  const target = pmrem.fromEquirectangular(texture)
+  texture.dispose()
+  pmrem.dispose()
+  return target.texture
 }
 
 export function createSceneRuntime(config) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x68b9dc)
-  scene.fog = new THREE.Fog(0xaed9e2, config.render.fogNear, config.render.fogFar)
+  scene.fog = new THREE.FogExp2(0xaed9e2, config.render.fogDensity)
 
   const camera = new THREE.PerspectiveCamera(
     config.player.baseFov,
@@ -324,19 +378,21 @@ export function createSceneRuntime(config) {
   renderer.setSize(innerWidth, innerHeight)
   renderer.setPixelRatio(pixelRatio())
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFShadowMap
-  renderer.toneMapping = THREE.NoToneMapping
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.05
   renderer.outputColorSpace = THREE.SRGBColorSpace
   document.body.appendChild(renderer.domElement)
 
+  scene.environment = createEnvironmentMap(renderer)
   const maxAniso = renderer.capabilities.getMaxAnisotropy()
   const matLib = createMatLib(Math.min(config.render.maxAnisotropy, maxAniso))
 
-  scene.add(new THREE.AmbientLight(0x7e8daf, 0.38))
-  const hemi = new THREE.HemisphereLight(0xd7f0f4, 0x765a6d, 1.35)
+  scene.add(new THREE.AmbientLight(0x758697, 0.22))
+  const hemi = new THREE.HemisphereLight(0xb9c9d1, 0x3c3038, 0.78)
   scene.add(hemi)
 
-  const sun = new THREE.DirectionalLight(0xffe5a6, 2.55)
+  const sun = new THREE.DirectionalLight(0xffe0ad, 1.65)
   sun.position.set(90, 95, 55)
   sun.castShadow = true
   sun.shadow.mapSize.set(config.render.shadowMapSize, config.render.shadowMapSize)
@@ -348,15 +404,15 @@ export function createSceneRuntime(config) {
   sun.shadow.camera.far = config.render.shadowCameraFar
   sun.shadow.bias = -0.00018
   sun.shadow.normalBias = 0.035
-  sun.shadow.radius = 1
+  sun.shadow.radius = 2.2
   scene.add(sun)
   scene.add(sun.target)
 
-  const fill = new THREE.DirectionalLight(0x68c7ed, 0.48)
+  const fill = new THREE.DirectionalLight(0x7fa6c0, 0.26)
   fill.position.set(-70, 45, -40)
   scene.add(fill)
 
-  const rim = new THREE.DirectionalLight(0xff756f, 0.58)
+  const rim = new THREE.DirectionalLight(0xd78275, 0.2)
   rim.position.set(-30, 12, 80)
   scene.add(rim)
 

@@ -1,5 +1,4 @@
-import * as THREE from 'three'
-import { AUDIO_FILES, CFG, LOAD_STEPS, SPAWN_POINTS } from './config.js'
+import { AUDIO_FILES, CFG, LOAD_STEPS } from './config.js'
 import {
   createGameState,
   createDeployState,
@@ -9,17 +8,18 @@ import {
 } from './state.js'
 import { createSceneRuntime } from './scene.js'
 import { AudioSystem } from './audio/audio-system.js'
-import { createWorldSystem } from './world/world.js'
+import { createMap } from './world/maps/registry.js'
+import { createObjectiveSystem } from './world/objectives.js'
 import { createEffectsSystem } from './combat/effects.js'
 import { createCombatSystem } from './combat/ballistics.js'
 import { createScoringSystem } from './combat/scoring.js'
-import { Player } from './entities/player.js'
-import { Bot } from './entities/bot.js'
 import { getDom } from './ui/dom.js'
 import { createHud } from './ui/hud.js'
 import { createMapSystem } from './ui/maps.js'
 import { createDeploymentSystem } from './ui/deployment.js'
 import { createInputSystem } from './input.js'
+import { MODE_DEFINITIONS, createMode } from './modes/registry.js'
+import { createModeMenu } from './ui/mode-menu.js'
 
 export function createGame() {
   const dom = getDom()
@@ -27,17 +27,24 @@ export function createGame() {
   const deploy = createDeployState()
   const runtime = createSceneRuntime(CFG)
   const audio = new AudioSystem(runtime.camera, AUDIO_FILES, CFG)
-  const world = createWorldSystem({
+  const objectives = createObjectiveSystem({
     scene: runtime.scene,
     matLib: runtime.matLib,
     state,
     config: CFG,
   })
   const effects = createEffectsSystem({ scene: runtime.scene, state, audio, config: CFG })
-  const hud = createHud({ dom, state, deploy, audio, config: CFG })
+  let mode = null
+  const hud = createHud({ dom, state, deploy, audio, config: CFG, getMode: () => mode })
   const maps = createMapSystem({ dom, state, config: CFG })
   let deployment
   let input
+
+  const modeMenu = createModeMenu({
+    container: dom.modeOptions,
+    definitions: MODE_DEFINITIONS,
+    onSelect: modeId => hud.renderRecords(modeId),
+  })
 
   async function enterMobilePresentation() {
     // 陀螺仪权限必须尽量在用户手势内先申请
@@ -77,8 +84,9 @@ export function createGame() {
     dom,
     state,
     deploy,
-    spawnPoints: SPAWN_POINTS,
+    getSpawnPoints: team => mode.getSpawnPoints(team),
     camera: runtime.camera,
+    scene: runtime.scene,
     renderer: runtime.renderer,
     audio,
     input,
@@ -87,72 +95,77 @@ export function createGame() {
     saveSettings,
   })
 
-  const combat = createCombatSystem({ state, effects, audio, hud, config: CFG })
-  const scoring = createScoringSystem({ state, hud, checkVictory, saveRecords })
+  const combat = createCombatSystem({
+    state,
+    effects,
+    audio,
+    hud,
+    config: CFG,
+    getMode: () => mode,
+  })
+  const scoring = createScoringSystem({
+    state,
+    hud,
+    onElimination: event => mode.onElimination(event),
+    saveRecords,
+  })
 
-  function getRandomSpawn(team) {
-    const points = SPAWN_POINTS[team]
-    const spawn = points[Math.floor(Math.random() * points.length)]
-    return new THREE.Vector3(
-      spawn.x + (Math.random() - 0.5) * CFG.match.spawnScatter,
-      0,
-      spawn.z + (Math.random() - 0.5) * CFG.match.spawnScatter
-    )
-  }
-
-  function checkVictory() {
-    if (!state.running) return
-    if (state.alliesScore >= CFG.match.killTarget) {
-      recordMatchResult(state.records, true, (performance.now() - state.startTime) / 1000)
-      hud.showEndScreen(true)
-    } else if (state.axisScore >= CFG.match.killTarget) {
-      recordMatchResult(state.records, false, (performance.now() - state.startTime) / 1000)
-      hud.showEndScreen(false)
-    }
+  function createModeMap(modeId) {
+    return createMap(modeId, {
+      scene: runtime.scene,
+      matLib: runtime.matLib,
+      state,
+      config: CFG,
+      objectives,
+    })
   }
 
   function initGame() {
-    state.player = new Player({
-      camera: runtime.camera,
-      sun: runtime.sun,
-      matLib: runtime.matLib,
-      audio,
+    const modeId = modeMenu.getSelectedModeId()
+    const map = createModeMap(modeId)
+    mode = createMode(modeId, {
       state,
       deploy,
-      input,
       config: CFG,
-      hud,
-      effects,
-      combat,
-      scoring,
-      deployment,
+      spawnPoints: map.spawnPoints,
+      services: {
+        scene: runtime.scene,
+        camera: runtime.camera,
+        sun: runtime.sun,
+        matLib: runtime.matLib,
+        audio,
+        input,
+        hud,
+        effects,
+        combat,
+        scoring,
+        deployment,
+        objectives,
+        map,
+      },
     })
-    const botServices = {
-      scene: runtime.scene,
-      camera: runtime.camera,
-      matLib: runtime.matLib,
-      audio,
-      gameState: state,
-      config: CFG,
-      hud,
-      effects,
-      combat,
-      scoring,
-      getRandomSpawn,
-    }
-    for (let i = 0; i < CFG.match.teamSize - 1; i++) {
-      state.bots.push(new Bot('allies', getRandomSpawn('allies'), botServices))
-    }
-    for (let i = 0; i < CFG.match.teamSize; i++) {
-      state.bots.push(new Bot('axis', getRandomSpawn('axis'), botServices))
-    }
-    state.startTime = performance.now()
+    mode.buildMap()
+    mode.setupMatch()
+    state.match.startTime = performance.now()
     state.running = true
     dom.hud.classList.add('show')
-    dom.targetKill.textContent = `达到 ${CFG.match.killTarget} 杀`
     state.player.weapon.setVisible(false)
     state.player.alive = false
+    hud.updateScores()
     deployment.showScreen()
+  }
+
+  function finishModeIfNeeded() {
+    if (!state.running || !mode) return
+    const outcome = mode.getOutcome()
+    if (!outcome) return
+    recordMatchResult(
+      state.records,
+      state.match.modeId,
+      outcome.playerWon,
+      (performance.now() - state.match.startTime) / 1000
+    )
+    hud.showEndScreen(outcome)
   }
 
   async function runBootLoad() {
@@ -162,7 +175,6 @@ export function createGame() {
     }
     const boot = CFG.boot
     setProgress(boot.initialProgress, LOAD_STEPS[0])
-    world.buildWorld()
     runtime.camera.position.y = CFG.match.initialCameraHeight
     setProgress(boot.worldProgress, LOAD_STEPS[1])
     await new Promise(resolve => setTimeout(resolve, boot.initialDelay))
@@ -195,13 +207,14 @@ export function createGame() {
     lastTime = now
     if (!state.loading && state.running && !state.paused) {
       state.player.update(dt)
-      for (const bot of state.bots) bot.update(dt)
+      for (const actor of state.actors) actor.update(dt)
+      mode.update(dt)
       combat.update()
       effects.update(dt)
-      if (deploy.phase === 'none') {
-        maps.updateMinimap()
-      }
+      hud.updateScores()
+      if (deploy.phase === 'none') maps.updateMinimap()
       hud.setScoreboardVisible(input.isKeyDown('Tab'))
+      finishModeIfNeeded()
     }
     audio.updateListener()
     runtime.renderer.render(runtime.scene, runtime.camera)
@@ -249,6 +262,17 @@ export function createGame() {
     input.syncUi()
   })
   dom.resumeBtn.addEventListener('click', togglePause)
+  dom.redeployBtn.addEventListener('click', () => {
+    if (!state.paused || deploy.phase !== 'none' || !state.player?.alive) return
+    state.paused = false
+    dom.pauseScreen.classList.remove('show')
+    audio.setAmbienceMuted(false)
+    input.reset()
+    hud.setScoreboardVisible(false)
+    if (document.pointerLockElement) document.exitPointerLock()
+    input.updateTouchUi()
+    state.player.die()
+  })
   dom.quitBtn.addEventListener('click', () => location.reload())
   dom.restartBtn.addEventListener('click', () => location.reload())
   window.addEventListener('resize', () => {

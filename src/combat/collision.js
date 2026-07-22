@@ -87,10 +87,46 @@ function resolveBox(position, radius, obstacle) {
   position.z = obstacle.z - nlx * sin + nlz * cos
 }
 
+function resolveFrustum(position, radius, obstacle, bottomY) {
+  const minY = obstacle.minY ?? 0
+  const maxY = obstacle.maxY ?? obstacle.h ?? 0
+  const height = maxY - minY
+  if (height <= 1e-6 || bottomY >= maxY) return
+
+  const dx = position.x - obstacle.x
+  const dz = position.z - obstacle.z
+  const distance = Math.hypot(dx, dz)
+  if (distance >= obstacle.bottomRadius + radius) return
+
+  let surfaceHeight = minY
+  if (distance <= obstacle.topRadius) surfaceHeight = maxY
+  else if (distance <= obstacle.bottomRadius) {
+    surfaceHeight =
+      minY + ((obstacle.bottomRadius - distance) /
+        (obstacle.bottomRadius - obstacle.topRadius)) * height
+  }
+  if (bottomY >= surfaceHeight - 0.05) return
+
+  const section = clamp((bottomY - minY) / height, 0, 1)
+  const sectionRadius =
+    obstacle.bottomRadius + (obstacle.topRadius - obstacle.bottomRadius) * section
+  const minDistance = sectionRadius + radius
+  if (distance >= minDistance) return
+  if (distance < 1e-6) {
+    position.x = obstacle.x + minDistance
+    position.z = obstacle.z
+    return
+  }
+  const push = (minDistance - distance) / distance
+  position.x += dx * push
+  position.z += dz * push
+}
+
 export function resolveObstacleCollision(position, radius, obstacle, bottomY = 0) {
   // 角色脚底高于障碍物顶部时，允许从上方越过
-  if (bottomY >= obstacle.maxY) return
+  if (bottomY >= obstacle.maxY && obstacle.shape !== 'frustum') return
   if (obstacle.shape === 'box') resolveBox(position, radius, obstacle)
+  else if (obstacle.shape === 'frustum') resolveFrustum(position, radius, obstacle, bottomY)
   else resolveCircle(position, radius, obstacle)
 }
 
@@ -158,7 +194,74 @@ function rayBoxFlat(ox, oz, dx, dz, obstacle, maxDist) {
   return tMin <= maxDist ? tMin : -1
 }
 
+function rayFrustum(origin, direction, obstacle, maxDist) {
+  const minY = obstacle.minY ?? 0
+  const maxY = obstacle.maxY ?? obstacle.h ?? 0
+  const height = maxY - minY
+  const bottomRadius = obstacle.bottomRadius
+  const topRadius = obstacle.topRadius
+  if (height <= 1e-6 || bottomRadius <= 0 || topRadius < 0) return -1
+  if (direction.lengthSq() < 1e-12) return -1
+
+  const ox = origin.x - obstacle.x
+  const oy = origin.y - minY
+  const oz = origin.z - obstacle.z
+  const dx = direction.x
+  const dy = direction.y
+  const dz = direction.z
+  const slope = (topRadius - bottomRadius) / height
+  const radiusAtOrigin = bottomRadius + slope * oy
+  const originRadiusSq = ox * ox + oz * oz
+  if (
+    oy >= 0 &&
+    oy <= height &&
+    radiusAtOrigin >= 0 &&
+    originRadiusSq <= radiusAtOrigin * radiusAtOrigin
+  ) return 0
+
+  let nearest = maxDist + 1
+  const testCandidate = t => {
+    if (t < 0 || t > maxDist || t >= nearest) return
+    const y = oy + dy * t
+    if (y < -1e-6 || y > height + 1e-6) return
+    const radius = bottomRadius + slope * y
+    if (radius < 0) return
+    const x = ox + dx * t
+    const z = oz + dz * t
+    if (x * x + z * z <= radius * radius + 1e-7) nearest = t
+  }
+
+  if (Math.abs(dy) > 1e-8) {
+    testCandidate(-oy / dy)
+    testCandidate((height - oy) / dy)
+  }
+
+  const radiusVelocity = slope * dy
+  const a = dx * dx + dz * dz - radiusVelocity * radiusVelocity
+  const b = 2 * (ox * dx + oz * dz - radiusAtOrigin * radiusVelocity)
+  const c = originRadiusSq - radiusAtOrigin * radiusAtOrigin
+  if (Math.abs(a) < 1e-8) {
+    if (Math.abs(b) >= 1e-8) testCandidate(-c / b)
+  } else {
+    const discriminant = b * b - 4 * a * c
+    if (discriminant >= 0) {
+      const root = Math.sqrt(discriminant)
+      const t1 = (-b - root) / (2 * a)
+      const t2 = (-b + root) / (2 * a)
+      testCandidate(Math.min(t1, t2))
+      testCandidate(Math.max(t1, t2))
+    }
+  }
+
+  return nearest <= maxDist ? nearest : -1
+}
+
 export function rayHitObstacle(origin, direction, obstacle, maxDist) {
+  if (obstacle.shape === 'frustum') {
+    const t = rayFrustum(origin, direction, obstacle, maxDist)
+    return t >= 0 ? t : null
+  }
+
   const flatLenSq = direction.x * direction.x + direction.z * direction.z
   if (flatLenSq < 1e-12) return null
   const flatLen = Math.sqrt(flatLenSq)

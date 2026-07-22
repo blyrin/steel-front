@@ -1,13 +1,11 @@
 import * as THREE from 'three'
 import { rayHitObstacle } from './collision.js'
 
-export function createCombatSystem({ state, effects, audio, hud, config }) {
+export function createCombatSystem({ state, effects, audio, hud, config, getMode }) {
   const combatConfig = config.combat
 
   function getEnemyTargets(team) {
-    const targets = state.bots.filter(bot => bot.alive && bot.team !== team)
-    if (state.player.alive && state.player.team !== team) targets.push(state.player)
-    return targets
+    return getMode().getHostileActors(team)
   }
 
   function fireBullet(origin, direction, team, owner, muzzle, attack) {

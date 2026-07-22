@@ -46,6 +46,17 @@ export function createMapSystem({ dom, state, config }) {
       staticCtx.fillRect(x - 3, y - 3, 6, 6)
       staticCtx.strokeRect(x - 3, y - 3, 6, 6)
     }
+    const fortress = state.objectives.fortress
+    if (fortress) {
+      const x = centerX + fortress.position.x * scale
+      const y = centerY + fortress.position.z * scale
+      staticCtx.fillStyle = '#ffd447'
+      staticCtx.strokeStyle = '#20233a'
+      staticCtx.beginPath()
+      staticCtx.rect(x - 5, y - 5, 10, 10)
+      staticCtx.fill()
+      staticCtx.stroke()
+    }
     staticLayerReady = true
   }
 
@@ -53,7 +64,7 @@ export function createMapSystem({ dom, state, config }) {
     if (!staticLayerReady) drawStaticLayer()
     miniCtx.clearRect(0, 0, width, height)
     miniCtx.drawImage(staticCanvas, 0, 0)
-    for (const bot of state.bots) {
+    for (const bot of state.actors) {
       if (!bot.alive) continue
       const x = centerX + bot.position.x * scale
       const y = centerY + bot.position.z * scale
@@ -63,6 +74,14 @@ export function createMapSystem({ dom, state, config }) {
         miniCtx.strokeStyle = 'rgba(0,0,0,0.55)'
         miniCtx.lineWidth = 1
         miniCtx.strokeRect(x - 2.6, y - 2.6, 5.2, 5.2)
+      } else if (bot.actorKind === 'zombie') {
+        miniCtx.fillStyle = '#f04f64'
+        miniCtx.beginPath()
+        miniCtx.arc(x, y, 3.2, 0, Math.PI * 2)
+        miniCtx.fill()
+        miniCtx.strokeStyle = 'rgba(0,0,0,0.55)'
+        miniCtx.lineWidth = 1
+        miniCtx.stroke()
       } else {
         miniCtx.fillStyle = '#ff3f5f'
         miniCtx.beginPath()

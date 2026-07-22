@@ -209,21 +209,58 @@ canvas {
   white-space: nowrap;
   text-shadow: 4px 0 var(--ink), -4px 0 var(--ink), 0 4px var(--ink), 0 -4px var(--ink), 9px 9px var(--coral);
 }
-#menu .sub {
-  max-width: 100%;
-  margin-bottom: 34px;
-  padding: 5px 10px;
-  background: var(--ink);
-  color: var(--yellow);
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 7px;
-  text-align: left;
-  white-space: nowrap;
-  transform: skewX(-7deg);
-}
 #menu .btn {
   min-width: 250px;
+}
+#modePanel {
+  width: min(640px, 100%);
+  margin: 20px 0;
+}
+.mode-heading {
+  margin-bottom: 8px;
+  color: var(--coral-dark);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+#modeOptions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.mode-option {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  background: rgba(245, 250, 239, 0.72);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.mode-option strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mode-option span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.mode-option:hover,
+.mode-option.selected {
+  background: var(--cyan);
+  box-shadow: 4px 4px 0 var(--ink);
+  transform: translate(-2px, -2px);
 }
 .settings {
   display: flex;
@@ -431,12 +468,6 @@ canvas {
   color: var(--coral-dark);
   font-weight: 900;
 }
-#menu .battle-info {
-  margin-top: 12px;
-  color: var(--cyan-dark);
-  font-weight: 900;
-}
-
 /* HUD */
 #hud {
   position: fixed;
@@ -877,7 +908,7 @@ body.touch-mode #lowAmmo {
 }
 #centerMsg {
   position: absolute;
-  top: 48%;
+  top: 22%;
   left: 50%;
   padding: 7px 15px;
   border: 3px solid var(--ink);
@@ -1060,6 +1091,13 @@ body.touch-mode #actionMsg.show {
 #pauseScreen .btn,
 #endScreen .btn {
   pointer-events: auto;
+}
+#pauseScreen .redeploy-btn {
+  margin-top: 10px;
+  background: var(--cyan);
+}
+#pauseScreen .redeploy-btn:hover {
+  background: #74e7f0;
 }
 
 /* 部署界面 */
@@ -1306,6 +1344,15 @@ body.touch-mode #actionMsg.show {
 .sb-rows {
   overflow: hidden;
   padding: 2px 0 4px;
+}
+.sb-objective {
+  min-height: 54px;
+  padding: 16px 12px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-align: center;
 }
 .sb-row {
   align-items: center;
@@ -1665,10 +1712,6 @@ body.touch-mode #controls {
     letter-spacing: 2px;
     text-shadow: 3px 0 var(--ink), -3px 0 var(--ink), 0 3px var(--ink), 0 -3px var(--ink), 6px 6px var(--coral);
   }
-  #menu .sub {
-    margin-bottom: 20px;
-    font-size: 10px;
-  }
   #menu .settings {
     margin-top: 20px;
   }
@@ -1847,10 +1890,6 @@ body.touch-mode #controls {
     margin-bottom: 8px;
     font-size: 38px;
   }
-  #menu .sub {
-    margin-bottom: 12px;
-    padding-block: 3px;
-  }
   #menu .btn {
     padding-block: 8px;
   }
@@ -1865,9 +1904,6 @@ body.touch-mode #controls {
     margin-top: 12px;
     font-size: 9px;
     line-height: 1.45;
-  }
-  #menu .battle-info {
-    margin-top: 5px;
   }
 }
 

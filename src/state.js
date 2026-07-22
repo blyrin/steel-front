@@ -22,23 +22,37 @@ function recordValue(value) {
   return Number.isInteger(value) && value >= 0 ? value : 0
 }
 
+function loadRecordBucket(data) {
+  const source = data && typeof data === 'object' && !Array.isArray(data) ? data : {}
+  return {
+    matches: recordValue(source.matches),
+    wins: recordValue(source.wins),
+    losses: recordValue(source.losses),
+    kills: recordValue(source.kills),
+    deaths: recordValue(source.deaths),
+    headshots: recordValue(source.headshots),
+    meleeKills: recordValue(source.meleeKills),
+    grenadeKills: recordValue(source.grenadeKills),
+    bestKillStreak: recordValue(source.bestKillStreak),
+    totalSeconds: recordValue(source.totalSeconds),
+  }
+}
+
 function loadRecords() {
   const raw = localStorage.getItem(RECORDS_KEY)
-  if (!raw) return createDefaultRecords()
+  if (!raw) return { classic: createDefaultRecords(), zombie: createDefaultRecords() }
   const data = JSON.parse(raw)
   if (!data || typeof data !== 'object' || Array.isArray(data))
     throw new TypeError('战绩数据格式无效')
+  if (Object.hasOwn(data, 'classic') || Object.hasOwn(data, 'zombie')) {
+    return {
+      classic: loadRecordBucket(data.classic),
+      zombie: loadRecordBucket(data.zombie),
+    }
+  }
   return {
-    matches: recordValue(data.matches),
-    wins: recordValue(data.wins),
-    losses: recordValue(data.losses),
-    kills: recordValue(data.kills),
-    deaths: recordValue(data.deaths),
-    headshots: recordValue(data.headshots),
-    meleeKills: recordValue(data.meleeKills),
-    grenadeKills: recordValue(data.grenadeKills),
-    bestKillStreak: recordValue(data.bestKillStreak),
-    totalSeconds: recordValue(data.totalSeconds),
+    classic: loadRecordBucket(data),
+    zombie: createDefaultRecords(),
   }
 }
 
@@ -84,11 +98,12 @@ export function saveRecords(records) {
   localStorage.setItem(RECORDS_KEY, JSON.stringify(records))
 }
 
-export function recordMatchResult(records, playerWon, durationSeconds) {
-  records.matches++
-  if (playerWon) records.wins++
-  else records.losses++
-  records.totalSeconds += Math.floor(durationSeconds)
+export function recordMatchResult(records, modeId, playerWon, durationSeconds) {
+  const modeRecords = records[modeId]
+  modeRecords.matches++
+  if (playerWon) modeRecords.wins++
+  else modeRecords.losses++
+  modeRecords.totalSeconds += Math.floor(durationSeconds)
   saveRecords(records)
 }
 
@@ -97,16 +112,28 @@ export function createGameState() {
     running: false,
     paused: false,
     loading: true,
-    alliesScore: 0,
-    axisScore: 0,
+    match: {
+      modeId: null,
+      startTime: 0,
+      score: {
+        allies: 0,
+        axis: 0,
+      },
+    },
+    modeState: null,
+    mapId: null,
+    groundHeightAt: () => 0,
+    objectives: {
+      fortress: null,
+    },
     player: null,
-    bots: [],
+    actors: [],
     particles: [],
     obstacles: [],
     coverPoints: [],
     ammoStations: [],
+    medicalStations: [],
     smokeClouds: [],
-    startTime: 0,
     records: loadRecords(),
     settings: loadSettings(),
   }

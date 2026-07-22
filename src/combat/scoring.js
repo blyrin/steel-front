@@ -1,4 +1,4 @@
-export function createScoringSystem({ state, hud, checkVictory, saveRecords }) {
+export function createScoringSystem({ state, hud, onElimination, saveRecords }) {
   function getActorName(actor) {
     return actor === state.player ? '你' : actor.name
   }
@@ -6,7 +6,7 @@ export function createScoringSystem({ state, hud, checkVictory, saveRecords }) {
   function recordPlayerStats(victim, attacker, headshot, attackType) {
     const player = state.player
     if (victim !== player && attacker !== player) return
-    const records = state.records
+    const records = state.records[state.match.modeId]
     if (victim === player) records.deaths++
     if (attacker === player) {
       records.kills++
@@ -25,16 +25,11 @@ export function createScoringSystem({ state, hud, checkVictory, saveRecords }) {
       player.bestKillStreak = Math.max(player.bestKillStreak, player.killStreak)
       records.bestKillStreak = Math.max(records.bestKillStreak, player.bestKillStreak)
     }
-    saveRecords(records)
+    saveRecords(state.records)
   }
 
   function recordElimination(victim, attacker, headshot = false, attackType = 'weapon') {
     victim.deaths++
-
-    let scoringTeam
-    if (attacker) scoringTeam = attacker.team
-    else if (victim.team === 'allies') scoringTeam = 'axis'
-    else scoringTeam = 'allies'
 
     if (attacker) {
       attacker.kills++
@@ -47,11 +42,8 @@ export function createScoringSystem({ state, hud, checkVictory, saveRecords }) {
 
     recordPlayerStats(victim, attacker, headshot, attackType)
 
-    if (scoringTeam === 'allies') state.alliesScore++
-    else state.axisScore++
-
+    onElimination({ victim, attacker, headshot, attackType })
     hud.updateScores()
-    checkVictory()
   }
 
   return { recordElimination }

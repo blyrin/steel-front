@@ -1,20 +1,61 @@
 export const CFG = {
-  // 对局与地图参数，距离单位为米，时间单位为秒。
+  // 通用对局与地图参数，距离单位为米，时间单位为秒。
   match: {
     // 地图边长。
     mapSize: 240,
-    // 任一队伍达到该击杀数后结束比赛。
-    killTarget: 150,
-    // 每支队伍的人数，包含玩家所在队伍的玩家。
-    teamSize: 20,
-    // Bot 阵亡后的复活等待时间。
-    respawnTime: 5,
-    // Bot 出生点周围的随机散布范围。
-    spawnScatter: 4,
     // 单帧最大模拟时间，避免切后台后瞬移。
     maxFrameDelta: 0.05,
     // 启动加载阶段的相机高度。
     initialCameraHeight: 5,
+  },
+  // 各模式的规则参数。实体和系统不直接读取这里的模式分支。
+  modes: {
+    classic: {
+      // 每支队伍的人数，包含玩家所在队伍的玩家。
+      teamSize: 20,
+      // 任一队伍达到该击杀数后结束比赛。
+      killTarget: 150,
+      // Bot 阵亡后的复活等待时间。
+      respawnTime: 5,
+      // Bot 出生点周围的随机散布范围。
+      spawnScatter: 4,
+    },
+    zombie: {
+      // 玩家之外的盟军 AI 数量。
+      alliedBotCount: 5,
+      // 盟军 AI 定时复活等待时间。
+      alliedRespawnTime: 8,
+      // 盟军出生点和敌方生成点的随机散布范围。
+      spawnScatter: 3,
+      // 第一波丧尸数量、每波增量和生成节奏。
+      waveStartCount: 12,
+      waveIncrement: 5,
+      waveSpawnInterval: 1.5,
+      waveIntermission: 15,
+      // 同时存活的丧尸上限。
+      maxConcurrent: 64,
+      // 盟军 AI 的活动范围中心与半径。
+      guardRadius: 32,
+      fortress: {
+        x: 0,
+        z: 0,
+        maxHealth: 1000,
+        radius: 16,
+        attackRadius: 11,
+        bottomRadius: 21,
+        topRadius: 11,
+        deckHeight: 4.2,
+      },
+      enemy: {
+        maxHealth: 100,
+        speed: 3.6,
+        radius: 0.46,
+        attackRange: 2.1,
+        targetSearchRadius: 42,
+        attackInterval: 1.1,
+        attackDamage: 12,
+      },
+    },
   },
   // 菜单和暂停界面中的玩家设置默认值。
   settings: {
@@ -291,11 +332,11 @@ export const CFG = {
     // 玩家每秒生命恢复量。
     healthRegen: 4,
     // 玩家默认视野角。
-    baseFov: 75,
+    baseFov: 60,
     // 玩家瞄准时的视野角。
-    aimingFov: 55,
+    aimingFov: 50,
     // 玩家冲刺时的视野角。
-    sprintingFov: 86,
+    sprintingFov: 75,
     // 视角输入到相机旋转的基础倍率。
     lookSensitivity: 0.0011,
     // 瞄准时的视角灵敏度倍率。
@@ -532,15 +573,15 @@ export const CFG = {
     // Bot 枪口火光的显示时长。
     botMuzzleLife: 0.06,
     // 第一人称枪口烟雾数量。
-    firstPersonSmokeCount: 2,
+    firstPersonSmokeCount: 1,
     // Bot 枪口烟雾数量。
-    botSmokeCount: 3,
+    botSmokeCount: 1,
     // 枪口烟雾的基础生命周期。
-    smokeLife: 0.4,
+    smokeLife: 0.3,
     // 每个后续烟雾粒子的生命周期增量。
     smokeLifeStep: 0.09,
     // 玩家枪口烟团的生命周期。
-    smokePuffLife: 0.55,
+    smokePuffLife: 0.5,
     // 弹壳粒子的生命周期。
     shellLife: 1.4,
     // 弹壳下落加速度。
@@ -586,12 +627,6 @@ export const CFG = {
     hitMarkerShake: 0.08,
     // 连杀统计的有效时间窗口。
     killStreakWindow: 3500,
-    // 爆头击杀时的屏幕震动。
-    hitKillShake: 0.22,
-    // 多重击杀时的屏幕震动。
-    multiKillShake: 0.22,
-    // 普通击杀时的屏幕震动。
-    normalKillShake: 0.14,
     // 击杀提示开始淡出的延迟。
     killNotifyOutDelay: 1500,
     // 击杀提示清理样式的延迟。
@@ -649,10 +684,8 @@ export const CFG = {
     cameraNear: 0.04,
     // 相机远裁剪面距离。
     cameraFar: 1200,
-    // 雾效开始出现的距离。
-    fogNear: 155,
-    // 雾效完全覆盖的距离。
-    fogFar: 470,
+    // 指数平方雾密度，远处渐进消隐而不产生硬交界线。
+    fogDensity: 0.0038,
     // 桌面设备的像素比上限。
     desktopPixelRatio: 1.25,
     // 触摸设备的像素比上限。
@@ -725,21 +758,28 @@ export const SPAWN_POINTS = {
   ],
 }
 
+// 丧尸模式的守军出生点和敌方生成点。
+export const ZOMBIE_SPAWN_POINTS = {
+  allies: [
+    { x: 0, z: 0, name: '堡垒上层', id: 'A' },
+  ],
+  axis: [
+    { x: 0, z: -108, name: '北侧来袭点', id: 'N' },
+    { x: -104, z: -62, name: '西北来袭点', id: 'W' },
+    { x: 104, z: -62, name: '东北来袭点', id: 'E' },
+    { x: -96, z: 78, name: '西侧来袭点', id: 'S-W' },
+    { x: 96, z: 78, name: '东侧来袭点', id: 'S-E' },
+  ],
+}
+
 // 启动加载界面按顺序显示的阶段文案。
 export const LOAD_STEPS = [
-  // 武器装配阶段。
   '正在装配武器...',
-  // 地形生成阶段。
   '生成战场地形...',
-  // 掩体构筑阶段。
   '构筑防御工事...',
-  // 单位部署阶段。
   '部署作战单位...',
-  // AI 初始化阶段。
   '初始化AI系统...',
-  // 战斗音效加载阶段。
   '加载战斗音效...',
-  // 加载结束阶段。
   '准备就绪...',
 ]
 

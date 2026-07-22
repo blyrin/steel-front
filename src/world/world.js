@@ -87,7 +87,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     return mesh
   }
 
-  function buildWorld() {
+  function buildClassicMap() {
     const half = config.match.mapSize / 2
     const groundGeo = new THREE.PlaneGeometry(
       config.match.mapSize * 2,
@@ -324,21 +324,26 @@ export function createWorldSystem({ scene, matLib, state, config }) {
   function createSky() {
     const skyMat = new THREE.ShaderMaterial({
       uniforms: {
+        ...THREE.UniformsLib.fog,
         topColor: { value: new THREE.Color(0x337fbf) },
         midColor: { value: new THREE.Color(0x68bddc) },
         horizonColor: { value: new THREE.Color(0xeeb58f) },
       },
       vertexShader: `
         varying vec3 vWorldPos;
+        #include <fog_pars_vertex>
         void main() {
           vec4 world = modelMatrix * vec4(position, 1.0);
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
           vWorldPos = world.xyz;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
         }
       `,
       fragmentShader: `
         uniform vec3 topColor, midColor, horizonColor;
         varying vec3 vWorldPos;
+        #include <fog_pars_fragment>
         void main() {
           vec3 dir = normalize(vWorldPos);
           float h = dir.y;
@@ -351,9 +356,11 @@ export function createWorldSystem({ scene, matLib, state, config }) {
           col = mix(col, vec3(1.0, 0.86, 0.28), sunDisk);
           col = mix(col, vec3(1.0, 0.55, 0.38), sunRing * 0.7);
           gl_FragColor = vec4(col, 1.0);
+          #include <fog_fragment>
         }
       `,
       side: THREE.BackSide,
+      fog: true,
       depthWrite: false,
     })
     scene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMat))
@@ -1023,5 +1030,5 @@ export function createWorldSystem({ scene, matLib, state, config }) {
     }
   }
 
-  return { buildWorld }
+  return { buildClassicMap }
 }

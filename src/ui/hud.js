@@ -9,7 +9,7 @@ const MULTI_TITLES = [
   '无人能挡',
 ]
 
-export function createHud({ dom, state, deploy, audio, config }) {
+export function createHud({ dom, state, deploy, audio, config, getMode }) {
   const hudConfig = config.hud
   let healthWidth = ''
   let healthText = ''
@@ -30,6 +30,8 @@ export function createHud({ dom, state, deploy, audio, config }) {
   let scoreboardPlayerKills = null
   let scoreboardPlayerDeaths = null
   let scoreboardPlayerAlive = null
+  let scoreboardModeKind = ''
+  let scoreboardObjectiveText = ''
   const scoreboardBotStats = []
 
   function updateHealth() {
@@ -110,8 +112,14 @@ export function createHud({ dom, state, deploy, audio, config }) {
   }
 
   function updateScores() {
-    dom.alliesScore.textContent = state.alliesScore
-    dom.axisScore.textContent = state.axisScore
+    const modeState = getMode()?.getHudState()
+    if (!modeState) return
+    dom.alliesScore.textContent = modeState.alliesScore
+    dom.axisScore.textContent = modeState.axisScore
+    dom.alliesLabel.textContent = modeState.alliesLabel
+    dom.axisLabel.textContent = modeState.axisLabel
+    dom.scoreStatus.textContent = modeState.kind === 'zombie' ? '防守' : '对战'
+    dom.targetKill.textContent = modeState.targetText
   }
 
   function formatRatio(kills, deaths) {
@@ -129,8 +137,12 @@ export function createHud({ dom, state, deploy, audio, config }) {
     return `${minutes} 分钟`
   }
 
-  function renderRecords() {
-    const records = state.records
+  function getRecords(modeId = state.match.modeId || 'classic') {
+    return state.records[modeId]
+  }
+
+  function renderRecords(modeId = state.match.modeId || 'classic') {
+    const records = getRecords(modeId)
     const entries = [
       ['总场次', records.matches],
       ['胜率', formatWinRate(records)],
@@ -196,10 +208,6 @@ export function createHud({ dom, state, deploy, audio, config }) {
     dom.killStreak.textContent = streak > 1 ? `${streak} 连杀` : ''
     dom.killNotify.classList.add('show')
     audio.killConfirm(kind)
-    let shake = hudConfig.normalKillShake
-    if (headshot) shake = hudConfig.hitKillShake
-    else if (streak >= 2) shake = hudConfig.multiKillShake
-    addScreenShake(shake)
     clearTimeout(dom.killNotify._timer)
     clearTimeout(dom.killNotify._outTimer)
     dom.killNotify._outTimer = setTimeout(() => {
@@ -302,7 +310,9 @@ export function createHud({ dom, state, deploy, audio, config }) {
       dom.killFeed.lastChild.remove()
   }
 
-  function showEndScreen(playerWon) {
+  function showEndScreen(result) {
+    const outcome = typeof result === 'boolean' ? { playerWon: result } : result
+    const modeState = getMode()?.getHudState()
     state.running = false
     if (document.pointerLockElement) document.exitPointerLock()
     dom.deployScreen.classList.remove('show')
@@ -311,16 +321,19 @@ export function createHud({ dom, state, deploy, audio, config }) {
     if (dom.touchControls) dom.touchControls.classList.remove('show')
     if (dom.rotateHint) dom.rotateHint.classList.remove('show')
     setScoreboardVisible(false)
-    dom.endTitle.textContent = playerWon ? '胜利' : '战败'
-    dom.endTitle.className = playerWon ? 'win' : 'lose'
+    const records = getRecords()
+    dom.endTitle.textContent = outcome.title || (outcome.playerWon ? '胜利' : '战败')
+    dom.endTitle.className = outcome.playerWon ? 'win' : 'lose'
     renderRecords()
     const stats = [
-      `我方击杀: ${state.alliesScore}　敌方击杀: ${state.axisScore}`,
+      `${modeState?.alliesLabel || '我方击杀'}: ${modeState?.alliesScore ?? state.match.score.allies}　${modeState?.axisLabel || '敌方击杀'}: ${modeState?.axisScore ?? state.match.score.axis}`,
+      ...(outcome.reason ? [`结算: ${outcome.reason}`] : []),
+      ...(outcome.details || []),
       `个人击杀: ${state.player.kills}　阵亡次数: ${state.player.deaths}`,
       `本局 K/D: ${formatRatio(state.player.kills, state.player.deaths)}　爆头: ${state.player.headshots}`,
       `近战击杀: ${state.player.meleeKills}　投掷物击杀: ${state.player.grenadeKills}`,
-      `累计 K/D: ${formatRatio(state.records.kills, state.records.deaths)}　胜率: ${formatWinRate(state.records)}`,
-      `战斗时长: ${Math.floor((performance.now() - state.startTime) / 1000)} 秒`,
+      `累计 K/D: ${formatRatio(records.kills, records.deaths)}　胜率: ${formatWinRate(records)}`,
+      `战斗时长: ${Math.floor((performance.now() - state.match.startTime) / 1000)} 秒`,
     ]
     dom.endStats.replaceChildren(
       ...stats.map(text => {
@@ -362,15 +375,19 @@ export function createHud({ dom, state, deploy, audio, config }) {
 
   function updateScoreboard() {
     if (!state.player) return
+    const scoreboardData = getMode()?.getScoreboardData()
+    if (!scoreboardData) return
     let changed =
-      state.alliesScore !== scoreboardAlliesScore ||
-      state.axisScore !== scoreboardAxisScore ||
+      scoreboardData.kind !== scoreboardModeKind ||
+      scoreboardData.objectiveText !== scoreboardObjectiveText ||
+      state.match.score.allies !== scoreboardAlliesScore ||
+      state.match.score.axis !== scoreboardAxisScore ||
       state.player.kills !== scoreboardPlayerKills ||
       state.player.deaths !== scoreboardPlayerDeaths ||
       state.player.alive !== scoreboardPlayerAlive ||
-      scoreboardBotStats.length !== state.bots.length * 3
-    for (let i = 0; i < state.bots.length && !changed; i++) {
-      const bot = state.bots[i]
+      scoreboardBotStats.length !== state.actors.length * 3
+    for (let i = 0; i < state.actors.length && !changed; i++) {
+      const bot = state.actors[i]
       const offset = i * 3
       changed =
         bot.kills !== scoreboardBotStats[offset] ||
@@ -378,14 +395,16 @@ export function createHud({ dom, state, deploy, audio, config }) {
         bot.alive !== scoreboardBotStats[offset + 2]
     }
     if (!changed) return
-    scoreboardAlliesScore = state.alliesScore
-    scoreboardAxisScore = state.axisScore
+    scoreboardModeKind = scoreboardData.kind
+    scoreboardObjectiveText = scoreboardData.objectiveText || ''
+    scoreboardAlliesScore = state.match.score.allies
+    scoreboardAxisScore = state.match.score.axis
     scoreboardPlayerKills = state.player.kills
     scoreboardPlayerDeaths = state.player.deaths
     scoreboardPlayerAlive = state.player.alive
-    scoreboardBotStats.length = state.bots.length * 3
-    for (let i = 0; i < state.bots.length; i++) {
-      const bot = state.bots[i]
+    scoreboardBotStats.length = state.actors.length * 3
+    for (let i = 0; i < state.actors.length; i++) {
+      const bot = state.actors[i]
       const offset = i * 3
       scoreboardBotStats[offset] = bot.kills
       scoreboardBotStats[offset + 1] = bot.deaths
@@ -401,7 +420,7 @@ export function createHud({ dom, state, deploy, audio, config }) {
       },
     ]
     const axis = []
-    for (const bot of state.bots) {
+    for (const bot of state.actors) {
       const entry = {
         name: bot.name,
         kills: bot.kills,
@@ -414,10 +433,22 @@ export function createHud({ dom, state, deploy, audio, config }) {
     }
     allies.sort(compareEntries)
     axis.sort(compareEntries)
-    dom.sbAlliesScore.textContent = state.alliesScore
-    dom.sbAxisScore.textContent = state.axisScore
+    const modeHudState = getMode().getHudState()
+    dom.sbAlliesLabel.textContent = scoreboardData.alliesLabel
+    dom.sbAxisLabel.textContent = scoreboardData.axisLabel
+    dom.sbAlliesColumnLabel.textContent = scoreboardData.alliesLabel
+    dom.sbAxisColumnLabel.textContent = scoreboardData.axisLabel
+    dom.sbAlliesScore.textContent = modeHudState.alliesScore
+    dom.sbAxisScore.textContent = modeHudState.axisScore
     renderRows(dom.sbAlliesRows, allies)
-    renderRows(dom.sbAxisRows, axis)
+    if (scoreboardData.kind === 'zombie') {
+      const objective = document.createElement('div')
+      objective.className = 'sb-objective'
+      objective.textContent = scoreboardData.objectiveText
+      dom.sbAxisRows.replaceChildren(objective)
+    } else {
+      renderRows(dom.sbAxisRows, axis)
+    }
   }
 
   function setScoreboardVisible(visible) {

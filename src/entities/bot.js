@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { createBoxHitbox, rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
+import { attachFlashlight } from './flashlight.js'
 
 const BOT_GEOMETRY = {
   leg: new THREE.BoxGeometry(0.17, 0.72, 0.2),
@@ -44,10 +45,12 @@ const BOT_MARKER_MATERIALS = {
 export class Bot {
   constructor(team, spawnPosition, services) {
     Object.assign(this, services)
+    this.mode = services.mode
     const botConfig = this.config.bot
     this.team = team
+    this.actorKind = 'soldier'
     this.position = spawnPosition.clone()
-    this.position.y = 0
+    this.position.y = this.gameState.groundHeightAt(this.position.x, this.position.z)
     this.velocity = new THREE.Vector3()
     this.yaw = Math.random() * Math.PI * 2
     this.alive = true
@@ -499,6 +502,13 @@ export class Bot {
     this.marker.position.set(0, 2.06, 0)
     this.marker.scale.setScalar(1.15)
     this.group.add(this.marker)
+    if (this.mode?.id === 'zombie') {
+      attachFlashlight(
+        this.group,
+        new THREE.Vector3(0.18, 1.18, -0.38),
+        new THREE.Vector3(0.18, 1.12, -18)
+      )
+    }
     this.matLib.addOutline(this.group, 1.045)
     this.legPhase = Math.random() * Math.PI * 2
     this.animationTime = Math.random() * Math.PI * 2
@@ -566,20 +576,27 @@ export class Bot {
   }
 
   getRandomPatrolPoint() {
-    const half = this.config.match.mapSize * this.config.bot.patrolAreaRatio
-    return new THREE.Vector3((Math.random() - 0.5) * half * 2, 0, (Math.random() - 0.5) * half * 2)
+    return this.mode.getPatrolPoint(this)
   }
 
   getHitboxes() {
     const rotation = this.yaw
     const cos = Math.cos(rotation)
     const sin = Math.sin(rotation)
+    const botConfig = this.config.bot
     for (const hitbox of this.hitboxes) {
       hitbox.x = this.position.x
       hitbox.z = this.position.z
       hitbox.rot = rotation
       hitbox.cos = cos
       hitbox.sin = sin
+      if (hitbox.headshot) {
+        hitbox.minY = this.position.y + botConfig.hitboxHeadMinY
+        hitbox.maxY = this.position.y + botConfig.hitboxHeadMaxY
+      } else {
+        hitbox.minY = this.position.y
+        hitbox.maxY = this.position.y + botConfig.hitboxBodyMaxY
+      }
     }
     return this.hitboxes
   }
@@ -605,7 +622,11 @@ export class Bot {
         return false
       const origin = this._seeOrigin
       const direction = this._seeDir
-      origin.set(this.position.x, this.config.bot.viewOriginHeight, this.position.z)
+      origin.set(
+        this.position.x,
+        this.position.y + this.config.bot.viewOriginHeight,
+        this.position.z
+      )
       direction.set(dirX, 0, dirZ)
       for (const smoke of this.gameState.smokeClouds) {
         const toSmokeX = smoke.position.x - origin.x
@@ -634,18 +655,12 @@ export class Bot {
   findNearestEnemy() {
     let nearest = null
     let minDistanceSq = Infinity
-    for (const bot of this.gameState.bots) {
-      if (bot.team === this.team || !bot.alive) continue
-      const distanceSq = this.position.distanceToSquared(bot.position)
-      if (distanceSq < minDistanceSq && this.canSee(bot)) {
+    for (const actor of this.mode.getHostileActors(this.team)) {
+      const distanceSq = this.position.distanceToSquared(actor.position)
+      if (distanceSq < minDistanceSq && this.canSee(actor)) {
         minDistanceSq = distanceSq
-        nearest = bot
+        nearest = actor
       }
-    }
-    const player = this.gameState.player
-    if (player.alive && player.team !== this.team) {
-      const distanceSq = this.position.distanceToSquared(player.position)
-      if (distanceSq < minDistanceSq && this.canSee(player)) nearest = player
     }
     return nearest
   }
@@ -828,6 +843,7 @@ export class Bot {
       }
     }
     this.position.addScaledVector(this.velocity, dt)
+    this.position.y = this.gameState.groundHeightAt(this.position.x, this.position.z)
     const half = this.config.match.mapSize / 2 - 2
     this.position.x = Math.max(-half, Math.min(half, this.position.x))
     this.position.z = Math.max(-half, Math.min(half, this.position.z))
@@ -865,7 +881,7 @@ export class Bot {
       const progress = Math.min(1, this.deathTime / 0.55)
       const eased = 1 - Math.pow(1 - progress, 3)
       this.group.rotation.z = (Math.PI / 2) * eased
-      this.group.position.y = 0.04 + (1 - eased) * 0.06
+      this.group.position.y = this.position.y + 0.04 + (1 - eased) * 0.06
       return
     }
 
@@ -999,10 +1015,13 @@ export class Bot {
         )
       : 20
     const rifleHeight = this.position.y + this.body.position.y + 0.46
+    const targetGroundHeight = this.target
+      ? this.target.position.y - (this.target.currentHeight ?? 0)
+      : 0
     const targetPitch = this.target?.alive
       ? THREE.MathUtils.clamp(
           Math.atan2(
-            this.config.bot.targetHeight - rifleHeight,
+            targetGroundHeight + this.config.bot.targetHeight - rifleHeight,
             horizontalTargetDistance
           ),
           -0.18,
@@ -1229,9 +1248,9 @@ export class Bot {
     const targetHeight = this.config.bot.targetHeight
     const muzzle = new THREE.Vector3()
     this.rifleMuzzle.getWorldPosition(muzzle)
-    muzzle.y = targetHeight
     const target = this.target.position.clone()
-    target.y = targetHeight
+    const targetGroundHeight = this.target.position.y - (this.target.currentHeight ?? 0)
+    target.y = targetGroundHeight + targetHeight
     const direction = new THREE.Vector3().subVectors(target, muzzle).normalize()
     const spread = this.getSpread()
     this.spreadBloom = Math.min(
@@ -1275,21 +1294,17 @@ export class Bot {
     this.deathTime = 0
     this.group.rotation.z = 0
     this.marker.visible = false
-    this.group.position.y = 0.1
-    const fallPosition = this.position.clone().setY(0.3)
-    this.effects.spawnBlood(this.position.clone().setY(1.2))
+    this.group.position.y = this.position.y + 0.1
+    const fallPosition = this.position.clone().setY(this.position.y + 0.3)
+    this.effects.spawnBlood(this.position.clone().setY(this.position.y + 1.2))
     this.audio.pain(this.config.bot.deathPainChance, fallPosition)
     this.audio.bodyFall(fallPosition)
     this.scoring.recordElimination(this, attacker, isHeadshot, attackType)
-    setTimeout(() => this.respawn(), this.config.match.respawnTime * 1000)
+    setTimeout(() => this.respawn(), this.mode.getBotRespawnDelay(this) * 1000)
   }
 
   respawn() {
-    if (
-      this.gameState.alliesScore >= this.config.match.killTarget ||
-      this.gameState.axisScore >= this.config.match.killTarget
-    )
-      return
+    if (!this.mode.canRespawn(this)) return
     this.alive = true
     this.randomizeLoadout()
     this.health = this.maxHealth
@@ -1297,7 +1312,7 @@ export class Bot {
     this.stateName = 'patrol'
     this.target = null
     this.position.copy(this.getRandomSpawn(this.team))
-    this.position.y = 0
+    this.position.y = this.gameState.groundHeightAt(this.position.x, this.position.z)
     this.velocity.set(0, 0, 0)
     this.yaw = Math.random() * Math.PI * 2
     this.deathTime = -1
@@ -1324,7 +1339,7 @@ export class Bot {
   handleCollisions() {
     for (const obstacle of this.gameState.obstacles) {
       if (obstacle.type === 'ground' || obstacle.type === 'crater' || obstacle.type === 'wire') continue
-      resolveObstacleCollision(this.position, this.radius, obstacle)
+      resolveObstacleCollision(this.position, this.radius, obstacle, this.position.y)
     }
   }
 }

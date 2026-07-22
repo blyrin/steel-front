@@ -403,7 +403,12 @@ export function createEffectsSystem({ scene, state, audio, config }) {
   function spawnThrownGrenade(origin, velocity, grenade, onDetonate) {
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(0.09, 8, 6),
-      new THREE.MeshToonMaterial({ color: grenade.color })
+      new THREE.MeshStandardMaterial({
+        color: grenade.color,
+        roughness: 0.48,
+        metalness: 0.34,
+        envMapIntensity: 0.35,
+      })
     )
     mesh.position.copy(origin)
     addParticle({

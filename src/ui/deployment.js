@@ -25,8 +25,9 @@ export function createDeploymentSystem({
   dom,
   state,
   deploy,
-  spawnPoints,
+  getSpawnPoints,
   camera,
+  scene,
   renderer,
   audio,
   input,
@@ -49,6 +50,19 @@ export function createDeploymentSystem({
   let startRoll = 0
   let screenAnimTime = 0
   let loadoutBuilt = false
+  let gameplayFogDensity = null
+
+  function enableDeploymentFog() {
+    if (!scene?.fog || gameplayFogDensity !== null) return
+    gameplayFogDensity = scene.fog.density
+    scene.fog.density = 0.00035
+  }
+
+  function restoreGameplayFog() {
+    if (!scene?.fog || gameplayFogDensity === null) return
+    scene.fog.density = gameplayFogDensity
+    gameplayFogDensity = null
+  }
 
   function refreshLoadoutSelection() {
     const selected = state.settings.loadout
@@ -100,7 +114,7 @@ export function createDeploymentSystem({
 
   function isContested(spawn) {
     let enemyNear = 0
-    for (const bot of state.bots) {
+    for (const bot of state.actors) {
       if (bot.team === state.player.team || !bot.alive) continue
       if (
         Math.hypot(bot.position.x - spawn.x, bot.position.z - spawn.z) <
@@ -131,7 +145,7 @@ export function createDeploymentSystem({
   function updateMarkers() {
     const panelRight = dom.loadoutPanel.getBoundingClientRect().right
     for (const { el, spawn, statusEl } of markers) {
-      project.set(spawn.x, 0.5, spawn.z).project(camera)
+      project.set(spawn.x, state.groundHeightAt(spawn.x, spawn.z) + 0.5, spawn.z).project(camera)
       const x = THREE.MathUtils.clamp(
         (project.x * 0.5 + 0.5) * innerWidth,
         panelRight + 52,
@@ -151,7 +165,8 @@ export function createDeploymentSystem({
 
   function buildMarkers() {
     dom.spawnMarkers.replaceChildren()
-    markers = spawnPoints[state.player.team].map((spawn, index) => {
+    const spawnPoints = getSpawnPoints(state.player.team)
+    markers = spawnPoints.map((spawn, index) => {
       const contested = isContested(spawn)
       const el = document.createElement('button')
       el.type = 'button'
@@ -182,6 +197,7 @@ export function createDeploymentSystem({
   }
 
   function showScreen() {
+    enableDeploymentFog()
     input.reset()
     input.updateTouchUi?.()
     if (document.pointerLockElement) document.exitPointerLock()
@@ -244,9 +260,10 @@ export function createDeploymentSystem({
 
   function startAnimation(index) {
     if (!state.running || deploy.phase !== 'deploy_screen') return
-    const spawn = spawnPoints[state.player.team][index]
+    const spawn = getSpawnPoints(state.player.team)[index]
     deploy.phase = 'deploying'
     deploy.animTime = 0
+    restoreGameplayFog()
     deploy.spawnPoint = spawn
     landed = false
     endYaw = Math.atan2(spawn.x, spawn.z)
@@ -264,7 +281,8 @@ export function createDeploymentSystem({
       ),
       spawn.z
     )
-    endPos.set(spawn.x, config.player.standHeight, spawn.z)
+    const spawnHeight = state.groundHeightAt(spawn.x, spawn.z)
+    endPos.set(spawn.x, spawnHeight + config.player.standHeight, spawn.z)
 
     state.player.weapon.setVisible(false)
     audio.whoosh()
@@ -335,7 +353,11 @@ export function createDeploymentSystem({
     hud.updateHealth()
     hud.updateAmmo()
     player.alive = true
-    player.position.set(spawn.x, config.player.standHeight, spawn.z)
+    player.position.set(
+      spawn.x,
+      state.groundHeightAt(spawn.x, spawn.z) + config.player.standHeight,
+      spawn.z
+    )
     player.velocity.set(0, 0, 0)
     state.player.weapon.setVisible(true)
     dom.deployVignette.classList.remove('landing')
