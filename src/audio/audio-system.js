@@ -343,7 +343,7 @@ export class AudioSystem {
   }
   thompsonShot() {
     this.play(['thompson_shot_01', 'thompson_shot_02'], {
-      vol: 0.6,
+      vol: 0.5,
       rate: 0.98,
       rateJitter: 0.03,
       wet: 0.16,
@@ -363,7 +363,7 @@ export class AudioSystem {
   }
   shotgunShot() {
     this.play(['shotgun_shot_01', 'shotgun_shot_02'], {
-      vol: 0.85,
+      vol: 0.7,
       rate: 0.94,
       rateJitter: 0.035,
       wet: 0.24,
@@ -373,7 +373,7 @@ export class AudioSystem {
   }
   shotgunPump() {
     this.play('shotgun_pump', {
-      vol: 0.8,
+      vol: 0.7,
       rateJitter: 0.04,
       priority: 1,
     })
@@ -470,7 +470,7 @@ export class AudioSystem {
     this._lastWorldShot = now
     if (modelId === 'shotgun') {
       this.play(['shotgun_shot_01', 'shotgun_shot_02'], {
-        vol: distance > 55 ? 0.5 : 0.6,
+        vol: distance > 55 ? 0.4 : 0.5,
         rate: 0.94,
         rateJitter: 0.04,
         pos,
@@ -498,7 +498,7 @@ export class AudioSystem {
     }
     if (modelId === 'thompson') {
       this.play(['thompson_shot_01', 'thompson_shot_02'], {
-        vol: distance > 55 ? 0.4 : 0.5,
+        vol: distance > 55 ? 0.3 : 0.4,
         rate: 0.98,
         rateJitter: 0.035,
         pos,
