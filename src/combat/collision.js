@@ -299,3 +299,148 @@ export function rayHitObstacle(origin, direction, obstacle, maxDist) {
   return t
 }
 
+function expandObstacle(obstacle, radius) {
+  const minY = (obstacle.minY ?? 0) - radius
+  const maxY = (obstacle.maxY ?? obstacle.h ?? 3) + radius
+  if (obstacle.shape === 'box') {
+    const width = obstacle.w + radius * 2
+    const depth = obstacle.d + radius * 2
+    return {
+      ...obstacle,
+      w: width,
+      d: depth,
+      hw: width * 0.5,
+      hd: depth * 0.5,
+      r: Math.sqrt(width * width + depth * depth) * 0.5,
+      minY,
+      maxY,
+    }
+  }
+  if (obstacle.shape === 'frustum') {
+    return {
+      ...obstacle,
+      minY,
+      maxY,
+      h: maxY - minY,
+      bottomRadius: obstacle.bottomRadius + radius,
+      topRadius: obstacle.topRadius + radius,
+    }
+  }
+  return { ...obstacle, minY, maxY, r: (obstacle.r || 1) + radius }
+}
+
+export function sweepSphereObstacle(start, end, radius, obstacle) {
+  const direction = end.clone().sub(start)
+  if (direction.x * direction.x + direction.y * direction.y + direction.z * direction.z < 1e-12)
+    return null
+  const expanded = expandObstacle(obstacle, radius)
+  if (
+    expanded.shape !== 'frustum' &&
+    direction.x * direction.x + direction.z * direction.z < 1e-12
+  ) {
+    let inside = false
+    if (expanded.shape === 'box') {
+      const dx = start.x - expanded.x
+      const dz = start.z - expanded.z
+      const lx = dx * expanded.cos - dz * expanded.sin
+      const lz = dx * expanded.sin + dz * expanded.cos
+      inside = Math.abs(lx) <= expanded.hw && Math.abs(lz) <= expanded.hd
+    } else {
+      const dx = start.x - expanded.x
+      const dz = start.z - expanded.z
+      inside = dx * dx + dz * dz <= expanded.r * expanded.r
+    }
+    if (!inside) return null
+    if (start.y >= expanded.minY && start.y <= expanded.maxY) return 0
+    if (Math.abs(direction.y) < 1e-8) return null
+    const boundary = direction.y > 0 ? expanded.minY : expanded.maxY
+    const hitTime = (boundary - start.y) / direction.y
+    return hitTime >= 0 && hitTime <= 1 ? hitTime : null
+  }
+  return rayHitObstacle(start, direction, expanded, 1)
+}
+
+function normalizeNormal(normal, fallback) {
+  const length = Math.hypot(normal.x, normal.y, normal.z)
+  if (length >= 1e-8) {
+    normal.x /= length
+    normal.y /= length
+    normal.z /= length
+    return normal
+  }
+  const fallbackLength = Math.hypot(fallback.x, fallback.y, fallback.z)
+  if (fallbackLength >= 1e-8) {
+    normal.x = fallback.x / fallbackLength
+    normal.y = fallback.y / fallbackLength
+    normal.z = fallback.z / fallbackLength
+  } else {
+    normal.x = 0
+    normal.y = 1
+    normal.z = 0
+  }
+  return normal
+}
+
+export function getObstacleNormal(position, obstacle, velocity = { x: 0, y: 0, z: 0 }) {
+  const fallback = { x: -velocity.x, y: -velocity.y, z: -velocity.z }
+  if (obstacle.shape === 'box') {
+    const dx = position.x - obstacle.x
+    const dz = position.z - obstacle.z
+    const lx = dx * obstacle.cos - dz * obstacle.sin
+    const lz = dx * obstacle.sin + dz * obstacle.cos
+    const minY = obstacle.minY ?? 0
+    const maxY = obstacle.maxY ?? obstacle.h ?? 3
+    const closestX = clamp(lx, -obstacle.hw, obstacle.hw)
+    const closestY = clamp(position.y, minY, maxY)
+    const closestZ = clamp(lz, -obstacle.hd, obstacle.hd)
+    let localNormal = {
+      x: lx - closestX,
+      y: position.y - closestY,
+      z: lz - closestZ,
+    }
+    if (
+      localNormal.x * localNormal.x +
+        localNormal.y * localNormal.y +
+        localNormal.z * localNormal.z <
+      1e-12
+    ) {
+      const distances = [
+        { distance: obstacle.hw - Math.abs(lx), x: lx >= 0 ? 1 : -1, y: 0, z: 0 },
+        { distance: obstacle.hd - Math.abs(lz), x: 0, y: 0, z: lz >= 0 ? 1 : -1 },
+        { distance: position.y - minY, x: 0, y: -1, z: 0 },
+        { distance: maxY - position.y, x: 0, y: 1, z: 0 },
+      ]
+      localNormal = distances.reduce((best, candidate) =>
+        candidate.distance < best.distance ? candidate : best
+      )
+    }
+    return normalizeNormal(
+      {
+        x: localNormal.x * obstacle.cos + localNormal.z * obstacle.sin,
+        y: localNormal.y,
+        z: -localNormal.x * obstacle.sin + localNormal.z * obstacle.cos,
+      },
+      fallback
+    )
+  }
+
+  const dx = position.x - obstacle.x
+  const dz = position.z - obstacle.z
+  const distance = Math.hypot(dx, dz)
+  const minY = obstacle.minY ?? 0
+  const maxY = obstacle.maxY ?? obstacle.h ?? 3
+  if (position.y >= maxY && distance <= (obstacle.topRadius ?? obstacle.r ?? 1) + 0.5)
+    return { x: 0, y: 1, z: 0 }
+  if (position.y <= minY && distance <= (obstacle.bottomRadius ?? obstacle.r ?? 1) + 0.5)
+    return { x: 0, y: -1, z: 0 }
+  if (distance >= 1e-8) {
+    if (obstacle.shape === 'frustum') {
+      const slope =
+        ((obstacle.topRadius - obstacle.bottomRadius) / (maxY - minY || 1))
+      return normalizeNormal({ x: dx / distance, y: -slope, z: dz / distance }, fallback)
+    }
+    return { x: dx / distance, y: 0, z: dz / distance }
+  }
+  return normalizeNormal({ x: 0, y: 0, z: 0 }, fallback)
+}
+

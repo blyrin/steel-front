@@ -135,6 +135,7 @@ export class Bot {
     this.baseSpread = this.weaponData.botBaseSpread
     this.grenadeCount = this.grenadeData.count
     this.itemUses = this.itemData.uses || 0
+    this.nextSupplyAt = 0
     this.grenadeCooldown =
       this.config.grenade.aiCooldownMin +
       Math.random() * this.config.grenade.aiCooldownRange
@@ -1007,6 +1008,7 @@ export class Bot {
   }
 
   findResupplyTarget() {
+    if (performance.now() < this.nextSupplyAt) return null
     const botConfig = this.config.bot
     if (this.health <= botConfig.resupplyHealthThreshold) {
       const station = this.findNearestStation(this.gameState.medicalStations)
@@ -1037,10 +1039,8 @@ export class Bot {
         this.health = this.maxHealth
       } else {
         this.reserveAmmo = this.weaponData.reserveAmmo
-        this.magazine = this.weaponData.magazineSize
-        this.reloading = false
-        this.reloadTimer = 0
       }
+      this.nextSupplyAt = performance.now() + this.config.supply.cooldown * 1000
       this.resupplyStation = null
       this.resupplyKind = null
       this.setState('patrol')
@@ -1091,7 +1091,7 @@ export class Bot {
     if (Math.random() >= throwChance * dt) return
     const origin = this.position.clone().setY(this.position.y + 1.3)
     const direction = new THREE.Vector3().subVectors(this.target.position, origin)
-    direction.y = Math.max(0.25, direction.y + 0.35)
+    direction.y = Math.max(0.12, direction.y + 0.16)
     direction.normalize()
     this.grenadeCount--
     this.combat.throwGrenade(origin, direction, this.grenadeData, this.team, this)
@@ -1162,7 +1162,12 @@ export class Bot {
     )
     const lookAhead = this.config.bot.movementLookAhead
     for (const obstacle of this.gameState.obstacles) {
-      if (obstacle.type === 'ground' || obstacle.type === 'crater' || obstacle.type === 'wire')
+      if (
+        obstacle.type === 'ground' ||
+        obstacle.type === 'crater' ||
+        obstacle.type === 'wire' ||
+        obstacle.shape === 'frustum'
+      )
         continue
       const hit = rayHitObstacle(origin, direction, obstacle, lookAhead)
       if (hit != null && hit < lookAhead * 0.92) return true

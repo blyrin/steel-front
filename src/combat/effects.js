@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { getObstacleNormal, sweepSphereObstacle } from './collision.js'
 
 export function createEffectsSystem({ scene, state, audio, config }) {
   const effectsConfig = config.effects
@@ -401,8 +402,9 @@ export function createEffectsSystem({ scene, state, audio, config }) {
   }
 
   function spawnThrownGrenade(origin, velocity, grenade, onDetonate) {
+    const radius = 0.09
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.09, 8, 6),
+      new THREE.SphereGeometry(radius, 8, 6),
       new THREE.MeshStandardMaterial({
         color: grenade.color,
         roughness: 0.48,
@@ -419,15 +421,47 @@ export function createEffectsSystem({ scene, state, audio, config }) {
       vel: velocity.clone(),
       update: (dt, time, particle) => {
         particle.vel.y -= config.grenade.gravity * dt
-        particle.mesh.position.addScaledVector(particle.vel, dt)
-        particle.mesh.rotation.x += dt * 9
-        particle.mesh.rotation.z += dt * 7
-        if (particle.mesh.position.y < 0.09) {
-          particle.mesh.position.y = 0.09
+        const previous = particle.mesh.position.clone()
+        const next = previous.clone().addScaledVector(particle.vel, dt)
+        let obstacleHit = null
+        let obstacleHitTime = Infinity
+        for (const obstacle of state.obstacles) {
+          if (obstacle.type === 'ground' || obstacle.type === 'crater') continue
+          const hitTime = sweepSphereObstacle(previous, next, radius, obstacle)
+          if (hitTime == null || hitTime >= obstacleHitTime) continue
+          obstacleHit = obstacle
+          obstacleHitTime = hitTime
+        }
+
+        const previousGround = state.groundHeightAt(previous.x, previous.z) + radius
+        const nextGround = state.groundHeightAt(next.x, next.z) + radius
+        let groundHitTime = Infinity
+        if (previous.y <= previousGround + 0.002 && particle.vel.y <= 0) groundHitTime = 0
+        else if (next.y <= nextGround) {
+          const distance = (previous.y - previousGround) - (next.y - nextGround)
+          groundHitTime = distance > 1e-6
+            ? THREE.MathUtils.clamp((previous.y - previousGround) / distance, 0, 1)
+            : 0
+        }
+
+        if (groundHitTime < Infinity && groundHitTime <= obstacleHitTime) {
+          particle.mesh.position.copy(previous).lerp(next, groundHitTime)
+          particle.mesh.position.y =
+            state.groundHeightAt(particle.mesh.position.x, particle.mesh.position.z) + radius
           particle.vel.y = Math.abs(particle.vel.y) * config.grenade.bounce
           particle.vel.x *= 0.68
           particle.vel.z *= 0.68
+        } else if (obstacleHit) {
+          particle.mesh.position.copy(previous).lerp(next, obstacleHitTime)
+          const normalData = getObstacleNormal(particle.mesh.position, obstacleHit, particle.vel)
+          const normal = new THREE.Vector3(normalData.x, normalData.y, normalData.z)
+          if (particle.vel.dot(normal) < 0) particle.vel.reflect(normal).multiplyScalar(0.62)
+          particle.mesh.position.addScaledVector(normal, 0.004)
+        } else {
+          particle.mesh.position.copy(next)
         }
+        particle.mesh.rotation.x += dt * 9
+        particle.mesh.rotation.z += dt * 7
       },
       onComplete: () => onDetonate(mesh.position.clone()),
     })
@@ -463,7 +497,7 @@ export function createEffectsSystem({ scene, state, audio, config }) {
   }
 
   function spawnSmokeCloud(position, radius, duration) {
-    const puffCount = 14
+    const puffCount = effectsConfig.smokeCloudPuffCount
     for (let i = 0; i < puffCount; i++) {
       const smoke = new THREE.Mesh(
         geometry.smoke,
@@ -491,7 +525,7 @@ export function createEffectsSystem({ scene, state, audio, config }) {
         update: (dt, time, particle) => {
           const fadeIn = Math.min(1, time / 1.2)
           const fadeOut = Math.min(1, particle.life / 2)
-          particle.mesh.material.opacity = 0.34 * fadeIn * fadeOut
+          particle.mesh.material.opacity = effectsConfig.smokeCloudOpacity * fadeIn * fadeOut
           particle.mesh.position.y += dt * 0.025
           particle.mesh.rotation.y += dt * 0.08
           particle.mesh.scale.setScalar(scale * (1 + Math.min(time, 4) * 0.08))

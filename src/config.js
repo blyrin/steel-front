@@ -301,16 +301,18 @@ export const CFG = {
   grenade: {
     cooldown: 0.8,
     gravity: 13,
+    throwLift: 0.14,
     bounce: 0.38,
-    aiMinDistance: 9,
-    aiMaxDistance: 28,
-    aiThrowChancePerSecond: 0.32,
-    aiCooldownMin: 9,
-    aiCooldownRange: 7,
+    aiMinDistance: 7,
+    aiMaxDistance: 38,
+    aiThrowChancePerSecond: 0.55,
+    aiCooldownMin: 5,
+    aiCooldownRange: 4,
   },
   supply: {
     interactRadius: 3.4,
     aiArrivalDistance: 2.7,
+    cooldown: 8,
   },
   // 玩家生命、移动、视角和受击反馈参数。
   player: {
@@ -625,6 +627,9 @@ export const CFG = {
     botSmokeCount: 1,
     // 枪口烟雾的基础生命周期。
     smokeLife: 0.3,
+    // 手雷烟雾团的数量和最大透明度。
+    smokeCloudPuffCount: 10,
+    smokeCloudOpacity: 0.16,
     // 每个后续烟雾粒子的生命周期增量。
     smokeLifeStep: 0.09,
     // 玩家枪口烟团的生命周期。

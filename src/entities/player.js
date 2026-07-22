@@ -76,6 +76,7 @@ export class Player {
     this.grenadeCount = 0
     this.itemUses = 0
     this.lastGrenade = 0
+    this.nextSupplyAt = 0
     this.applyLoadout(this.loadout, false)
     this.lastMelee = 0
     this.meleeDelay = weaponConfig.meleeDelay
@@ -136,6 +137,7 @@ export class Player {
     this.itemData = this.config.items[this.loadout.item]
     this.grenadeCount = this.grenadeData.count
     this.itemUses = this.itemData.uses || 0
+    this.nextSupplyAt = 0
     this.ammo = this.magSize
     this.reserveAmmo = this.weaponData.reserveAmmo
     this.reloading = false
@@ -364,28 +366,19 @@ export class Player {
     )
   }
 
-  refillSupplies() {
-    const wasFull =
-      this.ammo === this.magSize &&
-      this.reserveAmmo === this.weaponData.reserveAmmo &&
-      this.grenadeCount === this.grenadeData.count &&
-      this.itemUses === this.itemData.uses
-    this.ammo = this.magSize
-    this.reserveAmmo = this.weaponData.reserveAmmo
-    this.grenadeCount = this.grenadeData.count
-    this.itemUses = this.itemData.uses
-    this.reloading = false
-    this.weapon.resetActions()
-    return !wasFull
-  }
-
   useMedicalStation() {
     if (!this.isNearStation(this.state.medicalStations)) return false
+    const now = performance.now()
+    if (now < this.nextSupplyAt) {
+      this.hud.showActionMessage(`补给冷却中 ${Math.ceil((this.nextSupplyAt - now) / 1000)} 秒`)
+      return true
+    }
     if (this.health >= this.maxHealth) {
       this.hud.showActionMessage('生命值已满')
       return true
     }
     this.health = this.maxHealth
+    this.nextSupplyAt = now + this.config.supply.cooldown * 1000
     this.hud.updateHealth()
     this.hud.showActionMessage('医疗补给完成')
     return true
@@ -393,9 +386,19 @@ export class Player {
 
   useAmmoStation() {
     if (!this.isNearStation(this.state.ammoStations)) return false
-    const suppliesChanged = this.refillSupplies()
+    const now = performance.now()
+    if (now < this.nextSupplyAt) {
+      this.hud.showActionMessage(`补给冷却中 ${Math.ceil((this.nextSupplyAt - now) / 1000)} 秒`)
+      return true
+    }
+    if (this.reserveAmmo >= this.weaponData.reserveAmmo) {
+      this.hud.showActionMessage('补给已满')
+      return true
+    }
+    this.reserveAmmo = this.weaponData.reserveAmmo
+    this.nextSupplyAt = now + this.config.supply.cooldown * 1000
     this.hud.updateAmmo()
-    this.hud.showActionMessage(suppliesChanged ? '补给完成' : '补给已满')
+    this.hud.showActionMessage('弹药补给完成')
     return true
   }
 

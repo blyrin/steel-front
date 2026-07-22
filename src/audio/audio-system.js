@@ -435,16 +435,29 @@ export class AudioSystem {
   }
 
   grenadeExplosion(pos) {
-    this.play(['distant_01', 'distant_02'], {
-      vol: 1.15,
-      rate: 0.72,
+    this.play('grenade_explosion', {
+      vol: 1.05,
+      rate: 0.94,
+      rateJitter: 0.04,
+      pos,
+      ref: 24,
+      max: 150,
+      rolloff: 0.26,
+      wet: 0.2,
+      priority: 2,
+    })
+  }
+  smokeGrenade(pos) {
+    this.play('smoke_grenade', {
+      vol: 0.52,
+      rate: 0.94,
       rateJitter: 0.05,
       pos,
-      ref: 30,
-      max: 150,
-      rolloff: 0.24,
-      wet: 0.22,
-      priority: 2,
+      ref: 14,
+      max: 75,
+      rolloff: 0.34,
+      wet: 0.08,
+      priority: 1,
     })
   }
 

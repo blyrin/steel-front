@@ -87,6 +87,7 @@ export function createCombatSystem({ state, effects, audio, hud, config, getMode
         expiresAt: performance.now() + grenade.duration * 1000,
       })
       effects.spawnSmokeCloud(position, grenade.radius, grenade.duration)
+      audio.smokeGrenade(position)
       return
     }
 
@@ -114,7 +115,7 @@ export function createCombatSystem({ state, effects, audio, hud, config, getMode
 
   function throwGrenade(origin, direction, grenade, team, owner) {
     const velocity = direction.clone().normalize().multiplyScalar(grenade.throwSpeed)
-    velocity.y += grenade.throwSpeed * 0.32
+    velocity.y += grenade.throwSpeed * config.grenade.throwLift
     effects.spawnThrownGrenade(
       origin,
       velocity,
