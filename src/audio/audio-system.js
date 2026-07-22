@@ -29,6 +29,7 @@ export class AudioSystem {
     this._lastZombieStep = 0
     this._lastZombieVoice = 0
     this._lastZombieImpact = 0
+    this._lastZombieBite = 0
     this._lastZombieFall = 0
     this._lastFortressHit = 0
   }
@@ -411,7 +412,7 @@ export class AudioSystem {
   }
   step() {
     this.play(['step_01', 'step_02', 'step_03'], {
-      vol: 0.24,
+      vol: 0.15,
       rateJitter: 0.1,
     })
   }
@@ -436,7 +437,7 @@ export class AudioSystem {
 
   grenadeExplosion(pos) {
     this.play('grenade_explosion', {
-      vol: 1.05,
+      vol: 0.4,
       rate: 0.94,
       rateJitter: 0.04,
       pos,
@@ -565,7 +566,7 @@ export class AudioSystem {
     if (this.camera.position.distanceTo(pos) > 52) return
     this._lastZombieStep = now
     this.play(['zombie_step_01', 'zombie_step_02', 'zombie_step_03'], {
-      vol: 0.24,
+      vol: 0.15,
       rate: 0.9,
       rateJitter: 0.12,
       pos,
@@ -581,16 +582,25 @@ export class AudioSystem {
     if (now - this._lastZombieVoice < 280) return
     if (pos && this.camera.position.distanceTo(pos) > 68) return
     this._lastZombieVoice = now
-    this.play(['zombie_groan_01', 'zombie_groan_02', 'zombie_groan_03'], {
-      vol: 0.2,
-      rate: 0.88,
-      rateJitter: 0.12,
-      pos,
-      ref: 16,
-      max: 80,
-      rolloff: 0.32,
-      wet: 0.18,
-    })
+    this.play(
+      [
+        'zombie_groan_01',
+        'zombie_groan_02',
+        'zombie_groan_03',
+        'zombie_groan_04',
+        'zombie_groan_05',
+      ],
+      {
+        vol: 0.2,
+        rate: 0.88,
+        rateJitter: 0.12,
+        pos,
+        ref: 16,
+        max: 80,
+        rolloff: 0.32,
+        wet: 0.18,
+      }
+    )
   }
 
   zombieRoar(pos = null) {
@@ -598,8 +608,8 @@ export class AudioSystem {
     if (now - this._lastZombieVoice < 200) return
     if (pos && this.camera.position.distanceTo(pos) > 90) return
     this._lastZombieVoice = now
-    this.play(['zombie_roar_01', 'zombie_roar_02'], {
-      vol: pos ? 0.3 : 0.5,
+    this.play(['zombie_roar_01', 'zombie_roar_02', 'zombie_roar_03', 'zombie_roar_04'], {
+      vol: pos ? 0.2 : 0.3,
       rate: 0.86,
       rateJitter: 0.08,
       pos,
@@ -617,7 +627,7 @@ export class AudioSystem {
     if (now - this._lastZombieImpact < 60) return
     if (this.camera.position.distanceTo(pos) > 45) return
     this._lastZombieImpact = now
-    this.play(['zombie_hit_01', 'zombie_hit_02'], {
+    this.play(['zombie_hit_01', 'zombie_hit_02', 'zombie_hit_03', 'zombie_hit_04'], {
       vol: 0.48,
       rate: 0.94,
       rateJitter: 0.08,
@@ -634,9 +644,29 @@ export class AudioSystem {
     this.zombieImpact(pos)
   }
 
+  zombieBite(pos) {
+    if (!pos) return
+    const now = performance.now()
+    if (now - this._lastZombieBite < 80) return
+    if (this.camera.position.distanceTo(pos) > 45) return
+    this._lastZombieBite = now
+    this.play('zombie_bite', {
+      vol: 0.32,
+      rate: 0.95,
+      rateJitter: 0.08,
+      pos,
+      ref: 7,
+      max: 46,
+      rolloff: 0.4,
+      wet: 0.04,
+      priority: 1,
+    })
+  }
+
   zombieAttack(sourcePos, hitPos) {
     this.zombieRoar(sourcePos)
     this.zombieImpact(hitPos)
+    this.zombieBite(hitPos)
   }
 
   zombieDeath(pos) {
@@ -644,19 +674,36 @@ export class AudioSystem {
     if (now - this._lastZombieFall < 55) return
     if (pos && this.camera.position.distanceTo(pos) > 65) return
     this._lastZombieFall = now
-    this.play('zombie_fall', {
-      vol: 0.42,
-      rate: 0.94,
-      rateJitter: 0.08,
-      pos,
-      ref: 14,
-      max: 72,
-      rolloff: 0.36,
-      wet: 0.08,
-    })
+    this.play(
+      [
+        'zombie_fall_01',
+        'zombie_fall_02',
+        'zombie_fall_03',
+        'zombie_fall_04',
+        'zombie_fall_05',
+        'zombie_fall_06',
+      ],
+      {
+        vol: 0.42,
+        rate: 0.94,
+        rateJitter: 0.08,
+        pos,
+        ref: 14,
+        max: 72,
+        rolloff: 0.36,
+        wet: 0.08,
+      }
+    )
   }
 
   zombieWave() {
+    this.play('zombie_wave_crowd', {
+      vol: 0.36,
+      rate: 0.9,
+      rateJitter: 0.04,
+      wet: 0.24,
+      priority: 1,
+    })
     this.zombieRoar()
   }
 
