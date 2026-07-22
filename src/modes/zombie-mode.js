@@ -9,18 +9,6 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
   let fortress = null
   let zombies = []
   let spawnTimer = 0
-  let waveSpawnPoints = []
-
-  function selectWaveSpawnPoints() {
-    const shuffled = spawnPoints.axis.slice()
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      const swap = shuffled[i]
-      shuffled[i] = shuffled[j]
-      shuffled[j] = swap
-    }
-    waveSpawnPoints = shuffled.slice(0, Math.ceil(shuffled.length / 3))
-  }
 
   function getRandomSpawn(team) {
     const points = spawnPoints[team]
@@ -33,12 +21,14 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
   }
 
   function getRandomZombieSpawn() {
-    const spawn = waveSpawnPoints[Math.floor(Math.random() * waveSpawnPoints.length)]
-    return new THREE.Vector3(
-      spawn.x + (Math.random() - 0.5) * modeConfig.spawnScatter,
-      0,
-      spawn.z + (Math.random() - 0.5) * modeConfig.spawnScatter
-    )
+    const halfMap = config.match.mapSize / 2 - 2
+    let x
+    let z
+    do {
+      x = (Math.random() * 2 - 1) * halfMap
+      z = (Math.random() * 2 - 1) * halfMap
+    } while (Math.hypot(x, z) <= modeConfig.guardRadius)
+    return new THREE.Vector3(x, 0, z)
   }
 
   function getHostileActors(team) {
@@ -123,7 +113,6 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     data.waveSpawned = 0
     data.waveDefeated = 0
     data.phase = 'assault'
-    selectWaveSpawnPoints()
     services.audio.zombieWave()
     spawnTimer = modeConfig.waveSpawnInterval
     services.hud.showCenterMessage(`第 ${data.wave} 波`, 1400, '丧尸来袭')

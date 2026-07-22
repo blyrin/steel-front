@@ -391,14 +391,22 @@ export class Player {
       this.hud.showActionMessage(`补给冷却中 ${Math.ceil((this.nextSupplyAt - now) / 1000)} 秒`)
       return true
     }
-    if (this.reserveAmmo >= this.weaponData.reserveAmmo) {
+    const maxGrenades = this.grenadeData.count
+    const maxItemUses = this.itemData.uses || 0
+    const needsResupply =
+      this.reserveAmmo < this.weaponData.reserveAmmo ||
+      this.grenadeCount < maxGrenades ||
+      this.itemUses < maxItemUses
+    if (!needsResupply) {
       this.hud.showActionMessage('补给已满')
       return true
     }
     this.reserveAmmo = this.weaponData.reserveAmmo
+    this.grenadeCount = maxGrenades
+    this.itemUses = maxItemUses
     this.nextSupplyAt = now + this.config.supply.cooldown * 1000
     this.hud.updateAmmo()
-    this.hud.showActionMessage('弹药补给完成')
+    this.hud.showActionMessage('弹药、投掷物和道具补给完成')
     return true
   }
 

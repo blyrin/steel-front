@@ -854,7 +854,7 @@ export class Bot {
   updatePerception(dt) {
     const botConfig = this.config.bot
     this.perceptionTimer -= dt
-    if (this.perceptionTimer > 0) return
+    if (this.perceptionTimer > 0 && this.target?.alive) return
     this.perceptionTimer = botConfig.perceptionInterval * (0.85 + Math.random() * 0.3)
     const observation = this.selectTarget()
     if (!observation) {
@@ -1016,7 +1016,10 @@ export class Bot {
     }
     const totalAmmo = this.magazine + this.reserveAmmo
     const maxAmmo = this.weaponData.magazineSize + this.weaponData.reserveAmmo
-    if (totalAmmo / maxAmmo <= botConfig.resupplyAmmoRatio) {
+    const needsEquipment =
+      this.grenadeCount < this.grenadeData.count ||
+      this.itemUses < (this.itemData.uses || 0)
+    if (totalAmmo / maxAmmo <= botConfig.resupplyAmmoRatio || needsEquipment) {
       const station = this.findNearestAmmoStation()
       if (station) return { station, kind: 'ammo' }
     }
@@ -1039,6 +1042,8 @@ export class Bot {
         this.health = this.maxHealth
       } else {
         this.reserveAmmo = this.weaponData.reserveAmmo
+        this.grenadeCount = this.grenadeData.count
+        this.itemUses = this.itemData.uses || 0
       }
       this.nextSupplyAt = performance.now() + this.config.supply.cooldown * 1000
       this.resupplyStation = null
@@ -1646,6 +1651,7 @@ export class Bot {
   }
 
   getFirePause() {
+    if (this.mode?.id === 'zombie') return 0
     let roleOffset = 0
     if (this.role === 'marksman') roleOffset = 0.24
     else if (this.role === 'support') roleOffset = 0.1

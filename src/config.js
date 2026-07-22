@@ -22,20 +22,20 @@ export const CFG = {
     },
     zombie: {
       // 玩家之外的盟军 AI 数量。
-      alliedBotCount: 5,
+      alliedBotCount: 7,
       // 盟军 AI 定时复活等待时间。
       alliedRespawnTime: 8,
       // 盟军出生点和敌方生成点的随机散布范围。
       spawnScatter: 3,
       // 第一波丧尸数量、每波增量和生成节奏。
       waveStartCount: 32,
-      waveIncrement: 4,
+      waveIncrement: 8,
       waveSpawnInterval: 0.5,
-      waveIntermission: 15,
+      waveIntermission: 10,
       // 同时存活的丧尸上限。
       maxConcurrent: 128,
       // 盟军 AI 的活动范围中心与半径。
-      guardRadius: 32,
+      guardRadius: 28,
       fortress: {
         x: 0,
         z: 0,
@@ -625,15 +625,16 @@ export const CFG = {
     firstPersonSmokeCount: 1,
     // Bot 枪口烟雾数量。
     botSmokeCount: 1,
-    // 枪口烟雾的基础生命周期。
-    smokeLife: 0.3,
+    // 枪口烟雾的透明度和基础生命周期。
+    muzzleSmokeOpacity: 0.08,
+    smokeLife: 0.22,
     // 手雷烟雾团的数量和最大透明度。
-    smokeCloudPuffCount: 10,
-    smokeCloudOpacity: 0.16,
+    smokeCloudPuffCount: 24,
+    smokeCloudOpacity: 0.28,
     // 每个后续烟雾粒子的生命周期增量。
     smokeLifeStep: 0.09,
     // 玩家枪口烟团的生命周期。
-    smokePuffLife: 0.5,
+    smokePuffLife: 0.34,
     // 弹壳粒子的生命周期。
     shellLife: 1.4,
     // 弹壳下落加速度。
@@ -808,28 +809,10 @@ export const SPAWN_POINTS = {
   ],
 }
 
-// 丧尸模式的守军出生点和敌方生成点。
+// 丧尸模式的守军出生点。
 export const ZOMBIE_SPAWN_POINTS = {
   allies: [
     { x: 0, z: 0, name: '堡垒上层', id: 'A' },
-  ],
-  axis: [
-    { x: 0, z: -108, name: '北侧来袭点', id: 'N' },
-    { x: 41, z: -100, name: '北偏东来袭点', id: 'NNE' },
-    { x: 76, z: -76, name: '东北来袭点', id: 'NE' },
-    { x: 100, z: -41, name: '东偏北来袭点', id: 'ENE' },
-    { x: 108, z: 0, name: '东侧来袭点', id: 'E' },
-    { x: 100, z: 41, name: '东偏南来袭点', id: 'ESE' },
-    { x: 76, z: 76, name: '东南来袭点', id: 'SE' },
-    { x: 41, z: 100, name: '南偏东来袭点', id: 'SSE' },
-    { x: 0, z: 108, name: '南侧来袭点', id: 'S' },
-    { x: -41, z: 100, name: '南偏西来袭点', id: 'SSW' },
-    { x: -76, z: 76, name: '西南来袭点', id: 'SW' },
-    { x: -100, z: 41, name: '西偏南来袭点', id: 'WSW' },
-    { x: -108, z: 0, name: '西侧来袭点', id: 'W' },
-    { x: -100, z: -41, name: '西偏北来袭点', id: 'WNW' },
-    { x: -76, z: -76, name: '西北来袭点', id: 'NW' },
-    { x: -41, z: -100, name: '北偏西来袭点', id: 'NNW' },
   ],
 }
 

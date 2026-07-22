@@ -113,7 +113,7 @@ export function createEffectsSystem({ scene, state, audio, config }) {
     const sideOffset = firstPerson ? 0.02 : 0.05
     const sideScale = firstPerson ? 0.085 : 0.128
     const sideThickness = firstPerson ? 0.025 : 0.037
-    const smokeOpacity = firstPerson ? 0.22 : 0.4
+    const smokeOpacity = effectsConfig.muzzleSmokeOpacity
     const core = take(
       'core',
       () => createMesh('core', new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true }))
@@ -304,7 +304,7 @@ export function createEffectsSystem({ scene, state, audio, config }) {
     )
     puff.position.copy(pos)
     puff.scale.setScalar(0.06)
-    puff.material.opacity = 0.12
+    puff.material.opacity = effectsConfig.muzzleSmokeOpacity
     addParticle({
       mesh: puff,
       poolType: 'smoke',
@@ -312,7 +312,8 @@ export function createEffectsSystem({ scene, state, audio, config }) {
       life: effectsConfig.smokePuffLife,
       maxLife: effectsConfig.smokePuffLife,
       update: (dt, time, particle) => {
-        particle.mesh.material.opacity = (1 - time / particle.maxLife) * 0.12
+        particle.mesh.material.opacity =
+          (1 - time / particle.maxLife) * effectsConfig.muzzleSmokeOpacity
         particle.mesh.scale.setScalar(0.06 * (1 + time * 2.6))
         particle.mesh.position.y += dt * 0.18
       },
