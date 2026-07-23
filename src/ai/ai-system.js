@@ -5,10 +5,6 @@ export function createAiSystem({ state, config, getMode }) {
   const actorsById = new Map()
   let nextActorId = 1
   let initialized = false
-  let waitingForWorker = false
-  let latestFrame = null
-  let frameId = 0
-  let processedFrameId = 0
 
   function allocateActorId() {
     return `actor-${nextActorId++}`
@@ -161,8 +157,8 @@ export function createAiSystem({ state, config, getMode }) {
   }
 
   function update(dt) {
-    latestFrame = {
-      frameId: ++frameId,
+    worker.postMessage({
+      type: 'tick',
       dt,
       now: performance.now(),
       player: serializePlayer(),
@@ -174,10 +170,7 @@ export function createAiSystem({ state, config, getMode }) {
         radius: smoke.radius,
         expiresAt: smoke.expiresAt,
       })),
-    }
-    if (waitingForWorker) return
-    waitingForWorker = true
-    worker.postMessage({ type: 'tick', ...latestFrame })
+    })
   }
 
   function resolveTarget(id) {
@@ -224,19 +217,8 @@ export function createAiSystem({ state, config, getMode }) {
 
   worker.onmessage = event => {
     const message = event.data
-    waitingForWorker = false
-    processedFrameId = message.frameId
     applySnapshot(message)
     for (const workerEvent of message.events) handleEvent(workerEvent)
-    if (
-      latestFrame &&
-      latestFrame.frameId > processedFrameId &&
-      state.running &&
-      !state.paused
-    ) {
-      waitingForWorker = true
-      worker.postMessage({ type: 'tick', ...latestFrame })
-    }
   }
 
   worker.onerror = event => {

@@ -3,7 +3,9 @@ export const CFG = {
   match: {
     // 地图边长。
     mapSize: 240,
-    // 单帧最大模拟时间，避免切后台后瞬移。
+    // 固定模拟频率。
+    tickRate: 60,
+    // 单次渲染帧最多累积的模拟时间，避免切后台后瞬移。
     maxFrameDelta: 0.05,
     // 启动加载阶段的相机高度。
     initialCameraHeight: 5,

@@ -1436,7 +1436,6 @@ function processTick(message) {
   }
   self.postMessage({
     type: 'snapshot',
-    frameId: message.frameId,
     actors: [...actors.values()].map(snapshotActor),
     events,
   })

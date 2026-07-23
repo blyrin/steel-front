@@ -202,23 +202,33 @@ export function createGame() {
     }, boot.menuFadeDelay)
   }
 
+  const simulationStep = 1 / CFG.match.tickRate
+  let simulationAccumulator = 0
   let lastTime = performance.now()
   function animate() {
     requestAnimationFrame(animate)
     const now = performance.now()
-    const dt = Math.min(CFG.match.maxFrameDelta, (now - lastTime) / 1000)
+    const frameDelta = Math.min(CFG.match.maxFrameDelta, (now - lastTime) / 1000)
     lastTime = now
     if (!state.loading && state.running && !state.paused) {
-      state.player.update(dt)
-      mode.update(dt)
-      ai.update(dt)
-      for (const actor of state.actors) actor.update(dt)
-      combat.update()
-      effects.update(dt)
-      hud.updateScores()
-      if (deploy.phase === 'none') maps.updateMinimap()
-      hud.setScoreboardVisible(input.isKeyDown('Tab'))
-      finishModeIfNeeded()
+      simulationAccumulator += frameDelta
+      while (
+        simulationAccumulator >= simulationStep &&
+        state.running &&
+        !state.paused
+      ) {
+        state.player.update(simulationStep)
+        mode.update(simulationStep)
+        ai.update(simulationStep)
+        for (const actor of state.actors) actor.update(simulationStep)
+        combat.update()
+        effects.update(simulationStep)
+        hud.updateScores()
+        if (deploy.phase === 'none') maps.updateMinimap()
+        hud.setScoreboardVisible(input.isKeyDown('Tab'))
+        finishModeIfNeeded()
+        simulationAccumulator -= simulationStep
+      }
     }
     audio.updateListener()
     runtime.renderer.render(runtime.scene, runtime.camera)
