@@ -775,7 +775,7 @@ export function createWorldSystem({ scene, matLib, state, config }) {
           true
         )
         wheel.rotation.z = Math.PI / 2
-        wheel.position.set(side * 1.55, 0.32, i * 1.0)
+        wheel.position.set(side * 1.55, 0.32, i)
         group.add(wheel)
       }
       const skirt = enableShadow(

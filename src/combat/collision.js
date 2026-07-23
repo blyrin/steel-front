@@ -338,7 +338,7 @@ export function sweepSphereObstacle(start, end, radius, obstacle) {
     expanded.shape !== 'frustum' &&
     direction.x * direction.x + direction.z * direction.z < 1e-12
   ) {
-    let inside = false
+    let inside
     if (expanded.shape === 'box') {
       const dx = start.x - expanded.x
       const dz = start.z - expanded.z

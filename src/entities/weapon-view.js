@@ -749,11 +749,11 @@ export class WeaponView {
       const centerY = 0.055
       const centerZ = -0.11
       const centerRotationY = -0.014
-      let positionX = 0
-      let positionY = 0
-      let positionZ = 0
-      let meleeRotationX = 0
-      let meleeRotationY = 0
+      let positionX
+      let positionY
+      let positionZ
+      let meleeRotationX
+      let meleeRotationY
       if (progress < 0.18) {
         const time = progress / 0.18
         const eased = time * time * (3 - 2 * time)

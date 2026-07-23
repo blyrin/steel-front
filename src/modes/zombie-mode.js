@@ -37,16 +37,6 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     return targets
   }
 
-  function getPatrolPoint() {
-    const angle = Math.random() * Math.PI * 2
-    const radius = 8 + Math.random() * (modeConfig.guardRadius - 8)
-    return new THREE.Vector3(
-      fortress.position.x + Math.cos(angle) * radius,
-      0,
-      fortress.position.z + Math.sin(angle) * radius
-    )
-  }
-
   function createBotServices() {
     return {
       scene: services.scene,
@@ -55,8 +45,8 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
       audio: services.audio,
       gameState: state,
       config,
-      hud: services.hud,
       effects: services.effects,
+      ai: services.ai,
       combat: services.combat,
       scoring: services.scoring,
       mode,
@@ -121,18 +111,17 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
   function spawnZombie() {
     const zombie = new Zombie(getRandomZombieSpawn(), {
       scene: services.scene,
-      camera: services.camera,
       matLib: services.matLib,
       audio: services.audio,
       gameState: state,
-      config,
       effects: services.effects,
+      ai: services.ai,
       scoring: services.scoring,
-      mode,
       enemyConfig: modeConfig.enemy,
     })
     state.actors.push(zombie)
     zombies.push(zombie)
+    services.ai.addActor(zombie)
     services.audio.zombieGroan(zombie.position)
     state.modeState.waveSpawned++
   }
@@ -145,6 +134,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     for (let i = zombies.length - 1; i >= 0; i--) {
       const zombie = zombies[i]
       if (zombie.alive || zombie.deathTime < 0.7) continue
+      services.ai.removeActor(zombie)
       zombie.destroy()
       const actorIndex = state.actors.indexOf(zombie)
       if (actorIndex >= 0) state.actors.splice(actorIndex, 1)
@@ -218,7 +208,6 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     },
     getRandomSpawn,
     getHostileActors,
-    getPatrolPoint,
     getFortress() {
       return fortress
     },

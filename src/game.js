@@ -11,6 +11,7 @@ import { AudioSystem } from './audio/audio-system.js'
 import { createMap } from './world/maps/registry.js'
 import { createObjectiveSystem } from './world/objectives.js'
 import { createEffectsSystem } from './combat/effects.js'
+import { createAiSystem } from './ai/ai-system.js'
 import { createCombatSystem } from './combat/ballistics.js'
 import { createScoringSystem } from './combat/scoring.js'
 import { getDom } from './ui/dom.js'
@@ -35,6 +36,7 @@ export function createGame() {
   })
   const effects = createEffectsSystem({ scene: runtime.scene, state, audio, config: CFG })
   let mode = null
+  const ai = createAiSystem({ state, config: CFG, getMode: () => mode })
   const hud = createHud({ dom, state, deploy, audio, config: CFG, getMode: () => mode })
   const maps = createMapSystem({ dom, state, config: CFG })
   let deployment
@@ -136,6 +138,7 @@ export function createGame() {
         input,
         hud,
         effects,
+        ai,
         combat,
         scoring,
         deployment,
@@ -150,6 +153,7 @@ export function createGame() {
     dom.hud.classList.add('show')
     state.player.weapon.setVisible(false)
     state.player.alive = false
+    ai.start()
     hud.updateScores()
     deployment.showScreen()
   }
@@ -206,8 +210,9 @@ export function createGame() {
     lastTime = now
     if (!state.loading && state.running && !state.paused) {
       state.player.update(dt)
-      for (const actor of state.actors) actor.update(dt)
       mode.update(dt)
+      ai.update(dt)
+      for (const actor of state.actors) actor.update(dt)
       combat.update()
       effects.update(dt)
       hud.updateScores()

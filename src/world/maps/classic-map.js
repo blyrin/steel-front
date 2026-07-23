@@ -10,6 +10,7 @@ export function createClassicMap(services) {
       world.buildClassicMap()
       services.state.mapId = 'classic'
       services.state.groundHeightAt = () => 0
+      services.state.groundRegions = []
     },
   }
 }

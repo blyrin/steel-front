@@ -123,6 +123,7 @@ export function createGameState() {
     modeState: null,
     mapId: null,
     groundHeightAt: () => 0,
+    groundRegions: [],
     objectives: {
       fortress: null,
     },

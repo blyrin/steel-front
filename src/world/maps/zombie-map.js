@@ -484,6 +484,7 @@ export function createZombieMap({ scene, matLib, state, config, objectives }) {
   function buildMap() {
     state.mapId = 'zombie'
     state.groundHeightAt = groundHeightAt
+    state.groundRegions = groundRegions
     createGround()
     createCentralPlaza()
     createStreetLamp(-23, -18, 0.2)

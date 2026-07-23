@@ -22,15 +22,6 @@ export function createClassicMode({ state, deploy, config, spawnPoints, services
     return targets
   }
 
-  function getPatrolPoint() {
-    const half = config.match.mapSize * config.bot.patrolAreaRatio
-    return new THREE.Vector3(
-      (Math.random() - 0.5) * half * 2,
-      0,
-      (Math.random() - 0.5) * half * 2
-    )
-  }
-
   function createBotServices() {
     return {
       scene: services.scene,
@@ -39,8 +30,8 @@ export function createClassicMode({ state, deploy, config, spawnPoints, services
       audio: services.audio,
       gameState: state,
       config,
-      hud: services.hud,
       effects: services.effects,
+      ai: services.ai,
       combat: services.combat,
       scoring: services.scoring,
       mode,
@@ -115,7 +106,6 @@ export function createClassicMode({ state, deploy, config, spawnPoints, services
     },
     getRandomSpawn,
     getHostileActors,
-    getPatrolPoint,
     getBotRespawnDelay() {
       return modeConfig.respawnTime
     },
