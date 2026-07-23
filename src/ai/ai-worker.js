@@ -758,6 +758,43 @@ function selectBotTarget(actor, smokeClouds) {
   return null
 }
 
+function findZombieReinforcement(actor) {
+  const enemyConfig = config.modes.zombie.enemy
+  let best = null
+  let bestScore = Infinity
+  for (const ally of actors.values()) {
+    if (
+      ally === actor ||
+      ally.kind !== 'zombie' ||
+      !ally.alive ||
+      !ally.targetId
+    ) continue
+    const age = actor.aiTime - ally.lastSeenAt
+    if (age > enemyConfig.targetMemory) continue
+    const allyDistance = distance2D(actor, ally)
+    if (allyDistance > enemyConfig.reinforcementRadius) continue
+    const target = getTarget(ally.targetId)
+    if (!target?.alive || target.team === actor.team) continue
+    const targetDistance = Math.hypot(
+      ally.lastSeenX - actor.x,
+      ally.lastSeenZ - actor.z,
+    )
+    if (targetDistance > enemyConfig.targetSearchRadius * 1.35) continue
+    const score = allyDistance + targetDistance * 0.12 + age * 3
+    if (score >= bestScore) continue
+    bestScore = score
+    best = {
+      target,
+      visible: false,
+      x: ally.lastSeenX,
+      y: ally.lastSeenY,
+      z: ally.lastSeenZ,
+      seenAt: ally.lastSeenAt,
+    }
+  }
+  return best
+}
+
 function selectZombieTarget(actor) {
   const enemyConfig = config.modes.zombie.enemy
   const searchRadiusSq = enemyConfig.targetSearchRadius ** 2
@@ -795,6 +832,11 @@ function selectZombieTarget(actor) {
     if (age <= enemyConfig.playerShotMemory && distance <= enemyConfig.playerShotHearingDistance) {
       return { target: player, visible: false, x: shot.x, y: actor.y, z: shot.z, seenAt: actor.aiTime }
     }
+  }
+
+  if (!nearest) {
+    const reinforcement = findZombieReinforcement(actor)
+    if (reinforcement) return reinforcement
   }
 
   return nearest
@@ -1805,6 +1847,18 @@ function findZombieAttackTarget(actor) {
   return nearest
 }
 
+function getZombieSiegePoint(actor) {
+  const radius = Math.max(2, fortress.attackRadius - actor.radius * 1.8)
+  return {
+    x: fortress.x + Math.cos(actor.siegeAngle) * radius,
+    y: groundHeightAt(
+      fortress.x + Math.cos(actor.siegeAngle) * radius,
+      fortress.z + Math.sin(actor.siegeAngle) * radius,
+    ),
+    z: fortress.z + Math.sin(actor.siegeAngle) * radius,
+  }
+}
+
 function updateZombie(actor, dt) {
   const enemyConfig = config.modes.zombie.enemy
   actor.aiTime += dt
@@ -1825,13 +1879,14 @@ function updateZombie(actor, dt) {
   const target = immediateTarget || getTarget(actor.targetId)
   let targetPosition
   if (!target) {
-    targetPosition = { x: fortress.x, y: 0, z: fortress.z }
+    targetPosition = getZombieSiegePoint(actor)
   } else if (actor.targetVisible) {
     targetPosition = { x: target.x, y: targetGroundY(target), z: target.z }
   } else {
     targetPosition = { x: actor.lastSeenX, y: actor.lastSeenY, z: actor.lastSeenZ }
   }
   const targetDistance = Math.hypot(targetPosition.x - actor.x, targetPosition.z - actor.z)
+  const fortressDistance = distance2D(actor, fortress)
   let canAttack = false
   if (target && actor.targetVisible && targetDistance <= enemyConfig.attackRange) {
     canAttack = hasLineOfSight(
@@ -1840,7 +1895,7 @@ function updateZombie(actor, dt) {
       [],
     )
   }
-  if (canAttack || (!target && targetDistance <= fortress.attackRadius)) {
+  if (canAttack || (!target && fortressDistance <= fortress.attackRadius)) {
     actor.vx = 0
     actor.vz = 0
     if (actor.attackTimer <= 0) {
@@ -1908,6 +1963,7 @@ function createActor(data) {
     searchX: data.x,
     searchZ: data.z,
     flankDir: 1,
+    siegeAngle: Math.random() * Math.PI * 2,
     vx: data.vx,
     vz: data.vz,
   }

@@ -54,6 +54,8 @@ export const CFG = {
         radius: 0.46,
         attackRange: 2.0,
         targetSearchRadius: 42,
+        // 丧尸响应附近同类追击目标的范围。
+        reinforcementRadius: 24,
         // 丧尸主动重新选择目标的间隔。
         perceptionInterval: 0.16,
         // 丧尸丢失人类后的追踪记忆时间。
