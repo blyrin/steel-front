@@ -99,7 +99,6 @@ export class Bot {
     this.itemData = this.config.items[itemId]
     this.magazine = this.weaponData.magazineSize
     this.reserveAmmo = this.weaponData.reserveAmmo
-    this.baseSpread = this.weaponData.botBaseSpread
     this.grenadeCount = this.grenadeData.count
     this.itemUses = this.itemData.uses || 0
     if (this.rifle) this.configureRifleModel()
@@ -887,12 +886,12 @@ export class Bot {
 
   getSpread() {
     const weaponConfig = this.config.weapon
-    let spread = this.baseSpread + (1 - this.botSkill) * weaponConfig.botSkillSpread
+    let spread = this.weaponData.baseSpread
     const speed = Math.hypot(this.velocity.x, this.velocity.z)
-    if (speed > weaponConfig.botMovingFastThreshold)
-      spread *= weaponConfig.botMovingFastMultiplier
-    else if (speed > weaponConfig.botMovingSlowThreshold)
-      spread *= weaponConfig.botMovingSlowMultiplier
+    if (this.targetVisible) spread *= weaponConfig.aimingSpreadMultiplier
+    if (speed > weaponConfig.playerMovingThreshold) {
+      spread *= weaponConfig.movingSpreadMultiplier
+    }
     if (this.reloading) spread *= weaponConfig.reloadingSpreadMultiplier
     spread += this.spreadBloom
     return Math.min(spread, weaponConfig.maxSpread)
@@ -925,9 +924,12 @@ export class Bot {
     }
     const aimDirection = new THREE.Vector3().subVectors(target, muzzle).normalize()
     const spread = this.getSpread()
+    const spreadBloomPerShot = this.targetVisible
+      ? this.weaponData.aimedSpreadBloomPerShot
+      : this.weaponData.spreadBloomPerShot
     this.spreadBloom = Math.min(
       this.config.weapon.spreadBloomMax,
-      this.spreadBloom + this.weaponData.spreadBloomPerShot
+      this.spreadBloom + spreadBloomPerShot
     )
     const pelletCount = this.weaponData.pellets ?? 1
     for (let pellet = 0; pellet < pelletCount; pellet++) {

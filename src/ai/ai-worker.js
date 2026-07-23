@@ -10,6 +10,8 @@ let fortress = null
 let player = null
 let simulationTime = 0
 let events = []
+let navigation = null
+let coverReservations = new Map()
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
@@ -315,6 +317,279 @@ function resolveObstacleCollision(actor, radius) {
     actor.x = obstacle.x + nextX * obstacle.cos + nextZ * obstacle.sin
     actor.z = obstacle.z - nextX * obstacle.sin + nextZ * obstacle.cos
   }
+}
+
+function obstacleBlocksPoint(x, z, y, radius) {
+  for (const obstacle of obstacles) {
+    if (obstacle.type === 'ground' || obstacle.type === 'crater' || obstacle.type === 'wire') continue
+    if (y >= obstacle.maxY && obstacle.shape !== 'frustum') continue
+
+    if (obstacle.shape === 'frustum') {
+      const dx = x - obstacle.x
+      const dz = z - obstacle.z
+      const distance = Math.hypot(dx, dz)
+      if (distance >= obstacle.bottomRadius + radius) continue
+      const height = obstacle.maxY - obstacle.minY
+      if (height <= 1e-6) return true
+      let surfaceHeight = obstacle.minY
+      if (distance <= obstacle.topRadius) surfaceHeight = obstacle.maxY
+      else if (distance <= obstacle.bottomRadius) {
+        surfaceHeight = obstacle.minY +
+          ((obstacle.bottomRadius - distance) /
+            (obstacle.bottomRadius - obstacle.topRadius)) * height
+      }
+      if (y < surfaceHeight - 0.05) return true
+      continue
+    }
+
+    if (obstacle.shape === 'circle') {
+      const dx = x - obstacle.x
+      const dz = z - obstacle.z
+      if (dx * dx + dz * dz < (obstacle.r + radius) ** 2) return true
+      continue
+    }
+
+    const dx = x - obstacle.x
+    const dz = z - obstacle.z
+    const localX = dx * obstacle.cos - dz * obstacle.sin
+    const localZ = dx * obstacle.sin + dz * obstacle.cos
+    const closestX = clamp(localX, -obstacle.hw, obstacle.hw)
+    const closestZ = clamp(localZ, -obstacle.hd, obstacle.hd)
+    const offsetX = localX - closestX
+    const offsetZ = localZ - closestZ
+    if (offsetX * offsetX + offsetZ * offsetZ < radius * radius) return true
+  }
+  return false
+}
+
+function navigationCellAt(x, z) {
+  if (!navigation) return null
+  const col = clamp(
+    Math.floor((x - navigation.originX) / navigation.cellSize),
+    0,
+    navigation.columns - 1,
+  )
+  const row = clamp(
+    Math.floor((z - navigation.originZ) / navigation.cellSize),
+    0,
+    navigation.rows - 1,
+  )
+  return { col, row, index: row * navigation.columns + col }
+}
+
+function navigationCellCenter(col, row) {
+  return {
+    x: navigation.originX + (col + 0.5) * navigation.cellSize,
+    z: navigation.originZ + (row + 0.5) * navigation.cellSize,
+  }
+}
+
+function findNearestWalkableCell(x, z, maxRadius = 5) {
+  const base = navigationCellAt(x, z)
+  if (!base) return null
+  if (!navigation.blocked[base.index]) return base
+  let best = null
+  let bestDistance = Infinity
+  for (let radius = 1; radius <= maxRadius; radius++) {
+    for (let rowOffset = -radius; rowOffset <= radius; rowOffset++) {
+      for (let colOffset = -radius; colOffset <= radius; colOffset++) {
+        if (
+          Math.abs(rowOffset) !== radius &&
+          Math.abs(colOffset) !== radius
+        ) continue
+        const col = base.col + colOffset
+        const row = base.row + rowOffset
+        if (
+          col < 0 ||
+          col >= navigation.columns ||
+          row < 0 ||
+          row >= navigation.rows
+        ) continue
+        const index = row * navigation.columns + col
+        if (navigation.blocked[index]) continue
+        const center = navigationCellCenter(col, row)
+        const distance = Math.hypot(center.x - x, center.z - z)
+        if (distance < bestDistance) {
+          bestDistance = distance
+          best = { col, row, index }
+        }
+      }
+    }
+    if (best) return best
+  }
+  return null
+}
+
+function navigationSegmentBlocked(from, to, radius) {
+  const distance = Math.hypot(to.x - from.x, to.z - from.z)
+  if (distance < 1e-6) return false
+  const steps = Math.ceil(distance / Math.max(0.8, navigation.cellSize * 0.35))
+  for (let step = 1; step <= steps; step++) {
+    const progress = step / steps
+    const x = from.x + (to.x - from.x) * progress
+    const z = from.z + (to.z - from.z) * progress
+    if (obstacleBlocksPoint(x, z, groundHeightAt(x, z), radius)) return true
+  }
+  return false
+}
+
+function findNavigationPath(actor, target) {
+  if (!navigation) return null
+  const start = findNearestWalkableCell(actor.x, actor.z)
+  const goal = findNearestWalkableCell(target.x, target.z)
+  if (!start || !goal || start.index === goal.index) return []
+
+  const neighbors = [
+    [-1, -1, 1.414],
+    [0, -1, 1],
+    [1, -1, 1.414],
+    [-1, 0, 1],
+    [1, 0, 1],
+    [-1, 1, 1.414],
+    [0, 1, 1],
+    [1, 1, 1.414],
+  ]
+  const open = [{ index: start.index, g: 0, f: 0 }]
+  const scores = new Map([[start.index, 0]])
+  const parents = new Map()
+  const closed = new Set()
+  let expanded = 0
+
+  while (open.length > 0 && expanded < config.bot.navigationMaxSearchNodes) {
+    let bestOpen = 0
+    for (let i = 1; i < open.length; i++) {
+      if (open[i].f < open[bestOpen].f) bestOpen = i
+    }
+    const currentEntry = open.splice(bestOpen, 1)[0]
+    if (closed.has(currentEntry.index)) continue
+    if (currentEntry.g > (scores.get(currentEntry.index) ?? Infinity) + 1e-6) continue
+    closed.add(currentEntry.index)
+    expanded++
+    if (currentEntry.index === goal.index) break
+
+    const currentCol = currentEntry.index % navigation.columns
+    const currentRow = Math.floor(currentEntry.index / navigation.columns)
+    for (const [colOffset, rowOffset, cost] of neighbors) {
+      const col = currentCol + colOffset
+      const row = currentRow + rowOffset
+      if (
+        col < 0 ||
+        col >= navigation.columns ||
+        row < 0 ||
+        row >= navigation.rows
+      ) continue
+      const index = row * navigation.columns + col
+      if (navigation.blocked[index] || closed.has(index)) continue
+      if (colOffset && rowOffset) {
+        const sideA = (currentRow * navigation.columns) + currentCol + colOffset
+        const sideB = ((currentRow + rowOffset) * navigation.columns) + currentCol
+        if (navigation.blocked[sideA] || navigation.blocked[sideB]) continue
+      }
+      const nextScore = currentEntry.g + cost
+      if (nextScore >= (scores.get(index) ?? Infinity)) continue
+      scores.set(index, nextScore)
+      parents.set(index, currentEntry.index)
+      const distanceToGoal = Math.hypot(col - goal.col, row - goal.row)
+      open.push({ index, g: nextScore, f: nextScore + distanceToGoal })
+    }
+  }
+
+  if (!parents.has(goal.index)) return null
+  const cells = []
+  let current = goal.index
+  while (current !== start.index) {
+    const col = current % navigation.columns
+    const row = Math.floor(current / navigation.columns)
+    cells.push(navigationCellCenter(col, row))
+    current = parents.get(current)
+  }
+  cells.reverse()
+
+  const path = []
+  let anchor = { x: actor.x, z: actor.z }
+  let nextIndex = 0
+  while (nextIndex < cells.length) {
+    let furthest = nextIndex
+    for (let i = nextIndex; i < cells.length; i++) {
+      if (navigationSegmentBlocked(anchor, cells[i], actor.radius)) break
+      furthest = i
+    }
+    path.push(cells[furthest])
+    anchor = cells[furthest]
+    nextIndex = furthest + 1
+  }
+  return path
+}
+
+function buildNavigation() {
+  const cellSize = config.bot.navigationCellSize
+  const half = config.match.mapSize / 2 - 2
+  const columns = Math.ceil((half * 2) / cellSize)
+  const rows = columns
+  const radius = Math.max(
+    config.bot.radius,
+    config.modes.zombie.enemy.radius,
+  ) + 0.12
+  const blocked = new Uint8Array(columns * rows)
+  navigation = {
+    cellSize,
+    columns,
+    rows,
+    originX: -half,
+    originZ: -half,
+    blocked,
+  }
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < columns; col++) {
+      const center = navigationCellCenter(col, row)
+      blocked[row * columns + col] = obstacleBlocksPoint(
+        center.x,
+        center.z,
+        groundHeightAt(center.x, center.z),
+        radius,
+      ) ? 1 : 0
+    }
+  }
+}
+
+function getNavigationTarget(actor, target) {
+  if (!navigation) return target
+  const targetMoved = Math.hypot(
+    target.x - actor.navigationTargetX,
+    target.z - actor.navigationTargetZ,
+  ) > navigation.cellSize * 1.2
+  if (targetMoved || actor.navigationCheckTimer <= 0) {
+    actor.navigationTargetX = target.x
+    actor.navigationTargetZ = target.z
+    actor.navigationCheckTimer = config.bot.navigationDirectCheckInterval
+    actor.navigationDirectBlocked = navigationSegmentBlocked(
+      { x: actor.x, z: actor.z },
+      target,
+      actor.radius,
+    )
+  }
+  if (!actor.navigationDirectBlocked) {
+    actor.navigationPath = []
+    actor.navigationPathIndex = 0
+    return target
+  }
+
+  if (targetMoved || actor.navigationTimer <= 0) {
+    actor.navigationPath = findNavigationPath(actor, target) ?? []
+    actor.navigationPathIndex = 0
+    actor.navigationTimer = config.bot.navigationRepathInterval
+  }
+
+  while (
+    actor.navigationPathIndex < actor.navigationPath.length &&
+    Math.hypot(
+      actor.navigationPath[actor.navigationPathIndex].x - actor.x,
+      actor.navigationPath[actor.navigationPathIndex].z - actor.z,
+    ) <= config.bot.navigationWaypointArrivalDistance
+  ) {
+    actor.navigationPathIndex++
+  }
+  return actor.navigationPath[actor.navigationPathIndex] ?? target
 }
 
 function actorConfig(actor) {
@@ -630,8 +905,9 @@ function moveWithDirection(actor, direction, speed) {
 }
 
 function moveToward(actor, target, speed) {
-  const dx = target.x - actor.x
-  const dz = target.z - actor.z
+  const navigationTarget = getNavigationTarget(actor, target)
+  const dx = navigationTarget.x - actor.x
+  const dz = navigationTarget.z - actor.z
   if (dx * dx + dz * dz < 0.01) {
     actor.vx = 0
     actor.vz = 0
@@ -771,6 +1047,8 @@ function findCover(actor, targetPosition, smokeClouds) {
   let bestScore = -Infinity
   for (const cover of coverPoints) {
     if (cover.type === 'fortress' && actor.y < 1.5) continue
+    const owner = coverReservations.get(cover.id)
+    if (owner && owner !== actor.id) continue
     const distanceToCover = Math.hypot(cover.x - actor.x, cover.z - actor.z)
     if (distanceToCover > botConfig.coverSearchDistance) continue
     const awayX = cover.x - targetPosition.x
@@ -815,6 +1093,7 @@ function findCover(actor, targetPosition, smokeClouds) {
     if (score > bestScore) {
       bestScore = score
       best = {
+        coverId: cover.id,
         x: standX,
         y: standY,
         z: standZ,
@@ -964,41 +1243,248 @@ function getFirePause(actor) {
   )
 }
 
-function tryThrowGrenade(actor, dt) {
-  const target = getTarget(actor.targetId)
-  if (actor.grenadeCount <= 0 || actor.grenadeCooldown > 0 || !target?.alive || !actor.targetVisible) return
-  const grenade = config.grenades[actor.grenadeId]
-  const distance = distance2D(actor, target)
-  if (distance < config.grenade.aiMinDistance || distance > config.grenade.aiMaxDistance) return
-  let clusteredTargets = 0
-  for (const candidate of hostileTargets(actor)) {
-    if (candidate.alive && Math.hypot(candidate.x - target.x, candidate.z - target.z) < grenade.radius * 0.65) {
-      clusteredTargets++
+function predictedTargetPoint(target, leadTime) {
+  return {
+    x: target.x + (target.vx || 0) * leadTime,
+    y: targetGroundY(target) + config.bot.targetHeight,
+    z: target.z + (target.vz || 0) * leadTime,
+  }
+}
+
+function targetIsAdvancing(actor, target) {
+  const dx = actor.x - target.x
+  const dz = actor.z - target.z
+  const distance = Math.hypot(dx, dz)
+  const speed = Math.hypot(target.vx || 0, target.vz || 0)
+  if (distance < 1e-6 || speed < config.grenade.aiTargetAdvanceSpeed) return false
+  const towardSpeed = ((target.vx || 0) * dx + (target.vz || 0) * dz) / distance
+  return towardSpeed >= speed * 0.35
+}
+
+function targetPressure(actor, target) {
+  let pressure = 0
+  if (target.targetId === actor.id) pressure = 0.85
+  if (targetIsAdvancing(actor, target)) pressure = Math.max(pressure, 0.9)
+  if (target.stateName === 'engage' && target.targetVisible) {
+    pressure = Math.max(pressure, 0.65)
+  }
+  if (target.kind === 'player' && player.lastShot) {
+    const age = (simulationTime * 1000 - player.lastShot.at) / 1000
+    if (age >= 0 && age <= config.grenade.aiTargetFireMemory) {
+      pressure = Math.max(pressure, 0.9)
     }
   }
-  if (
-    grenade.kind === 'smoke' &&
-    actor.health > config.bot.lowHealthThreshold &&
-    actor.suppression <= 0.45 &&
-    actor.stateName !== 'seek_cover'
-  ) {
-    return
+  return pressure
+}
+
+function countVisibleThreats(actor, smokeClouds, maxDistance) {
+  let count = 0
+  for (const target of hostileTargets(actor)) {
+    if (distance2D(actor, target) > maxDistance || !botCanSee(actor, target, smokeClouds)) continue
+    count++
   }
-  const chance = config.grenade.aiThrowChancePerSecond * (clusteredTargets > 1 && grenade.kind !== 'smoke' ? 2.2 : 1)
-  if (Math.random() >= chance * dt) return
-  const originY = actor.y + 1.3
-  const targetY = targetGroundY(target) + config.bot.targetHeight
-  const directionLength = Math.hypot(target.x - actor.x, targetY + 0.16 - originY, target.z - actor.z)
-  if (directionLength < 1e-6) return
+  return count
+}
+
+function friendlyNearPoint(actor, point, radius) {
+  if (Math.hypot(actor.x - point.x, actor.z - point.z) < radius) return true
+  for (const ally of actors.values()) {
+    if (
+      !ally.alive ||
+      ally === actor ||
+      ally.team !== actor.team
+    ) continue
+    if (Math.hypot(ally.x - point.x, ally.z - point.z) < radius) return true
+  }
+  if (
+    player.alive &&
+    player.team === actor.team &&
+    Math.hypot(player.x - point.x, player.z - point.z) < radius
+  ) return true
+  return false
+}
+
+function solveThrowDirection(origin, target, grenade) {
+  const dx = target.x - origin.x
+  const dz = target.z - origin.z
+  const horizontalDistance = Math.hypot(dx, dz)
+  if (horizontalDistance < 1e-6) return null
+  const speed = grenade.throwSpeed
+  const gravity = config.grenade.gravity
+  const liftVelocity = speed * config.grenade.throwLift
+  const maxTime = Math.min(grenade.fuse * 0.9, 2.5)
+  let best = null
+  for (let time = 0.24; time <= maxTime; time += 0.04) {
+    const horizontalSpeed = horizontalDistance / time
+    const verticalVelocity =
+      (target.y - origin.y + 0.5 * gravity * time * time) / time
+    const directionY = (verticalVelocity - liftVelocity) / speed
+    if (directionY <= -0.45 || directionY >= 0.88) continue
+    const expectedHorizontalSpeed = speed * Math.sqrt(1 - directionY * directionY)
+    const error = Math.abs(expectedHorizontalSpeed - horizontalSpeed)
+    if (!best || error < best.error) {
+      best = { directionY, error }
+    }
+  }
+  if (!best) {
+    const length = Math.hypot(dx, target.y - origin.y, dz)
+    return {
+      x: dx / length,
+      y: (target.y - origin.y) / length,
+      z: dz / length,
+    }
+  }
+  const horizontalScale = Math.sqrt(1 - best.directionY * best.directionY)
+  return {
+    x: (dx / horizontalDistance) * horizontalScale,
+    y: best.directionY,
+    z: (dz / horizontalDistance) * horizontalScale,
+  }
+}
+
+function findFragTarget(actor, grenade, smokeClouds) {
+  const primary = getTarget(actor.targetId)
+  if (!primary?.alive || !actor.targetVisible) return null
+  const candidates = hostileTargets(actor).filter(candidate => {
+    const distance = distance2D(actor, candidate)
+    return distance >= config.grenade.aiMinDistance &&
+      distance <= config.grenade.aiMaxDistance
+  })
+  const visibleCandidates = candidates.filter(candidate =>
+    candidate === primary || botCanSee(actor, candidate, smokeClouds)
+  )
+  let best = null
+  let bestScore = -Infinity
+  for (const candidate of visibleCandidates) {
+    const distance = distance2D(actor, candidate)
+    const leadTime = clamp(
+      distance / grenade.throwSpeed,
+      0.12,
+      config.grenade.aiPredictionTime,
+    )
+    const candidatePoint = predictedTargetPoint(candidate, leadTime)
+    const clustered = visibleCandidates.filter(other => {
+      const otherPoint = predictedTargetPoint(other, leadTime)
+      return Math.hypot(
+        otherPoint.x - candidatePoint.x,
+        otherPoint.z - candidatePoint.z,
+      ) <= grenade.radius * 0.72
+    })
+    const pressure = targetPressure(actor, candidate)
+    if (
+      clustered.length < 2 &&
+      (distance > config.grenade.aiFragSingleTargetMaxDistance ||
+        pressure < config.grenade.aiThreatPressureThreshold)
+    ) continue
+    const point = clustered.reduce(
+      (center, other) => {
+        const predicted = predictedTargetPoint(other, leadTime)
+        center.x += predicted.x
+        center.y += predicted.y
+        center.z += predicted.z
+        return center
+      },
+      { x: 0, y: 0, z: 0 },
+    )
+    point.x /= clustered.length
+    point.y /= clustered.length
+    point.z /= clustered.length
+    if (friendlyNearPoint(actor, point, config.grenade.aiFriendlyFireRadius)) continue
+    const score = clustered.length * 52 + pressure * 32 - distance * 0.8 +
+      (candidate === primary ? 22 : 0) +
+      (candidate.health < candidate.maxHealth * 0.45 ? 8 : 0)
+    if (score > bestScore) {
+      bestScore = score
+      best = { point, clusteredCount: clustered.length, pressure }
+    }
+  }
+  return best
+}
+
+function findSmokePoint(actor, target, grenade, smokeClouds) {
+  const targetPosition = actor.targetVisible
+    ? predictedTargetPoint(target, config.grenade.aiPredictionTime)
+    : { x: actor.lastSeenX, y: actor.y + 0.45, z: actor.lastSeenZ }
+  const dx = targetPosition.x - actor.x
+  const dz = targetPosition.z - actor.z
+  const distance = Math.hypot(dx, dz)
+  if (
+    distance < config.grenade.aiSmokeMinDistance ||
+    distance > config.grenade.aiSmokeMaxDistance
+  ) return null
+  if (isSmokeBlocked(
+    { x: actor.x, y: actor.y + 1.3, z: actor.z },
+    targetPosition,
+    smokeClouds,
+  )) return null
+  const smokeDistance = clamp(distance * 0.48, 6, config.grenade.aiSmokeMaxDistance * 0.72)
+  const point = {
+    x: actor.x + (dx / distance) * smokeDistance,
+    y: actor.y + 0.45,
+    z: actor.z + (dz / distance) * smokeDistance,
+  }
+  for (const smoke of smokeClouds) {
+    if (smoke.expiresAt <= simulationTime * 1000) continue
+    if (Math.hypot(smoke.x - point.x, smoke.z - point.z) < grenade.radius * 0.8) return null
+  }
+  return point
+}
+
+function tryThrowGrenade(actor, dt, smokeClouds, needsCover) {
+  if (
+    actor.grenadeCount <= 0 ||
+    actor.grenadeCooldown > 0 ||
+    actor.reloading
+  ) return
+  const target = getTarget(actor.targetId)
+  if (!target?.alive) return
+  const grenade = config.grenades[actor.grenadeId]
+  let targetPoint = null
+  let throwChance = 0
+  if (grenade.kind === 'smoke') {
+    const defensivePressure =
+      actor.health <= config.grenade.aiSmokeHealthThreshold ||
+      actor.suppression >= config.grenade.aiSmokeSuppressionThreshold ||
+      needsCover
+    if (!defensivePressure) return
+    const pressure = targetPressure(actor, target)
+    const threatCount = countVisibleThreats(
+      actor,
+      smokeClouds,
+      config.grenade.aiSmokeMaxDistance,
+    )
+    if (
+      threatCount < config.grenade.aiSmokeMinThreatCount &&
+      pressure < config.grenade.aiThreatPressureThreshold
+    ) return
+    targetPoint = findSmokePoint(actor, target, grenade, smokeClouds)
+    const threatFactor = clamp((threatCount - 1) * 0.45, 0, 1)
+    throwChance = Math.min(
+      1,
+      config.grenade.aiSmokeChancePerSecond *
+        (0.25 + threatFactor + pressure * 0.45),
+    )
+  } else {
+    const frag = findFragTarget(actor, grenade, smokeClouds)
+    if (!frag) return
+    targetPoint = frag.point
+    const clusterFactor = clamp((frag.clusteredCount - 1) * 0.5, 0, 1)
+    throwChance = Math.min(
+      1,
+      config.grenade.aiThrowChancePerSecond *
+        (0.25 + clusterFactor + frag.pressure * 0.5),
+    )
+  }
+  if (!targetPoint || Math.random() >= throwChance * dt) return
+
+  const origin = { x: actor.x, y: actor.y + 1.3, z: actor.z }
+  const direction = solveThrowDirection(origin, targetPoint, grenade)
+  if (!direction) return
   actor.grenadeCount--
   events.push({
     type: 'throw-grenade',
     actorId: actor.id,
-    direction: {
-      x: (target.x - actor.x) / directionLength,
-      y: (targetY + 0.16 - originY) / directionLength,
-      z: (target.z - actor.z) / directionLength,
-    },
+    direction,
   })
   actor.grenadeCooldown = config.grenade.aiCooldownMin + Math.random() * config.grenade.aiCooldownRange
 }
@@ -1043,16 +1529,16 @@ function updateBotMovement(actor, dt, smokeClouds) {
       : { x: actor.lastSeenX, y: actor.lastSeenY, z: actor.lastSeenZ }
   }
 
-  tryThrowGrenade(actor, dt)
   const needsCover = actor.health < botConfig.lowHealthThreshold || actor.suppression > 0.62 || isOutnumbered(actor)
+  tryThrowGrenade(actor, dt, smokeClouds, needsCover)
   if (
     targetPosition &&
-    actor.targetVisible &&
     needsCover &&
     (!actor.cover || actor.stateTimer > botConfig.coverRefreshInterval)
   ) {
     const cover = findCover(actor, targetPosition, smokeClouds)
     if (cover) {
+      coverReservations.set(cover.coverId, actor.id)
       actor.cover = cover
       actor.coverPeekTimer = botConfig.coverPeekIntervalMin + Math.random() * botConfig.coverPeekIntervalRange
       actor.isPeeking = false
@@ -1225,6 +1711,8 @@ function updateBot(actor, dt, smokeClouds) {
   actor.fireOpportunityTimer -= dt
   actor.weaponShotTimer -= dt
   actor.grenadeCooldown = Math.max(0, actor.grenadeCooldown - dt)
+  actor.navigationTimer = Math.max(0, actor.navigationTimer - dt)
+  actor.navigationCheckTimer = Math.max(0, actor.navigationCheckTimer - dt)
   actor.unstuckTimer = Math.max(0, actor.unstuckTimer - dt)
   actor.suppression = Math.max(0, actor.suppression - dt * botConfig.suppressionRecovery)
   if (actor.reactionTimer > 0) actor.reactionTimer = Math.max(0, actor.reactionTimer - dt)
@@ -1294,13 +1782,47 @@ function updateZombiePerception(actor, dt) {
   }
 }
 
+function findZombieAttackTarget(actor) {
+  const enemyConfig = config.modes.zombie.enemy
+  let nearest = null
+  let nearestDistance = Infinity
+  for (const candidate of hostileTargets(actor)) {
+    const distance = distance2D(actor, candidate)
+    if (distance > enemyConfig.attackRange) continue
+    const visible = hasLineOfSight(
+      { x: actor.x, y: actor.y + 1.05, z: actor.z },
+      {
+        x: candidate.x,
+        y: targetGroundY(candidate) + 1.05,
+        z: candidate.z,
+      },
+      [],
+    )
+    if (!visible || distance >= nearestDistance) continue
+    nearest = candidate
+    nearestDistance = distance
+  }
+  return nearest
+}
+
 function updateZombie(actor, dt) {
   const enemyConfig = config.modes.zombie.enemy
   actor.aiTime += dt
   actor.attackTimer -= dt
+  actor.navigationTimer = Math.max(0, actor.navigationTimer - dt)
+  actor.navigationCheckTimer = Math.max(0, actor.navigationCheckTimer - dt)
   actor.unstuckTimer = Math.max(0, actor.unstuckTimer - dt)
   updateZombiePerception(actor, dt)
-  const target = getTarget(actor.targetId)
+  const immediateTarget = findZombieAttackTarget(actor)
+  if (immediateTarget) {
+    actor.targetId = immediateTarget.id
+    actor.targetVisible = true
+    actor.lastSeenX = immediateTarget.x
+    actor.lastSeenY = targetGroundY(immediateTarget)
+    actor.lastSeenZ = immediateTarget.z
+    actor.lastSeenAt = actor.aiTime
+  }
+  const target = immediateTarget || getTarget(actor.targetId)
   let targetPosition
   if (!target) {
     targetPosition = { x: fortress.x, y: 0, z: fortress.z }
@@ -1346,6 +1868,7 @@ function createActor(data) {
     stateTimer: 0,
     perceptionTimer: Math.random() * (data.kind === 'zombie' ? config.modes.zombie.enemy.perceptionInterval : config.bot.perceptionInterval),
     targetScanTimer: Math.random() * config.modes.zombie.enemy.perceptionInterval,
+    attackTimer: 0,
     lastSeenX: data.x,
     lastSeenY: data.y,
     lastSeenZ: data.z,
@@ -1359,6 +1882,13 @@ function createActor(data) {
     burstShotsRemaining: 0,
     grenadeCooldown: config.grenade.aiCooldownMin + Math.random() * config.grenade.aiCooldownRange,
     suppression: 0,
+    navigationPath: [],
+    navigationPathIndex: 0,
+    navigationTargetX: data.x,
+    navigationTargetZ: data.z,
+    navigationTimer: 0,
+    navigationCheckTimer: 0,
+    navigationDirectBlocked: false,
     unstuckTimer: 0,
     unstuckSign: Math.random() > 0.5 ? 1 : -1,
     stuckTimer: 0,
@@ -1426,6 +1956,12 @@ function processTick(message) {
   fortress = message.fortress
   events = []
   const smokeClouds = message.smokeClouds
+  coverReservations.clear()
+  for (const actor of actors.values()) {
+    const coverId = actor.cover?.coverId
+    if (!actor.alive || coverId == null || coverReservations.has(coverId)) continue
+    coverReservations.set(coverId, actor.id)
+  }
   for (const actor of actors.values()) {
     if (!actor.alive) continue
     if (actor.kind === 'zombie') {
@@ -1487,6 +2023,8 @@ self.onmessage = event => {
     groundRegions = message.groundRegions
     fortress = message.fortress
     player = message.player
+    coverReservations = new Map()
+    buildNavigation()
     actors.clear()
     for (const actor of message.actors) actors.set(actor.id, createActor(actor))
     return

@@ -56,6 +56,7 @@ export function createAiSystem({ state, config, getMode }) {
     const lastShot = state.lastPlayerShot
     return {
       id: 'player',
+      kind: 'player',
       team: player.team,
       x: player.position.x,
       y: player.position.y,
@@ -78,14 +79,16 @@ export function createAiSystem({ state, config, getMode }) {
     }
   }
 
-  function serializePoint(point) {
+  function serializePoint(point, id) {
     if (point.position) {
       return {
+        id,
         x: point.position.x,
         z: point.position.z,
       }
     }
     return {
+      id,
       x: point.x,
       z: point.z,
       r: point.r,

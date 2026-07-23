@@ -110,8 +110,6 @@ export const CFG = {
     // 散布值是方向向量偏移量，越大越不准。
     // 玩家静止时的基础射击散布。
     baseSpread: 0.005,
-    // Bot 静止时的基础射击散布。
-    botBaseSpread: 0.015,
     // 射击散布的最大值。
     maxSpread: 0.08,
     // 连续射击额外散布的上限。
@@ -134,16 +132,6 @@ export const CFG = {
     airborneSpreadMultiplier: 1.8,
     // 换弹状态下的散布倍率。
     reloadingSpreadMultiplier: 1.35,
-    // Bot 技能不足时额外增加的散布系数。
-    botSkillSpread: 0.006,
-    // Bot 被视为快速移动的速度阈值。
-    botMovingFastThreshold: 4,
-    // Bot 被视为普通移动的速度阈值。
-    botMovingSlowThreshold: 0.4,
-    // Bot 快速移动时的散布倍率。
-    botMovingFastMultiplier: 2.6,
-    // Bot 普通移动时的散布倍率。
-    botMovingSlowMultiplier: 1.55,
     // 玩家开始计算移动散布的速度阈值。
     playerMovingThreshold: 0.4,
     // 玩家射击时的后坐力和屏幕震动。
@@ -185,7 +173,6 @@ export const CFG = {
       effectiveRange: 72,
       minDamageMultiplier: 0.78,
       baseSpread: 0.005,
-      botBaseSpread: 0.015,
       spreadBloomPerShot: 0.005,
       aimedSpreadBloomPerShot: 0.004,
       recoilMultiplier: 1,
@@ -207,7 +194,6 @@ export const CFG = {
       effectiveRange: 24,
       minDamageMultiplier: 0.35,
       baseSpread: 0.032,
-      botBaseSpread: 0.038,
       spreadBloomPerShot: 0.005,
       aimedSpreadBloomPerShot: 0.008,
       recoilMultiplier: 1.2,
@@ -230,7 +216,6 @@ export const CFG = {
       effectiveRange: 28,
       minDamageMultiplier: 0.5,
       baseSpread: 0.011,
-      botBaseSpread: 0.022,
       spreadBloomPerShot: 0.004,
       aimedSpreadBloomPerShot: 0.004,
       recoilMultiplier: 0.7,
@@ -252,7 +237,6 @@ export const CFG = {
       effectiveRange: 60,
       minDamageMultiplier: 0.72,
       baseSpread: 0.009,
-      botBaseSpread: 0.021,
       spreadBloomPerShot: 0.0045,
       aimedSpreadBloomPerShot: 0.005,
       recoilMultiplier: 0.96,
@@ -305,9 +289,22 @@ export const CFG = {
     gravity: 13,
     throwLift: 0.14,
     bounce: 0.38,
-    aiMinDistance: 7,
-    aiMaxDistance: 38,
+    aiMinDistance: 6,
+    aiMaxDistance: 42,
     aiThrowChancePerSecond: 0.55,
+    aiSmokeChancePerSecond: 0.75,
+    aiPredictionTime: 0.42,
+    aiFriendlyFireRadius: 7,
+    // AI 投掷时使用的目标行为和数量门槛。
+    aiTargetAdvanceSpeed: 1.2,
+    aiTargetFireMemory: 0.9,
+    aiThreatPressureThreshold: 0.65,
+    aiFragSingleTargetMaxDistance: 18,
+    aiSmokeMinThreatCount: 2,
+    aiSmokeMinDistance: 5,
+    aiSmokeMaxDistance: 30,
+    aiSmokeHealthThreshold: 62,
+    aiSmokeSuppressionThreshold: 0.38,
     aiCooldownMin: 5,
     aiCooldownRange: 4,
   },
@@ -407,6 +404,16 @@ export const CFG = {
     communicationRadius: 38,
     // 队友共享情报的保留时间。
     sharedContactMemory: 2.4,
+    // 导航网格单元边长。
+    navigationCellSize: 4.5,
+    // 单次寻路允许展开的最大节点数。
+    navigationMaxSearchNodes: 900,
+    // 导航路径重新计算的最短间隔。
+    navigationRepathInterval: 0.45,
+    // 直线路径检测缓存时长。
+    navigationDirectCheckInterval: 0.18,
+    // 导航路径点到达判定距离。
+    navigationWaypointArrivalDistance: 1.7,
     // Bot 听到玩家开火声的最大距离。
     playerShotHearingDistance: 90,
     // Bot 根据玩家开火声搜索的最长时间。
@@ -420,8 +427,8 @@ export const CFG = {
     viewForwardMinDistance: 5,
     // Bot 视线检测起点高度。
     viewOriginHeight: 1.6,
-    // Bot 射击时瞄准目标的高度。
-    targetHeight: 1.4,
+    // Bot 射击和目标判断时使用的高度。
+    targetHeight: 1,
     // Bot 巡逻区域相对地图半径的比例。
     patrolAreaRatio: 0.42,
     // Bot 到达巡逻点的判定距离。
