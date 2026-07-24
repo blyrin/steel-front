@@ -5,6 +5,14 @@ export const CFG = {
     tickRate: 60,
     // 单次渲染帧最多累积的模拟时间，避免切后台后瞬移。
     maxFrameDelta: 0.05,
+    // AI Worker 背压时单次 tick 最多合并的模拟时间。
+    maxAiFrameDelta: 0.1,
+    // 主线程对 AI 权威位置的跟随速度，越大越贴合 Worker。
+    aiFollowSpeed: 16,
+    // 与 AI 权威位置偏差超过该距离时直接校正，避免长距离漂移。
+    aiSnapDistance: 2.4,
+    // 主线程对 AI 权威朝向的跟随速度。
+    aiYawFollowSpeed: 14,
     // 启动加载阶段的相机高度。
     initialCameraHeight: 5,
   },
@@ -399,19 +407,15 @@ export const CFG = {
     // Bot 两次主动扫描之间的时间，避免每帧重复遍历整张地图。
     perceptionInterval: 0.14,
     // 每次扫描最多进行精确视线检测的候选数。
-    maxPerceptionTargets: 8,
-    // 队友共享可疑目标的最大距离。
-    communicationRadius: 38,
-    // 队友共享情报的保留时间。
-    sharedContactMemory: 2.4,
+    maxPerceptionTargets: 6,
     // 导航网格单元边长。
     navigationCellSize: 4.5,
     // 单次寻路允许展开的最大节点数。
-    navigationMaxSearchNodes: 900,
+    navigationMaxSearchNodes: 700,
     // 导航路径重新计算的最短间隔。
-    navigationRepathInterval: 0.45,
+    navigationRepathInterval: 0.55,
     // 直线路径检测缓存时长。
-    navigationDirectCheckInterval: 0.18,
+    navigationDirectCheckInterval: 0.24,
     // 导航路径点到达判定距离。
     navigationWaypointArrivalDistance: 1.7,
     // Bot 听到玩家开火声的最大距离。
@@ -442,7 +446,9 @@ export const CFG = {
     // Bot 丢失目标后转入搜索状态的等待时间。
     lostTargetTime: 3,
     // Bot 搜索掩体的最大距离。
-    coverSearchDistance: 40,
+    coverSearchDistance: 36,
+    // 掩体评分最多评估的近距离候选数。
+    coverMaxCandidates: 10,
     // 掩体评分中拉开与敌人距离的权重。
     coverEnemyWeight: 0.5,
     // 掩体评分中自身到掩体距离的权重。
@@ -451,6 +457,12 @@ export const CFG = {
     coverDistanceBias: 12,
     // Bot 低于该生命值时优先寻找掩体。
     lowHealthThreshold: 40,
+    // 已在掩体时，生命回升到阈值 + 该值后才考虑离开。
+    coverExitHealthBias: 18,
+    // 进入掩体的压制阈值。
+    coverEnterSuppression: 0.62,
+    // 离开掩体的压制阈值，低于进入阈值形成滞回。
+    coverExitSuppression: 0.38,
     // Bot 重新评估掩体的时间间隔。
     coverRefreshInterval: 5,
     // Bot 站到掩体背后的额外安全距离。
@@ -479,8 +491,12 @@ export const CFG = {
     idealRangeMultiplier: 0.62,
     // Bot 低于弹匣该比例时，在安全状态主动换弹。
     tacticalReloadThreshold: 0.32,
-    // Bot 感到敌人数量优势时触发撤退或找掩体的倍率。
-    outnumberedRatio: 1.35,
+    // Bot 附近敌人数达到该值时视为高压，优先找掩体。
+    pressureHostileCount: 2,
+    // Bot 评估高压威胁的半径。
+    pressureRadius: 18,
+    // 高压状态刷新间隔。
+    pressureRefreshInterval: 0.22,
     // Bot 接敌后首次射击的基础延迟。
     engageFireBaseDelay: 0.7,
     // Bot 技能对射击延迟的影响范围。
@@ -711,28 +727,20 @@ export const CFG = {
     // 允许超过最大声音数的额外声音数量。
     overflowVoices: 10,
   },
-  // 相机、雾效、像素比和阴影的运行时渲染参数。
+  // 相机、雾效、像素比的运行时渲染参数（动漫三渲二，无阴影，低像素比 + MSAA）。
   render: {
     // 相机近裁剪面距离。
     cameraNear: 0.04,
     // 相机远裁剪面距离。
     cameraFar: 1200,
     // 指数平方雾密度，远处渐进消隐而不产生硬交界线。
-    fogDensity: 0.0038,
-    // 桌面设备的像素比上限。
-    desktopPixelRatio: 1.25,
+    fogDensity: 0.0032,
+    // 桌面设备的像素比上限（卡通风格优先帧率，硬件 MSAA 兜底边缘）。
+    desktopPixelRatio: 1,
     // 触摸设备的像素比上限。
-    touchPixelRatio: 2,
+    touchPixelRatio: 1.25,
     // 纹理各向异性过滤等级上限。
-    maxAnisotropy: 4,
-    // 主光源阴影贴图尺寸。
-    shadowMapSize: 2048,
-    // 主光源阴影视锥的水平边界。
-    shadowCameraBound: 120,
-    // 主光源阴影视锥的近裁剪面。
-    shadowCameraNear: 10,
-    // 主光源阴影视锥的远裁剪面。
-    shadowCameraFar: 300,
+    maxAnisotropy: 2,
   },
   // 启动加载进度和各阶段等待时间，时间单位为毫秒。
   boot: {

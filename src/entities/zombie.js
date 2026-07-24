@@ -53,8 +53,48 @@ export class Zombie {
       createBoxHitbox(0.8, 0.58, 0, 1.5),
       createBoxHitbox(0.5, 0.5, 1.48, 1.95, true),
     ]
+    this._aiX = this.position.x
+    this._aiY = this.position.y
+    this._aiZ = this.position.z
+    this._aiVx = 0
+    this._aiVz = 0
+    this._aiYaw = this.yaw
+    this._aiAt = performance.now()
     this.buildModel()
     this.scene.add(this.group)
+  }
+
+  advanceFromAi(dt) {
+    if (!this.alive) return
+    const match = this.config.match
+    const elapsed = Math.min(match.maxAiFrameDelta, (performance.now() - this._aiAt) / 1000)
+    const half = this.gameState.mapSize / 2 - 2
+    const targetX = Math.max(-half, Math.min(half, this._aiX + this._aiVx * elapsed))
+    const targetZ = Math.max(-half, Math.min(half, this._aiZ + this._aiVz * elapsed))
+    const dx = targetX - this.position.x
+    const dz = targetZ - this.position.z
+    const distance = Math.hypot(dx, dz)
+    if (distance > match.aiSnapDistance) {
+      this.position.x = targetX
+      this.position.z = targetZ
+    } else {
+      const blend = 1 - Math.exp(-match.aiFollowSpeed * dt)
+      this.position.x += dx * blend
+      this.position.z += dz * blend
+    }
+    this.position.y = this.gameState.groundHeightAt(this.position.x, this.position.z)
+
+    const velocityBlend = 1 - Math.exp(-12 * dt)
+    this.velocity.x += (this._aiVx - this.velocity.x) * velocityBlend
+    this.velocity.z += (this._aiVz - this.velocity.z) * velocityBlend
+
+    let yawDifference = this._aiYaw - this.yaw
+    while (yawDifference > Math.PI) yawDifference -= Math.PI * 2
+    while (yawDifference < -Math.PI) yawDifference += Math.PI * 2
+    this.yaw += yawDifference * (1 - Math.exp(-match.aiYawFollowSpeed * dt))
+
+    this.group.position.copy(this.position)
+    this.group.rotation.y = this.yaw
   }
 
   buildModel() {
@@ -195,11 +235,23 @@ export class Zombie {
 
   applyAiState(data) {
     if (!this.alive) return
-    this.position.set(data.x, data.y, data.z)
-    this.velocity.set(data.vx, 0, data.vz)
-    this.yaw = data.yaw
-    this.group.position.copy(this.position)
-    this.group.rotation.y = this.yaw
+    this._aiX = data.x
+    this._aiY = data.y
+    this._aiZ = data.z
+    this._aiVx = data.vx
+    this._aiVz = data.vz
+    this._aiYaw = data.yaw
+    this._aiAt = performance.now()
+    const snapDistance = this.config.match.aiSnapDistance
+    const dx = data.x - this.position.x
+    const dz = data.z - this.position.z
+    if (dx * dx + dz * dz > snapDistance * snapDistance) {
+      this.position.set(data.x, data.y, data.z)
+      this.velocity.set(data.vx, 0, data.vz)
+      this.yaw = data.yaw
+      this.group.position.copy(this.position)
+      this.group.rotation.y = this.yaw
+    }
   }
 
   attackFromWorker(target) {
@@ -208,6 +260,7 @@ export class Zombie {
   }
 
   update(dt) {
+    this.advanceFromAi(dt)
     this.updateModelAnimation(dt)
   }
 
@@ -235,6 +288,12 @@ export class Zombie {
     this.alive = false
     this.deathTime = 0
     this.velocity.set(0, 0, 0)
+    this._aiVx = 0
+    this._aiVz = 0
+    this._aiX = this.position.x
+    this._aiY = this.position.y
+    this._aiZ = this.position.z
+    this._aiYaw = this.yaw
     this.effects.spawnBlood(this.position.clone().setY(this.position.y + 1.2))
     this.audio.zombieDeath(this.position.clone().setY(this.position.y + 0.3))
     this.ai.reportDeath(this)

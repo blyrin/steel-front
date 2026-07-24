@@ -117,6 +117,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
       effects: services.effects,
       ai: services.ai,
       scoring: services.scoring,
+      config,
       enemyConfig: modeConfig.enemy,
     })
     state.actors.push(zombie)

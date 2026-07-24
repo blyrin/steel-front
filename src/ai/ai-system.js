@@ -5,6 +5,8 @@ export function createAiSystem({ state, config, getMode }) {
   const actorsById = new Map()
   let nextActorId = 1
   let initialized = false
+  let tickInFlight = false
+  let pendingDt = 0
 
   function allocateActorId() {
     return `actor-${nextActorId++}`
@@ -160,7 +162,11 @@ export function createAiSystem({ state, config, getMode }) {
     worker.postMessage({ type: 'death', id: actor.id })
   }
 
-  function update(dt) {
+  function flushTick() {
+    if (!initialized || tickInFlight || pendingDt <= 0) return
+    const dt = pendingDt
+    pendingDt = 0
+    tickInFlight = true
     worker.postMessage({
       type: 'tick',
       dt,
@@ -175,6 +181,11 @@ export function createAiSystem({ state, config, getMode }) {
         expiresAt: smoke.expiresAt,
       })),
     })
+  }
+
+  function update(dt) {
+    pendingDt = Math.min(config.match.maxAiFrameDelta, pendingDt + dt)
+    flushTick()
   }
 
   function resolveTarget(id) {
@@ -221,8 +232,10 @@ export function createAiSystem({ state, config, getMode }) {
 
   worker.onmessage = event => {
     const message = event.data
+    tickInFlight = false
     applySnapshot(message)
     for (const workerEvent of message.events) handleEvent(workerEvent)
+    flushTick()
   }
 
   worker.onerror = event => {

@@ -610,15 +610,6 @@ function getTarget(id) {
   return actors.get(id) ?? null
 }
 
-function hostileTargets(actor) {
-  const targets = []
-  for (const candidate of actors.values()) {
-    if (candidate.alive && candidate.team !== actor.team) targets.push(candidate)
-  }
-  if (player.alive && player.team !== actor.team) targets.push(player)
-  return targets
-}
-
 function forwardDot(actor, target) {
   const dx = target.x - actor.x
   const dz = target.z - actor.z
@@ -649,33 +640,47 @@ function targetScore(actor, target, distance, visible) {
   const weapon = config.weapons[actor.weaponId]
   const idealRange = Math.max(8, weapon.effectiveRange * botConfig.idealRangeMultiplier)
   let score = (botConfig.viewDistance - distance) * 0.16
-  score -= Math.abs(distance - idealRange) * 0.12
+  score -= Math.abs(distance - idealRange) * 0.14
   if (visible) score += 40
-  if (target.targetId === actor.id) score += 24
-  if (target.targetId && getTarget(target.targetId)?.team === actor.team) score += 9
+  if (target.targetId === actor.id) score += 28
   if (target.kind === 'player') score += 12
   if (target.kind === 'zombie' && fortress) {
     const fortressDistance = Math.hypot(target.x - fortress.x, target.z - fortress.z)
     score += Math.max(0, 40 - fortressDistance) * 0.42
   }
-  if (target.health < target.maxHealth * 0.35) score += 3
+  if (target.health < target.maxHealth * 0.35) score += 6
+  if (target.health < target.maxHealth * 0.6) score += 2
+  if (target.stateName === 'engage' || target.stateName === 'hold_cover') score += 4
   return score
 }
 
 function selectBotTarget(actor, smokeClouds) {
   const botConfig = config.bot
-  const candidates = hostileTargets(actor)
-    .map(target => ({
+  const viewDistance = botConfig.viewDistance
+  const candidates = []
+  for (const target of actors.values()) {
+    if (!target.alive || target.team === actor.team) continue
+    const distance = distance2D(actor, target)
+    if (distance > viewDistance) continue
+    candidates.push({
       target,
-      distance: distance2D(actor, target),
-    }))
-    .filter(candidate => candidate.distance <= botConfig.viewDistance)
-    .map(candidate => ({
-      ...candidate,
-      score: targetScore(actor, candidate.target, candidate.distance, false) +
-        (candidate.target.id === actor.targetId ? 12 : 0),
-    }))
-    .sort((a, b) => b.score - a.score)
+      distance,
+      score: targetScore(actor, target, distance, false) +
+        (target.id === actor.targetId ? 12 : 0),
+    })
+  }
+  if (player.alive && player.team !== actor.team) {
+    const distance = distance2D(actor, player)
+    if (distance <= viewDistance) {
+      candidates.push({
+        target: player,
+        distance,
+        score: targetScore(actor, player, distance, false) +
+          (player.id === actor.targetId ? 12 : 0),
+      })
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score)
 
   const limited = candidates.slice(0, botConfig.maxPerceptionTargets)
   const playerCandidate = candidates.find(candidate => candidate.target.kind === 'player')
@@ -710,40 +715,6 @@ function selectBotTarget(actor, smokeClouds) {
       return { target: player, visible: false, x: shot.x, y: actor.y, z: shot.z, seenAt: actor.aiTime }
     }
   }
-
-  let shared = null
-  let sharedScore = -Infinity
-  for (const ally of actors.values()) {
-    if (
-      ally === actor ||
-      !ally.alive ||
-      ally.team !== actor.team ||
-      !ally.targetId ||
-      ally.targetId === actor.id
-    ) {
-      continue
-    }
-    const contact = getTarget(ally.targetId)
-    if (!contact?.alive || contact.team === actor.team) continue
-    const allyDistance = distance2D(actor, ally)
-    if (allyDistance > botConfig.communicationRadius) continue
-    const age = actor.aiTime - ally.lastSeenAt
-    if (age > botConfig.sharedContactMemory) continue
-    const targetDistance = distance2D(actor, contact)
-    const score = targetScore(actor, contact, targetDistance, false) - age * 5
-    if (score > sharedScore) {
-      sharedScore = score
-      shared = {
-        target: contact,
-        visible: false,
-        x: ally.lastSeenX,
-        y: ally.lastSeenY,
-        z: ally.lastSeenZ,
-        seenAt: ally.lastSeenAt,
-      }
-    }
-  }
-  if (shared) return shared
 
   const current = getTarget(actor.targetId)
   if (current?.alive && actor.aiTime - actor.lastSeenAt <= botConfig.lostTargetTime) {
@@ -799,9 +770,11 @@ function findZombieReinforcement(actor) {
 function selectZombieTarget(actor) {
   const enemyConfig = config.modes.zombie.enemy
   const searchRadiusSq = enemyConfig.targetSearchRadius ** 2
+  const searchRadius = enemyConfig.targetSearchRadius
   let nearest = null
   let nearestDistance = Infinity
-  for (const target of hostileTargets(actor)) {
+  for (const target of actors.values()) {
+    if (!target.alive || target.team === actor.team) continue
     const dx = target.x - actor.x
     const dz = target.z - actor.z
     const distanceSq = dx * dx + dz * dz
@@ -814,12 +787,25 @@ function selectZombieTarget(actor) {
       nearestDistance = score
     }
   }
+  if (player.alive && player.team !== actor.team) {
+    const dx = player.x - actor.x
+    const dz = player.z - actor.z
+    const distanceSq = dx * dx + dz * dz
+    if (distanceSq <= searchRadiusSq) {
+      let score = Math.sqrt(distanceSq) - 1.8
+      if (player.health < player.maxHealth * 0.35) score -= 0.8
+      if (score < nearestDistance) {
+        nearest = player
+        nearestDistance = score
+      }
+    }
+  }
 
   const current = getTarget(actor.targetId)
   if (current?.alive) {
     const currentDistance = distance2D(actor, current)
     if (
-      currentDistance <= Math.sqrt(searchRadiusSq) &&
+      currentDistance <= searchRadius &&
       (!nearest || currentDistance <= nearestDistance + enemyConfig.targetSwitchBias)
     ) {
       return { target: current, visible: true, x: current.x, y: targetGroundY(current), z: current.z, seenAt: actor.aiTime }
@@ -907,6 +893,9 @@ function addSeparation(actor, direction) {
 function chooseMovementDirection(actor, desired) {
   const desiredDirection = normalizeDirection(desired.x, desired.z)
   if (desiredDirection.x === 0 && desiredDirection.z === 0) return desiredDirection
+  if (actor.unstuckTimer <= 0 && !directionBlocked(actor, desiredDirection)) {
+    return addSeparation(actor, desiredDirection)
+  }
   const actorConfigData = actorConfig(actor)
   const baseAngle = Math.atan2(desiredDirection.z, desiredDirection.x)
   const probeAngle = actorConfigData.movementProbeAngle
@@ -914,15 +903,24 @@ function chooseMovementDirection(actor, desired) {
   const unstuckOffset = actor.unstuckTimer > 0
     ? actor.unstuckSign * unstuckDistance
     : 0
-  const angles = [
-    unstuckOffset,
-    probeAngle + unstuckOffset,
-    -probeAngle + unstuckOffset,
-    probeAngle * 2 + unstuckOffset,
-    -probeAngle * 2 + unstuckOffset,
-    Math.PI * 0.78 + unstuckOffset,
-    -Math.PI * 0.78 + unstuckOffset,
-  ]
+  const angles = actor.unstuckTimer > 0
+    ? [
+      unstuckOffset,
+      probeAngle + unstuckOffset,
+      -probeAngle + unstuckOffset,
+      probeAngle * 2 + unstuckOffset,
+      -probeAngle * 2 + unstuckOffset,
+      Math.PI * 0.78 + unstuckOffset,
+      -Math.PI * 0.78 + unstuckOffset,
+    ]
+    : [
+      probeAngle,
+      -probeAngle,
+      probeAngle * 2,
+      -probeAngle * 2,
+      Math.PI * 0.78,
+      -Math.PI * 0.78,
+    ]
   let best = desiredDirection
   let bestScore = -Infinity
   for (const offset of angles) {
@@ -1086,14 +1084,25 @@ function findCover(actor, targetPosition, smokeClouds) {
     y: targetPosition.y + botConfig.viewOriginHeight,
     z: targetPosition.z,
   }
-  let best = null
-  let bestScore = -Infinity
+  const candidates = []
   for (const cover of coverPoints) {
     if (cover.type === 'fortress' && actor.y < 1.5) continue
     const owner = coverReservations.get(cover.id)
     if (owner && owner !== actor.id) continue
     const distanceToCover = Math.hypot(cover.x - actor.x, cover.z - actor.z)
     if (distanceToCover > botConfig.coverSearchDistance) continue
+    candidates.push({ cover, distanceToCover })
+  }
+  candidates.sort((a, b) => a.distanceToCover - b.distanceToCover)
+  const limited = candidates.slice(0, botConfig.coverMaxCandidates)
+  let best = null
+  let bestScore = -Infinity
+  const actorToEnemy = Math.hypot(targetPosition.x - actor.x, targetPosition.z - actor.z)
+  const weapon = config.weapons[actor.weaponId]
+  const idealRange = Math.max(10, weapon.effectiveRange * botConfig.idealRangeMultiplier)
+  for (const candidate of limited) {
+    const cover = candidate.cover
+    const distanceToCover = candidate.distanceToCover
     const awayX = cover.x - targetPosition.x
     const awayZ = cover.z - targetPosition.z
     const awayDistance = Math.hypot(awayX, awayZ)
@@ -1129,10 +1138,10 @@ function findCover(actor, targetPosition, smokeClouds) {
     const coverToEnemy = Math.hypot(targetPosition.x - cover.x, targetPosition.z - cover.z)
     let score = protectedPosition ? 34 : -18
     if (peekVisible) score += 18
-    score += (Math.hypot(targetPosition.x - actor.x, targetPosition.z - actor.z) - coverToEnemy) * botConfig.coverEnemyWeight
+    score += (actorToEnemy - coverToEnemy) * botConfig.coverEnemyWeight
     score += (botConfig.coverDistanceBias - distanceToCover) * botConfig.coverDistanceWeight
     if (cover.type === 'sandbag' || cover.type === 'barricade') score += 5
-    if (actor.role === 'support') score += Math.min(8, coverToEnemy * 0.08)
+    score += Math.max(0, 14 - Math.abs(coverToEnemy - idealRange) * 0.35)
     if (score > bestScore) {
       bestScore = score
       best = {
@@ -1149,22 +1158,37 @@ function findCover(actor, targetPosition, smokeClouds) {
 }
 
 function nearbyHostiles(actor, radius) {
-  return hostileTargets(actor).filter(target => distance2D(actor, target) <= radius).length
-}
-
-function nearbyAllies(actor, radius) {
+  const radiusSq = radius * radius
   let count = 0
-  for (const other of actors.values()) {
-    if (other.alive && other !== actor && other.team === actor.team && distance2D(actor, other) <= radius) count++
+  for (const candidate of actors.values()) {
+    if (!candidate.alive || candidate.team === actor.team) continue
+    const dx = candidate.x - actor.x
+    const dz = candidate.z - actor.z
+    if (dx * dx + dz * dz <= radiusSq) count++
   }
-  if (player.alive && player.team === actor.team && distance2D(actor, player) <= radius) count++
+  if (player.alive && player.team !== actor.team) {
+    const dx = player.x - actor.x
+    const dz = player.z - actor.z
+    if (dx * dx + dz * dz <= radiusSq) count++
+  }
   return count
 }
 
-function isOutnumbered(actor) {
-  const enemies = nearbyHostiles(actor, 18)
-  const allies = nearbyAllies(actor, 18) + 1
-  return enemies >= 2 && enemies > allies * config.bot.outnumberedRatio
+function evaluatePressure(actor) {
+  const botConfig = config.bot
+  const hostiles = nearbyHostiles(actor, botConfig.pressureRadius)
+  if (hostiles >= botConfig.pressureHostileCount + 1) return true
+  if (hostiles >= botConfig.pressureHostileCount && actor.suppression > 0.28) return true
+  if (hostiles >= 1 && actor.suppression > 0.55) return true
+  return false
+}
+
+function refreshPressure(actor, dt) {
+  actor.pressureTimer -= dt
+  if (actor.pressureTimer > 0) return actor.underPressure
+  actor.pressureTimer = config.bot.pressureRefreshInterval * (0.85 + Math.random() * 0.3)
+  actor.underPressure = evaluatePressure(actor)
+  return actor.underPressure
 }
 
 function emitWorkerHealthEvent(actor, type, payload = {}) {
@@ -1254,9 +1278,14 @@ function updateBotFire(actor, dt) {
     return
   }
   if (actor.fireOpportunityTimer > 0) return
-  actor.burstShotsRemaining = weapon.automatic
-    ? Math.max(2, Math.round(2 + actor.botSkill * 3))
-    : 1
+  const rangeRatio = distance / Math.max(1, weapon.effectiveRange)
+  if (weapon.automatic) {
+    const baseBurst = 2 + actor.botSkill * 3
+    const rangeBurst = rangeRatio < 0.4 ? 1.4 : rangeRatio > 0.85 ? 0.7 : 1
+    actor.burstShotsRemaining = Math.max(2, Math.round(baseBurst * rangeBurst))
+  } else {
+    actor.burstShotsRemaining = 1
+  }
   if (actor.magazine > 0) {
     actor.magazine--
     actor.burstShotsRemaining--
@@ -1272,17 +1301,17 @@ function updateBotFire(actor, dt) {
 function getFirePause(actor) {
   if (modeId === 'zombie') return 0
   const botConfig = config.bot
-  let roleOffset = 0
-  if (actor.role === 'marksman') {
-    roleOffset = 0.24
-  } else if (actor.role === 'support') roleOffset = 0.1
   const weapon = config.weapons[actor.weaponId]
+  const careful = clamp(weapon.effectiveRange / 100, 0.12, 0.4)
+  const cadence = weapon.automatic
+    ? weapon.fireDelay * 1.15
+    : weapon.fireDelay * 2.1
   return Math.max(
-    weapon.fireDelay * 1.5,
-    botConfig.engageFireBaseDelay +
+    cadence,
+    botConfig.engageFireBaseDelay * (weapon.automatic ? 0.55 : 1) +
     (1 - actor.botSkill) * botConfig.engageFireSkillDelay +
-    roleOffset +
-    Math.random() * 0.45,
+    careful * 0.35 +
+    Math.random() * 0.4,
   )
 }
 
@@ -1322,8 +1351,17 @@ function targetPressure(actor, target) {
 
 function countVisibleThreats(actor, smokeClouds, maxDistance) {
   let count = 0
-  for (const target of hostileTargets(actor)) {
+  for (const target of actors.values()) {
+    if (!target.alive || target.team === actor.team) continue
     if (distance2D(actor, target) > maxDistance || !botCanSee(actor, target, smokeClouds)) continue
+    count++
+  }
+  if (
+    player.alive &&
+    player.team !== actor.team &&
+    distance2D(actor, player) <= maxDistance &&
+    botCanSee(actor, player, smokeClouds)
+  ) {
     count++
   }
   return count
@@ -1388,11 +1426,19 @@ function solveThrowDirection(origin, target, grenade) {
 function findFragTarget(actor, grenade, smokeClouds) {
   const primary = getTarget(actor.targetId)
   if (!primary?.alive || !actor.targetVisible) return null
-  const candidates = hostileTargets(actor).filter(candidate => {
+  const minDistance = config.grenade.aiMinDistance
+  const maxDistance = config.grenade.aiMaxDistance
+  const candidates = []
+  for (const candidate of actors.values()) {
+    if (!candidate.alive || candidate.team === actor.team) continue
     const distance = distance2D(actor, candidate)
-    return distance >= config.grenade.aiMinDistance &&
-      distance <= config.grenade.aiMaxDistance
-  })
+    if (distance < minDistance || distance > maxDistance) continue
+    candidates.push(candidate)
+  }
+  if (player.alive && player.team !== actor.team) {
+    const distance = distance2D(actor, player)
+    if (distance >= minDistance && distance <= maxDistance) candidates.push(player)
+  }
   const visibleCandidates = candidates.filter(candidate =>
     candidate === primary || botCanSee(actor, candidate, smokeClouds)
   )
@@ -1572,7 +1618,17 @@ function updateBotMovement(actor, dt, smokeClouds) {
       : { x: actor.lastSeenX, y: actor.lastSeenY, z: actor.lastSeenZ }
   }
 
-  const needsCover = actor.health < botConfig.lowHealthThreshold || actor.suppression > 0.62 || isOutnumbered(actor)
+  const underPressure = refreshPressure(actor, dt)
+  const inCoverState = actor.stateName === 'seek_cover' || actor.stateName === 'hold_cover'
+  const enterCover =
+    actor.health < botConfig.lowHealthThreshold ||
+    actor.suppression > botConfig.coverEnterSuppression ||
+    underPressure
+  const stayCover =
+    actor.health < botConfig.lowHealthThreshold + botConfig.coverExitHealthBias ||
+    actor.suppression > botConfig.coverExitSuppression ||
+    underPressure
+  const needsCover = inCoverState ? stayCover : enterCover
   tryThrowGrenade(actor, dt, smokeClouds, needsCover)
   if (
     targetPosition &&
@@ -1587,6 +1643,10 @@ function updateBotMovement(actor, dt, smokeClouds) {
       actor.isPeeking = false
       setState(actor, 'seek_cover')
     }
+  } else if (inCoverState && !needsCover && actor.stateTimer > 1.2) {
+    actor.cover = null
+    actor.isPeeking = false
+    setState(actor, target?.alive && actor.targetVisible ? 'engage' : 'patrol')
   }
 
   if (actor.stateName === 'resupply') {
@@ -1703,7 +1763,11 @@ function updateBotMovement(actor, dt, smokeClouds) {
         12,
         botConfig.engageFarDistance - 2,
       )
-      const closeRange = actor.role === 'assault' ? botConfig.engageCloseDistance * 0.65 : botConfig.engageCloseDistance
+      const closeRange = clamp(
+        weapon.effectiveRange * 0.22,
+        botConfig.engageCloseDistance * 0.55,
+        botConfig.engageCloseDistance,
+      )
       if (distance > Math.min(botConfig.engageFarDistance, desiredRange + 10)) {
         moveToward(actor, targetPosition, botConfig.engageFarSpeed)
       } else if (distance < closeRange) {
@@ -1727,11 +1791,15 @@ function updateBotMovement(actor, dt, smokeClouds) {
         actor.reserveAmmo > 0 &&
         actor.suppression < 0.25 &&
         !actor.reloading &&
-        distance > botConfig.engageCloseDistance * 1.4
+        distance > closeRange * 1.35
       ) {
         startReload(actor, false)
       }
-      if (actor.stateTimer > 2 && Math.random() < botConfig.seekCoverFlankChance * dt * 0.22 && !needsCover) {
+      if (
+        actor.stateTimer > 1.6 &&
+        !needsCover &&
+        Math.random() < botConfig.seekCoverFlankChance * dt * (distance > desiredRange ? 0.28 : 0.16)
+      ) {
         actor.flankDir = Math.random() > 0.5 ? 1 : -1
         setState(actor, 'flank')
       }
@@ -1829,9 +1897,9 @@ function findZombieAttackTarget(actor) {
   const enemyConfig = config.modes.zombie.enemy
   let nearest = null
   let nearestDistance = Infinity
-  for (const candidate of hostileTargets(actor)) {
+  const consider = candidate => {
     const distance = distance2D(actor, candidate)
-    if (distance > enemyConfig.attackRange) continue
+    if (distance > enemyConfig.attackRange || distance >= nearestDistance) return
     const visible = hasLineOfSight(
       { x: actor.x, y: actor.y + 1.05, z: actor.z },
       {
@@ -1841,10 +1909,15 @@ function findZombieAttackTarget(actor) {
       },
       [],
     )
-    if (!visible || distance >= nearestDistance) continue
+    if (!visible) return
     nearest = candidate
     nearestDistance = distance
   }
+  for (const candidate of actors.values()) {
+    if (!candidate.alive || candidate.team === actor.team) continue
+    consider(candidate)
+  }
+  if (player.alive && player.team !== actor.team) consider(player)
   return nearest
 }
 
@@ -1957,7 +2030,8 @@ function createActor(data) {
     resupplyStation: null,
     resupplyKind: null,
     nextSupplyAt: 0,
-    role: 'rifleman',
+    pressureTimer: Math.random() * config.bot.pressureRefreshInterval,
+    underPressure: false,
     botSkill: data.skill,
     patrolX: data.x,
     patrolZ: data.z,
@@ -1969,16 +2043,6 @@ function createActor(data) {
     vz: data.vz,
   }
   if (actor.kind === 'soldier') {
-    const weapon = config.weapons[actor.weaponId]
-    if (weapon.modelId === 'shotgun' || weapon.modelId === 'thompson') {
-      actor.role = 'assault'
-    } else if (weapon.modelId === 'bar') {
-      actor.role = 'support'
-    } else if (weapon.modelId === 'garand' && actor.botSkill > 0.42) {
-      actor.role = 'marksman'
-    } else {
-      actor.role = 'rifleman'
-    }
     const point = patrolPoint(actor)
     actor.patrolX = point.x
     actor.patrolZ = point.z
@@ -2019,6 +2083,7 @@ function processTick(message) {
     if (!actor.alive || coverId == null || coverReservations.has(coverId)) continue
     coverReservations.set(coverId, actor.id)
   }
+  const snapshots = []
   for (const actor of actors.values()) {
     if (!actor.alive) continue
     if (actor.kind === 'zombie') {
@@ -2026,10 +2091,11 @@ function processTick(message) {
     } else {
       updateBot(actor, message.dt, smokeClouds)
     }
+    snapshots.push(snapshotActor(actor))
   }
   self.postMessage({
     type: 'snapshot',
-    actors: [...actors.values()].map(snapshotActor),
+    actors: snapshots,
     events,
   })
 }

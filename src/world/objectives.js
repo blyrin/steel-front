@@ -126,13 +126,8 @@ export function createObjectiveSystem({ scene, matLib, state }) {
 
     const fortressMetal = matLib.metal.clone()
     fortressMetal.color.set(0x65747d)
-    fortressMetal.roughness = 0.38
-    fortressMetal.metalness = 0.92
-    fortressMetal.envMapIntensity = 0.78
     const fortressDeckMetal = fortressMetal.clone()
     fortressDeckMetal.color.set(0x3d5059)
-    fortressDeckMetal.roughness = 0.3
-    fortressDeckMetal.envMapIntensity = 0.9
 
     addMesh(
       group,

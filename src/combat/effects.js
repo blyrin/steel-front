@@ -406,11 +406,8 @@ export function createEffectsSystem({ scene, state, audio, config }) {
     const radius = 0.09
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(radius, 8, 6),
-      new THREE.MeshStandardMaterial({
+      new THREE.MeshToonMaterial({
         color: grenade.color,
-        roughness: 0.48,
-        metalness: 0.34,
-        envMapIntensity: 0.35,
       })
     )
     mesh.position.copy(origin)

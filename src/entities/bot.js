@@ -84,8 +84,53 @@ export class Bot {
       ),
     ]
     this.name = this.generateName()
+    this._workerTurnDifference = 0
+    this._aiX = this.position.x
+    this._aiY = this.position.y
+    this._aiZ = this.position.z
+    this._aiVx = 0
+    this._aiVz = 0
+    this._aiYaw = this.yaw
+    this._aiAt = performance.now()
     this.buildModel()
     this.scene.add(this.group)
+  }
+
+  advanceFromAi(dt) {
+    if (!this.alive) return
+    const match = this.config.match
+    const elapsed = Math.min(match.maxAiFrameDelta, (performance.now() - this._aiAt) / 1000)
+    const half = this.gameState.mapSize / 2 - 2
+    const targetX = Math.max(-half, Math.min(half, this._aiX + this._aiVx * elapsed))
+    const targetZ = Math.max(-half, Math.min(half, this._aiZ + this._aiVz * elapsed))
+    const targetY = this.gameState.groundHeightAt(targetX, targetZ)
+    const dx = targetX - this.position.x
+    const dz = targetZ - this.position.z
+    const distance = Math.hypot(dx, dz)
+    if (distance > match.aiSnapDistance) {
+      this.position.x = targetX
+      this.position.z = targetZ
+    } else {
+      const blend = 1 - Math.exp(-match.aiFollowSpeed * dt)
+      this.position.x += dx * blend
+      this.position.z += dz * blend
+    }
+    this.position.y = this.gameState.groundHeightAt(this.position.x, this.position.z)
+    if (Math.abs(targetY - this.position.y) > 0.8) this.position.y = targetY
+
+    const velocityBlend = 1 - Math.exp(-12 * dt)
+    this.velocity.x += (this._aiVx - this.velocity.x) * velocityBlend
+    this.velocity.z += (this._aiVz - this.velocity.z) * velocityBlend
+
+    let yawDifference = this._aiYaw - this.yaw
+    while (yawDifference > Math.PI) yawDifference -= Math.PI * 2
+    while (yawDifference < -Math.PI) yawDifference += Math.PI * 2
+    const yawStep = yawDifference * (1 - Math.exp(-match.aiYawFollowSpeed * dt))
+    this.yaw += yawStep
+    this._workerTurnDifference += yawStep
+
+    this.group.position.copy(this.position)
+    this.group.rotation.y = this.yaw
   }
 
   randomizeLoadout() {
@@ -581,10 +626,13 @@ export class Bot {
 
   applyAiState(data, resolveTarget) {
     if (!this.alive) return
-    const previousYaw = this.yaw
-    this.position.set(data.x, data.y, data.z)
-    this.velocity.set(data.vx, 0, data.vz)
-    this.yaw = data.yaw
+    this._aiX = data.x
+    this._aiY = data.y
+    this._aiZ = data.z
+    this._aiVx = data.vx
+    this._aiVz = data.vz
+    this._aiYaw = data.yaw
+    this._aiAt = performance.now()
     this.stateName = data.stateName
     this.target = resolveTarget(data.targetId)
     this.targetVisible = data.targetVisible
@@ -593,11 +641,16 @@ export class Bot {
     this.reserveAmmo = data.reserveAmmo
     this.grenadeCount = data.grenadeCount
     this.itemUses = data.itemUses
-    this.group.position.copy(this.position)
-    this.group.rotation.y = this.yaw
-    this._workerTurnDifference = data.yaw - previousYaw
-    while (this._workerTurnDifference > Math.PI) this._workerTurnDifference -= Math.PI * 2
-    while (this._workerTurnDifference < -Math.PI) this._workerTurnDifference += Math.PI * 2
+    const snapDistance = this.config.match.aiSnapDistance
+    const dx = data.x - this.position.x
+    const dz = data.z - this.position.z
+    if (dx * dx + dz * dz > snapDistance * snapDistance) {
+      this.position.set(data.x, data.y, data.z)
+      this.velocity.set(data.vx, 0, data.vz)
+      this.yaw = data.yaw
+      this.group.position.copy(this.position)
+      this.group.rotation.y = this.yaw
+    }
   }
 
   applyWorkerItem(health, itemUses) {
@@ -633,6 +686,7 @@ export class Bot {
   }
 
   update(dt) {
+    this.advanceFromAi(dt)
     if (this.alive) {
       const cameraDeltaX = this.camera.position.x - this.position.x
       const cameraDeltaZ = this.camera.position.z - this.position.z
@@ -642,7 +696,7 @@ export class Bot {
       0,
       this.spreadBloom - dt * this.config.weapon.spreadBloomRecovery
     )
-    const turnDifference = this._workerTurnDifference || 0
+    const turnDifference = this._workerTurnDifference
     this._workerTurnDifference = 0
     this.updateModelAnimation(dt, turnDifference)
   }
@@ -959,6 +1013,13 @@ export class Bot {
     this.alive = false
     this.stateName = 'dead'
     this.deathTime = 0
+    this.velocity.set(0, 0, 0)
+    this._aiVx = 0
+    this._aiVz = 0
+    this._aiX = this.position.x
+    this._aiY = this.position.y
+    this._aiZ = this.position.z
+    this._aiYaw = this.yaw
     this.group.rotation.z = 0
     this.marker.visible = false
     this.group.position.y = this.position.y + 0.1
@@ -984,7 +1045,14 @@ export class Bot {
     this.position.copy(this.getRandomSpawn(this.team))
     this.position.y = this.gameState.groundHeightAt(this.position.x, this.position.z)
     this.velocity.set(0, 0, 0)
+    this._aiX = this.position.x
+    this._aiY = this.position.y
+    this._aiZ = this.position.z
+    this._aiVx = 0
+    this._aiVz = 0
     this.yaw = Math.random() * Math.PI * 2
+    this._aiYaw = this.yaw
+    this._aiAt = performance.now()
     this.deathTime = -1
     this.moveBlend = 0
     this.aimPose = 0
