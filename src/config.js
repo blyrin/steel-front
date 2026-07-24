@@ -30,16 +30,21 @@ export const CFG = {
     },
     zombie: {
       // 玩家之外的盟军 AI 数量。
-      alliedBotCount: 7,
+      alliedBotCount: 5,
       // 盟军 AI 定时复活等待时间。
       alliedRespawnTime: 8,
       // 盟军出生点和敌方生成点的随机散布范围。
       spawnScatter: 3,
       // 第一波丧尸数量、每波增量和生成节奏。
       waveStartCount: 32,
-      waveIncrement: 8,
-      waveSpawnInterval: 0.5,
+      waveIncrement: 16,
+      // 每次刷新事件间隔（一次可能是一群）。
+      waveSpawnInterval: 1.2,
       waveIntermission: 10,
+      // 边缘最远处的单群上限；距离堡垒越远群体越大。
+      wavePackMax: 8,
+      // 同一群内个体相对中心点的散布半径。
+      wavePackScatter: 4,
       // 同时存活的丧尸上限。
       maxConcurrent: 128,
       // 盟军 AI 的活动范围中心与半径。

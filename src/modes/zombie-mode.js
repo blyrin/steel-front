@@ -20,7 +20,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     )
   }
 
-  function getRandomZombieSpawn() {
+  function getRandomZombieSpawnCenter() {
     const halfMap = state.mapSize / 2 - 2
     let x
     let z
@@ -28,7 +28,16 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
       x = (Math.random() * 2 - 1) * halfMap
       z = (Math.random() * 2 - 1) * halfMap
     } while (Math.hypot(x, z) <= modeConfig.guardRadius)
-    return new THREE.Vector3(x, 0, z)
+    return { x, z, halfMap }
+  }
+
+  // 距离堡垒越远，单次刷新的群体越大；近处倾向单体，远处倾向一群。
+  function getPackSize(distance, halfMap) {
+    const span = halfMap - modeConfig.guardRadius
+    const t = Math.min(1, Math.max(0, (distance - modeConfig.guardRadius) / span))
+    const expected = 1 + t * t * (modeConfig.wavePackMax - 1)
+    const roll = expected * (0.7 + Math.random() * 0.6)
+    return Math.max(1, Math.min(modeConfig.wavePackMax, Math.round(roll)))
   }
 
   function getHostileActors(team) {
@@ -108,8 +117,8 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     services.hud.showCenterMessage(`第 ${data.wave} 波`, 1400, '丧尸来袭')
   }
 
-  function spawnZombie() {
-    const zombie = new Zombie(getRandomZombieSpawn(), {
+  function spawnOneZombie(position) {
+    const zombie = new Zombie(position, {
       scene: services.scene,
       matLib: services.matLib,
       audio: services.audio,
@@ -125,6 +134,29 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
     services.ai.addActor(zombie)
     services.audio.zombieGroan(zombie.position)
     state.modeState.waveSpawned++
+  }
+
+  function spawnZombiePack() {
+    const data = state.modeState
+    const remaining = data.waveTotal - data.waveSpawned
+    const room = modeConfig.maxConcurrent - getActiveZombies()
+    if (remaining <= 0 || room <= 0) return
+
+    const center = getRandomZombieSpawnCenter()
+    const distance = Math.hypot(center.x, center.z)
+    const packSize = Math.min(getPackSize(distance, center.halfMap), remaining, room)
+    const scatter = modeConfig.wavePackScatter
+
+    for (let i = 0; i < packSize; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const radius = packSize === 1 ? 0 : Math.random() * scatter
+      const position = new THREE.Vector3(
+        center.x + Math.cos(angle) * radius,
+        0,
+        center.z + Math.sin(angle) * radius
+      )
+      spawnOneZombie(position)
+    }
   }
 
   function getActiveZombies() {
@@ -177,7 +209,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
       spawnTimer += dt
       if (spawnTimer >= modeConfig.waveSpawnInterval) {
         spawnTimer = 0
-        spawnZombie()
+        spawnZombiePack()
       }
     }
     if (data.waveSpawned >= data.waveTotal && getActiveZombies() === 0) startIntermission(now)
