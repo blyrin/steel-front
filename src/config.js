@@ -1,8 +1,6 @@
 export const CFG = {
-  // 通用对局与地图参数，距离单位为米，时间单位为秒。
+  // 通用对局参数，时间单位为秒。
   match: {
-    // 地图边长。
-    mapSize: 240,
     // 固定模拟频率。
     tickRate: 60,
     // 单次渲染帧最多累积的模拟时间，避免切后台后瞬移。
@@ -713,33 +711,6 @@ export const CFG = {
     // 允许超过最大声音数的额外声音数量。
     overflowVoices: 10,
   },
-  // 世界生成数量，调整数量会改变战场掩体和景观密度。
-  world: {
-    // 地形网格的横向和纵向细分数。
-    terrainSegments: 64,
-    // 地形边缘保留起伏的额外范围。
-    terrainEdgeMargin: 8,
-    // 泥地斑块数量。
-    dirtPatchCount: 36,
-    // 弹坑数量。
-    craterCount: 32,
-    // 木箱数量。
-    crateCount: 55,
-    // 铁丝网组数量。
-    barbedWireCount: 14,
-    // 树木数量。
-    treeCount: 90,
-    // 碎片组数量。
-    debrisCount: 40,
-    // 远景烟柱数量。
-    smokeColumnCount: 12,
-    // 每根烟柱包含的烟团数量。
-    smokePuffsPerColumn: 7,
-    // 木箱生成时避开地图中心的半径。
-    centerExclusionRadius: 8,
-    // 烟柱生成时避开地图中心的半径。
-    smokeCenterExclusionRadius: 35,
-  },
   // 相机、雾效、像素比和阴影的运行时渲染参数。
   render: {
     // 相机近裁剪面距离。
@@ -788,43 +759,6 @@ export const CFG = {
     // 加载界面淡出后显示菜单的延迟。
     menuFadeDelay: 600,
   },
-}
-
-// 两个阵营可选择的出生点坐标和界面名称。
-export const SPAWN_POINTS = {
-  // 我方出生点。
-  allies: [
-    // A 点：南侧主阵地。
-    { x: 0, z: 100, name: '南侧主阵地', id: 'A' },
-    // B 点：西南农场。
-    { x: -55, z: 90, name: '西南农场', id: 'B' },
-    // C 点：东南路口。
-    { x: 55, z: 95, name: '东南路口', id: 'C' },
-    // D 点：西南林地。
-    { x: -95, z: 70, name: '西南林地', id: 'D' },
-    // E 点：东南废墟。
-    { x: 95, z: 70, name: '东南废墟', id: 'E' },
-  ],
-  // 敌方出生点。
-  axis: [
-    // F 点：北侧据点。
-    { x: 0, z: -100, name: '北侧据点', id: 'F' },
-    // G 点：西北树林。
-    { x: -55, z: -90, name: '西北树林', id: 'G' },
-    // H 点：东北废墟。
-    { x: 55, z: -95, name: '东北废墟', id: 'H' },
-    // I 点：西北高地。
-    { x: -95, z: -70, name: '西北高地', id: 'I' },
-    // J 点：东北公路。
-    { x: 95, z: -70, name: '东北公路', id: 'J' },
-  ],
-}
-
-// 丧尸模式的守军出生点。
-export const ZOMBIE_SPAWN_POINTS = {
-  allies: [
-    { x: 0, z: 0, name: '堡垒上层', id: 'A' },
-  ],
 }
 
 // 启动加载界面按顺序显示的阶段文案。

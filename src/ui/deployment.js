@@ -112,7 +112,7 @@ export function createDeploymentSystem({
   }
 
   function getGodHeight() {
-    const half = config.match.mapSize * 0.5
+    const half = state.mapSize * 0.5
     const vFov = THREE.MathUtils.degToRad(camera.fov)
     const heightScale =
       state.mapId === 'zombie'

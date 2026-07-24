@@ -122,6 +122,7 @@ export function createGameState() {
     },
     modeState: null,
     mapId: null,
+    mapSize: 0,
     groundHeightAt: () => 0,
     groundRegions: [],
     objectives: {

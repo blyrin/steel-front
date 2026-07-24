@@ -1,6 +1,7 @@
 const actors = new Map()
 let config = null
 let modeId = null
+let mapSize = 0
 let obstacles = []
 let coverPoints = []
 let medicalStations = []
@@ -523,7 +524,7 @@ function findNavigationPath(actor, target) {
 
 function buildNavigation() {
   const cellSize = config.bot.navigationCellSize
-  const half = config.match.mapSize / 2 - 2
+  const half = mapSize / 2 - 2
   const columns = Math.ceil((half * 2) / cellSize)
   const rows = columns
   const radius = Math.max(
@@ -982,7 +983,7 @@ function updateStuck(actor, dt) {
 function applyMovement(actor, dt) {
   actor.x += actor.vx * dt
   actor.z += actor.vz * dt
-  const half = config.match.mapSize / 2 - 2
+  const half = mapSize / 2 - 2
   actor.x = clamp(actor.x, -half, half)
   actor.z = clamp(actor.z, -half, half)
   actor.y = groundHeightAt(actor.x, actor.z)
@@ -1037,7 +1038,7 @@ function patrolPoint(actor) {
       z: fortress.z + Math.sin(angle) * radius,
     }
   }
-  const half = config.match.mapSize * config.bot.patrolAreaRatio
+  const half = mapSize * config.bot.patrolAreaRatio
   return {
     x: (Math.random() - 0.5) * half * 2,
     z: (Math.random() - 0.5) * half * 2,
@@ -2072,6 +2073,7 @@ self.onmessage = event => {
   if (message.type === 'init') {
     modeId = message.modeId
     config = message.config
+    mapSize = message.mapSize
     obstacles = message.obstacles
     coverPoints = message.coverPoints
     medicalStations = message.medicalStations

@@ -38,7 +38,7 @@ export function createGame() {
   let mode = null
   const ai = createAiSystem({ state, config: CFG, getMode: () => mode })
   const hud = createHud({ dom, state, deploy, audio, config: CFG, getMode: () => mode })
-  const maps = createMapSystem({ dom, state, config: CFG })
+  const maps = createMapSystem({ dom, state })
   let deployment
   let input
 

@@ -1,5 +1,16 @@
 import * as THREE from 'three'
-import { ZOMBIE_SPAWN_POINTS } from '../../config.js'
+
+// 丧尸防守地图参数，边长单位为米。
+const MAP = {
+  size: 240,
+}
+
+// 守军出生点。
+const SPAWN_POINTS = {
+  allies: [
+    { x: 0, z: 0, name: '堡垒上层', id: 'A' },
+  ],
+}
 
 const ZOMBIE_COLORS = {
   ground: 0x334b3d,
@@ -15,7 +26,7 @@ const ZOMBIE_COLORS = {
 }
 
 export function createZombieMap({ scene, matLib, state, config, objectives }) {
-  const mapSize = config.match.mapSize
+  const mapSize = MAP.size
   const groundRegions = []
 
   function addMesh(mesh, { castShadow = true, receiveShadow = true } = {}) {
@@ -476,13 +487,14 @@ export function createZombieMap({ scene, matLib, state, config, objectives }) {
   }
 
   const map = {
-    spawnPoints: ZOMBIE_SPAWN_POINTS,
+    spawnPoints: SPAWN_POINTS,
     buildMap,
     addFrustumRegion,
   }
 
   function buildMap() {
     state.mapId = 'zombie'
+    state.mapSize = mapSize
     state.groundHeightAt = groundHeightAt
     state.groundRegions = groundRegions
     createGround()

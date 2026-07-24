@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { createCircleHitbox, rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
+import { createActionEngine, createPlayerWeaponActions } from './action-engine.js'
 import { WeaponView } from './weapon-view.js'
 import { attachFlashlight } from './flashlight.js'
 
@@ -63,16 +64,15 @@ export class Player {
       matLib,
       audio,
       config: weaponConfig,
-      reloadDuration: weaponConfig.reloadDuration,
-      emptyReloadDuration: weaponConfig.emptyReloadDuration,
     })
+    this.actions = createActionEngine()
+    this.actionDefs = createPlayerWeaponActions(weaponConfig)
     this.weaponData = null
     this.ammo = 0
     this.reserveAmmo = 0
     this.magSize = 0
     this.fireDelay = 0
     this.lastFire = 0
-    this.reloading = false
     this.grenadeCount = 0
     this.itemUses = 0
     this.lastGrenade = 0
@@ -140,8 +140,16 @@ export class Player {
     this.nextSupplyAt = 0
     this.ammo = this.magSize
     this.reserveAmmo = this.weaponData.reserveAmmo
-    this.reloading = false
+    this.actions.cancelAll()
     this.weapon.resetActions()
+  }
+
+  get reloading() {
+    return this.actions.isActive('reload')
+  }
+
+  isHandsBusy() {
+    return this.actions.isBusy('hands')
   }
 
   getHitboxes() {
@@ -188,7 +196,7 @@ export class Player {
     this.crouching = false
     this.sprinting = false
     this.aiming = false
-    this.reloading = false
+    this.actions.cancelAll()
     this.weapon.resetActions()
     this.input.reset()
     this.input.updateTouchUi?.()
@@ -221,10 +229,11 @@ export class Player {
 
   fire() {
     const weaponConfig = this.config.weapon
-    if (!this.alive || this.reloading || this.weapon.meleeTime >= 0 || this.ammo <= 0) return
+    if (!this.alive || this.isHandsBusy() || this.ammo <= 0) return
     const now = performance.now()
     if (now - this.lastFire < this.fireDelay * 1000) return
     this.lastFire = now
+    this.actions.cancel('queueReload')
     this.state.lastPlayerShot = {
       x: this.position.x,
       z: this.position.z,
@@ -254,7 +263,13 @@ export class Player {
     this.viewRecoilPitch += recoilImpulse.pitch
     this.viewRecoilYaw += recoilImpulse.yaw
     this.viewRecoilRoll += recoilImpulse.roll
-    this.weapon.triggerFire(aiming, this.ammo === 0, recoilImpulse)
+    this.weapon.applyRecoil(aiming, recoilImpulse)
+    this.actions.play(this.actionDefs.bolt, {
+      locksOpen: this.ammo === 0,
+      pumpPlayed: false,
+      kickPlayed: false,
+      emptyEjectPlayed: false,
+    })
     this.addShake(
       (aiming ? weaponConfig.aimingFireShake : weaponConfig.hipFireShake) * recoilMultiplier
     )
@@ -291,40 +306,37 @@ export class Player {
     this.effects.spawnShell(eject, right, up)
     this.effects.spawnMuzzleFlash(muzzle, aimDirection, true)
     this.effects.spawnSmokePuff(muzzle)
-    if (this.ammo === 0) {
-      setTimeout(() => {
-        if (this.alive && this.ammo === 0) this.reload()
-      }, weaponConfig.emptyReloadDelay * 1000)
-    }
+    if (this.ammo === 0) this.actions.play(this.actionDefs.queueReload)
     this.hud.updateAmmo()
     this.hud.updateCrosshair()
   }
 
   reload() {
-    if (!this.alive || this.reloading || this.weapon.isBusy()) return
+    if (!this.alive || this.isHandsBusy()) return
     if (this.ammo >= this.magSize || this.reserveAmmo <= 0) return
-    this.reloading = true
-    this.weapon.triggerReload(this.ammo === 0)
-    setTimeout(
-      () => {
-        if (!this.alive || !this.reloading) return
-        const need = this.magSize - this.ammo
-        const amount = Math.min(need, this.reserveAmmo)
-        this.ammo += amount
-        this.reserveAmmo -= amount
-        this.reloading = false
-        this.hud.updateAmmo()
-      },
-      Math.round(this.weapon.getReloadDuration() * 1000)
-    )
+    this.actions.cancel('queueReload')
+    this.actions.cancel('bolt')
+    this.actions.play(this.actionDefs.reload, {
+      empty: this.ammo === 0,
+      reloadDuration: this.weaponData.reloadDuration,
+      emptyReloadDuration: this.weaponData.emptyReloadDuration,
+    })
+  }
+
+  finishReload() {
+    if (!this.alive) return
+    const need = this.magSize - this.ammo
+    const amount = Math.min(need, this.reserveAmmo)
+    this.ammo += amount
+    this.reserveAmmo -= amount
+    this.hud.updateAmmo()
   }
 
   throwGrenade() {
     const now = performance.now()
     if (
       !this.alive ||
-      this.reloading ||
-      this.weapon.isBusy() ||
+      this.isHandsBusy() ||
       this.grenadeCount <= 0 ||
       now - this.lastGrenade < this.config.grenade.cooldown * 1000
     )
@@ -411,28 +423,36 @@ export class Player {
   }
 
   melee() {
-    if (!this.alive || this.reloading || this.weapon.isBusy()) return
+    if (!this.alive || this.isHandsBusy()) return
     const now = performance.now()
     if (now - this.lastMelee < this.meleeDelay * 1000) return
     this.lastMelee = now
     this.aiming = false
-    this.weapon.triggerMelee()
+    this.actions.cancel('queueReload')
+    this.actions.play(this.actionDefs.melee)
     this.audio.stabSwing()
     this.viewRecoilPitch -= 0.008
     this.viewRecoilYaw *= 0.5
     this.viewRecoilRoll *= 0.4
     this.addShake(0.1)
-    const duration = this.weapon.meleeDuration * 1000
-    setTimeout(
-      () => {
-        if (!this.alive || this.deploy.phase !== 'none') return
-        this.viewRecoilPitch += 0.03
-        this.viewRecoilRoll *= 0.3
-        this.addShake(0.22)
-      },
-      Math.round(duration * 0.22)
-    )
-    setTimeout(() => this.resolveMelee(), Math.round(duration * 0.36))
+  }
+
+  handleActionEvents(events) {
+    for (const event of events) {
+      if (event.type === 'complete') {
+        if (event.action === 'reload') this.finishReload()
+        else if (event.action === 'queueReload' && this.alive && this.ammo === 0) this.reload()
+      } else if (event.type === 'marker' && event.action === 'melee') {
+        if (event.name === 'prep') {
+          if (!this.alive || this.deploy.phase !== 'none') continue
+          this.viewRecoilPitch += 0.03
+          this.viewRecoilRoll *= 0.3
+          this.addShake(0.22)
+        } else if (event.name === 'hit') {
+          this.resolveMelee()
+        }
+      }
+    }
   }
 
   resolveMelee() {
@@ -524,7 +544,7 @@ export class Player {
       if (!this.useMedicalStation()) this.useAmmoStation()
     }
 
-    const aiming = this.input.isMouseDown('right') && !this.weapon.isBusy()
+    const aiming = this.input.isMouseDown('right') && !this.isHandsBusy()
     const sprintHeld =
       this.input.isKeyDown('ShiftLeft') ||
       this.input.isKeyDown('ShiftRight') ||
@@ -534,6 +554,8 @@ export class Player {
     this.sprinting = sprintHeld && !this.crouching && !this.aiming
     const firePressed = this.input.consumePressed('MouseLeft')
     if (this.weaponData.automatic ? this.input.isMouseDown('left') : firePressed) this.fire()
+
+    this.handleActionEvents(this.actions.update(dt))
 
     const lookSensitivity =
       playerConfig.lookSensitivity *
@@ -587,7 +609,7 @@ export class Player {
       }
     }
     this.handleCollisions()
-    const half = this.config.match.mapSize / 2 - 2
+    const half = this.state.mapSize / 2 - 2
     this.position.x = Math.max(-half, Math.min(half, this.position.x))
     this.position.z = Math.max(-half, Math.min(half, this.position.z))
 
@@ -690,8 +712,14 @@ export class Player {
       this.aiming,
       lookDelta,
       this._bobPhase || 0,
-      animAxis
+      animAxis,
+      {
+        bolt: this.actions.get('bolt'),
+        reload: this.actions.get('reload'),
+        melee: this.actions.get('melee'),
+      }
     )
+    this.actions.flush()
     this.spreadBloom = Math.max(
       0,
       this.spreadBloom - dt * weaponConfig.spreadBloomRecovery

@@ -1,7 +1,6 @@
-export function createMapSystem({ dom, state, config }) {
+export function createMapSystem({ dom, state }) {
   const width = 180
   const height = 180
-  const scale = width / config.match.mapSize
   const centerX = width / 2
   const centerY = height / 2
   const miniCtx = dom.miniCanvas.getContext('2d')
@@ -12,6 +11,7 @@ export function createMapSystem({ dom, state, config }) {
   staticCanvas.height = height
 
   function drawStaticLayer() {
+    const scale = width / state.mapSize
     const gradient = staticCtx.createRadialGradient(centerX, centerY, 10, centerX, centerY, 90)
     gradient.addColorStop(0, 'rgba(224,245,234,0.94)')
     gradient.addColorStop(1, 'rgba(91,158,172,0.96)')
@@ -62,6 +62,7 @@ export function createMapSystem({ dom, state, config }) {
 
   function updateMinimap() {
     if (!staticLayerReady) drawStaticLayer()
+    const scale = width / state.mapSize
     miniCtx.clearRect(0, 0, width, height)
     miniCtx.drawImage(staticCanvas, 0, 0)
     for (const bot of state.actors) {

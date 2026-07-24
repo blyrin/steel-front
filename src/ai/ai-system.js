@@ -115,6 +115,7 @@ export function createAiSystem({ state, config, getMode }) {
       type: 'init',
       modeId: state.match.modeId,
       config,
+      mapSize: state.mapSize,
       obstacles: state.obstacles,
       coverPoints: state.coverPoints.map(serializePoint),
       medicalStations: state.medicalStations.map(serializePoint),

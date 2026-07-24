@@ -21,7 +21,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
   }
 
   function getRandomZombieSpawn() {
-    const halfMap = config.match.mapSize / 2 - 2
+    const halfMap = state.mapSize / 2 - 2
     let x
     let z
     do {

@@ -5,22 +5,12 @@ function createReloadFlags() {
 }
 
 export class WeaponView {
-  constructor({ config, camera, matLib, audio, reloadDuration, emptyReloadDuration }) {
+  constructor({ config, camera, matLib, audio }) {
     this.camera = camera
     this.matLib = matLib
     this.audio = audio
     this.group = new THREE.Group()
     this.bobTime = 0
-    this.boltTime = -1
-    this.reloadTime = -1
-    this.meleeTime = -1
-    this.meleeDuration = config.meleeAnimationDuration
-    this.reloadDuration = reloadDuration
-    this.emptyReloadDuration = emptyReloadDuration
-    this.emptyReload = false
-    this.boltLocksOpen = false
-    this.emptyEjectPlayed = false
-    this.boltDuration = config.boltAnimationDuration
     this.aimingViewModelRecoilMultiplier = config.aimingViewModelRecoilMultiplier
     this.aiming = false
     this.swayX = 0
@@ -41,6 +31,9 @@ export class WeaponView {
     this.pendingRecoilYaw = 0
     this.pendingRecoilRoll = 0
     this.recoilMultiplier = 1
+    this.activeReload = null
+    this.activeMelee = null
+    this.reloadFlags = createReloadFlags()
     this.smoothPos = new THREE.Vector3()
     this.build()
     camera.add(this.group)
@@ -237,8 +230,6 @@ export class WeaponView {
   }
 
   configure(weapon) {
-    this.reloadDuration = weapon.reloadDuration
-    this.emptyReloadDuration = weapon.emptyReloadDuration
     this.weaponModelId = weapon.modelId
     this.recoilMultiplier = weapon.recoilMultiplier
     this.group.scale.set(...weapon.modelScale)
@@ -374,12 +365,8 @@ export class WeaponView {
   }
 
   resetActions() {
-    this.boltTime = -1
-    this.reloadTime = -1
-    this.meleeTime = -1
-    this.emptyReload = false
-    this.boltLocksOpen = false
-    this.emptyEjectPlayed = false
+    this.activeReload = null
+    this.activeMelee = null
     this.pendingRecoilPitch = 0
     this.pendingRecoilYaw = 0
     this.pendingRecoilRoll = 0
@@ -402,7 +389,16 @@ export class WeaponView {
     this.bayonet.rotation.x = 0
   }
 
-  update(dt, moving, sprinting, aiming, lookDelta, bobPhase = 0, moveAxis = { x: 0, z: 0 }) {
+  update(
+    dt,
+    moving,
+    sprinting,
+    aiming,
+    lookDelta,
+    bobPhase = 0,
+    moveAxis = { x: 0, z: 0 },
+    actions = {}
+  ) {
     if (!this.group.visible) return
     this.aiming = aiming
     const aimMultiplier = aiming ? 0.08 : 1
@@ -480,16 +476,24 @@ export class WeaponView {
     let rotationY = (aiming ? 0 : 0.03) - this.swayX * 1.2 + this.kickYaw
     let rotationZ = bobRoll + this.swayTilt + this.strafeLean + this.kickRoll
 
-    if (this.boltTime >= 0) {
-      this.boltTime += dt
-      const progress = this.boltTime / this.boltDuration
+    const boltAction = actions.bolt
+    const reloadAction = actions.reload
+    const meleeAction = actions.melee
+
+    if (boltAction) {
+      const progress = boltAction.progress
+      const params = boltAction.params
+      const locksOpen = !!params.locksOpen
       const { x, y, z } = this.boltBase
       if (progress >= 1) {
-        this.boltTime = -1
-        this.bolt.position.set(x, y, z + (this.boltLocksOpen ? 0.06 : 0))
+        this.bolt.position.set(x, y, z + (locksOpen ? 0.06 : 0))
         this.bolt.rotation.set(0, 0, 0)
-        if (this.weaponModelId === 'shotgun') this.audio.shotgunPump()
-        if (!this.boltLocksOpen) {
+        if (this.weaponModelId === 'shotgun' && !params.pumpPlayed) {
+          params.pumpPlayed = true
+          this.audio.shotgunPump()
+        }
+        if (!locksOpen && !params.kickPlayed) {
+          params.kickPlayed = true
           const boltKick = this.aiming ? this.aimingViewModelRecoilMultiplier : 1
           this.kickZ += 0.004 * boltKick
           this.kickPitch += 0.004 * boltKick
@@ -499,16 +503,16 @@ export class WeaponView {
         if (progress < 0.28) {
           const time = progress / 0.28
           phase = 1 - Math.pow(1 - time, 3)
-        } else if (this.boltLocksOpen || progress < 0.48) {
+        } else if (locksOpen || progress < 0.48) {
           phase = 1
         } else {
           const time = (progress - 0.48) / 0.52
           phase = Math.pow(1 - time, 2.4)
         }
         this.bolt.position.set(x, y, z + phase * 0.06)
-        if (this.weaponModelId === 'garand' && this.boltLocksOpen && progress >= 0.28) {
-          if (!this.emptyEjectPlayed) {
-            this.emptyEjectPlayed = true
+        if (this.weaponModelId === 'garand' && locksOpen && progress >= 0.28) {
+          if (!params.emptyEjectPlayed) {
+            params.emptyEjectPlayed = true
             this.audio.ping()
           }
           const eject = Math.min(1, (progress - 0.28) / 0.16)
@@ -529,19 +533,33 @@ export class WeaponView {
       }
     }
 
-    if (this.reloadTime >= 0) {
-      this.reloadTime += dt
-      const progress = Math.min(1, this.reloadTime / this.getReloadDuration())
+    if (reloadAction) {
+      const emptyReload = !!reloadAction.params.empty
+      if (reloadAction !== this.activeReload) {
+        this.activeReload = reloadAction
+        this.reloadFlags = createReloadFlags()
+        this.mag.visible =
+          this.weaponModelId !== 'shotgun' && (this.weaponModelId !== 'garand' || !emptyReload)
+        this.mag.position.copy(this.magBase)
+        this.mag.rotation.set(0, 0, 0)
+        this.setMagazineScale()
+        this.bolt.position.set(
+          this.boltBase.x,
+          this.boltBase.y,
+          this.boltBase.z + (emptyReload ? 0.06 : 0)
+        )
+      }
+      const progress = reloadAction.progress
       const smooth = value => value * value * (3 - 2 * value)
       const easeOut = value => 1 - Math.pow(1 - value, 3)
       const modelId = this.weaponModelId
       const detachable = modelId !== 'garand'
-      let poseInEnd = this.emptyReload ? 0.1 : 0.14
-      let insertStart = this.emptyReload ? 0.16 : 0.34
-      let insertEnd = this.emptyReload ? 0.52 : 0.57
-      let seatEnd = this.emptyReload ? 0.68 : 0.7
-      let releaseStart = this.emptyReload ? 0.68 : 0.7
-      let releaseEnd = this.emptyReload ? 0.77 : 0.79
+      let poseInEnd = emptyReload ? 0.1 : 0.14
+      let insertStart = emptyReload ? 0.16 : 0.34
+      let insertEnd = emptyReload ? 0.52 : 0.57
+      let seatEnd = emptyReload ? 0.68 : 0.7
+      let releaseStart = emptyReload ? 0.68 : 0.7
+      let releaseEnd = emptyReload ? 0.77 : 0.79
       if (detachable) {
         poseInEnd = 0.12
         insertStart = 0.44
@@ -586,14 +604,14 @@ export class WeaponView {
         reloadPositionY = -0.04 * pose
         reloadPositionZ = 0.07 * pose
       }
-      let boltPull = this.emptyReload ? 1 : 0
-      const cyclesBolt = !detachable || this.emptyReload
+      let boltPull = emptyReload ? 1 : 0
+      const cyclesBolt = !detachable || emptyReload
 
-      if ((detachable || !this.emptyReload) && progress >= 0.12 && !this.reloadFlags.open) {
+      if ((detachable || !emptyReload) && progress >= 0.12 && !this.reloadFlags.open) {
         this.reloadFlags.open = true
         this.audio.reloadStage('open')
       }
-      if ((detachable || !this.emptyReload) && progress >= 0.19 && !this.reloadFlags.eject) {
+      if ((detachable || !emptyReload) && progress >= 0.19 && !this.reloadFlags.eject) {
         this.reloadFlags.eject = true
         if (detachable) this.audio.reloadStage('seat')
         else this.audio.ping()
@@ -611,7 +629,7 @@ export class WeaponView {
         this.audio.reloadStage('close')
       }
 
-      if (!detachable && !this.emptyReload) {
+      if (!detachable && !emptyReload) {
         if (progress < 0.1) boltPull = 0
         else if (progress < 0.18) boltPull = easeOut((progress - 0.1) / 0.08)
         else if (progress < releaseStart) boltPull = 1
@@ -669,12 +687,12 @@ export class WeaponView {
           this.mag.rotation.set(0, 0, 0)
           this.setMagazineScale()
         }
-      } else if (!this.emptyReload && progress < 0.19) {
+      } else if (!emptyReload && progress < 0.19) {
         this.mag.visible = true
         this.mag.position.copy(this.magBase)
         this.mag.rotation.set(0, 0, 0)
         this.setMagazineScale()
-      } else if (!this.emptyReload && progress < 0.25) {
+      } else if (!emptyReload && progress < 0.25) {
         const time = easeOut((progress - 0.19) / 0.06)
         this.mag.visible = time < 0.9
         this.mag.position.set(
@@ -729,9 +747,6 @@ export class WeaponView {
       this.group.position.z += reloadPositionZ
       this.bolt.position.set(x, y, z + boltPull * 0.06)
       if (progress >= 1) {
-        this.reloadTime = -1
-        this.emptyReload = false
-        this.boltLocksOpen = false
         this.mag.visible = true
         this.mag.position.copy(this.magBase)
         this.mag.rotation.set(0, 0, 0)
@@ -740,11 +755,17 @@ export class WeaponView {
         this.bolt.rotation.set(0, 0, 0)
         this.reloadFlags = createReloadFlags()
       }
+    } else {
+      this.activeReload = null
     }
 
-    if (this.meleeTime >= 0) {
-      this.meleeTime += dt
-      const progress = Math.min(1, this.meleeTime / this.meleeDuration)
+    if (meleeAction) {
+      if (meleeAction !== this.activeMelee) {
+        this.activeMelee = meleeAction
+        this.bayonet.rotation.x = 0
+        this.bayonet.position.z = this.bayonetBaseZ
+      }
+      const progress = meleeAction.progress
       const centerX = -0.06
       const centerY = 0.055
       const centerZ = -0.11
@@ -806,16 +827,17 @@ export class WeaponView {
         this.bayonet.rotation.x = -0.01 * (1 - time)
       }
       if (progress >= 1) {
-        this.meleeTime = -1
         this.bayonet.rotation.x = 0
         this.bayonet.position.z = this.bayonetBaseZ
       }
+    } else {
+      this.activeMelee = null
     }
     if (this.weaponModelId === 'shotgun') this.mag.visible = false
     this.group.rotation.set(rotationX, rotationY, rotationZ)
   }
 
-  triggerFire(aiming = false, locksOpen = false, recoilImpulse) {
+  applyRecoil(aiming = false, recoilImpulse) {
     const viewModelMultiplier = aiming ? this.aimingViewModelRecoilMultiplier : 1
     const positionMultiplier = viewModelMultiplier * this.recoilMultiplier
     this.kickVelZ += (0.55 + Math.random() * 0.12) * positionMultiplier
@@ -826,38 +848,5 @@ export class WeaponView {
     this.pendingRecoilPitch += recoilImpulse.pitch * viewModelMultiplier
     this.pendingRecoilYaw += recoilImpulse.yaw * viewModelMultiplier
     this.pendingRecoilRoll += recoilImpulse.roll * viewModelMultiplier
-    this.boltLocksOpen = locksOpen
-    this.emptyEjectPlayed = false
-    this.boltTime = 0
-  }
-
-  triggerReload(empty = false) {
-    this.emptyReload = empty
-    this.reloadTime = 0
-    this.boltTime = -1
-    this.reloadFlags = createReloadFlags()
-    this.mag.visible = this.weaponModelId !== 'shotgun' && (this.weaponModelId !== 'garand' || !empty)
-    this.mag.position.copy(this.magBase)
-    this.mag.rotation.set(0, 0, 0)
-    this.setMagazineScale()
-    this.bolt.position.set(
-      this.boltBase.x,
-      this.boltBase.y,
-      this.boltBase.z + (empty ? 0.06 : 0)
-    )
-  }
-
-  getReloadDuration() {
-    return this.emptyReload ? this.emptyReloadDuration : this.reloadDuration
-  }
-
-  triggerMelee() {
-    this.meleeTime = 0
-    this.bayonet.rotation.x = 0
-    this.bayonet.position.z = this.bayonetBaseZ
-  }
-
-  isBusy() {
-    return this.reloadTime >= 0 || this.meleeTime >= 0
   }
 }
