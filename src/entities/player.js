@@ -526,9 +526,9 @@ export class Player {
     }
     if (!this.alive) return
 
-    this.viewRecoilPitch *= Math.pow(0.0001, dt)
-    this.viewRecoilYaw *= Math.pow(0.0001, dt)
-    this.viewRecoilRoll *= Math.pow(0.0002, dt)
+    this.viewRecoilPitch *= Math.pow(weaponConfig.viewRecoilPitchDecay, dt)
+    this.viewRecoilYaw *= Math.pow(weaponConfig.viewRecoilYawDecay, dt)
+    this.viewRecoilRoll *= Math.pow(weaponConfig.viewRecoilRollDecay, dt)
     this.shakeTime += dt
     this.shakeTrauma = Math.max(
       0,

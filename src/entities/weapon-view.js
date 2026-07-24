@@ -9,6 +9,7 @@ export class WeaponView {
     this.camera = camera
     this.matLib = matLib
     this.audio = audio
+    this.weaponConfig = config
     this.group = new THREE.Group()
     this.bobTime = 0
     this.aimingViewModelRecoilMultiplier = config.aimingViewModelRecoilMultiplier
@@ -444,8 +445,9 @@ export class WeaponView {
 
     const targetPosition = aiming ? this.aimPosition : this.basePosition
     this.smoothPos.lerp(targetPosition, 1 - Math.exp(-(aiming ? 20 : 12) * dt))
-    const damping = Math.exp(-14 * dt)
-    const positionSpring = 1 - Math.exp(-22 * dt)
+    const weaponConfig = this.weaponConfig
+    const damping = Math.exp(-weaponConfig.viewModelKickDamping * dt)
+    const positionSpring = 1 - Math.exp(-weaponConfig.viewModelKickSpring * dt)
     this.kickVelZ *= damping
     this.kickVelY *= damping
     this.kickZ += this.kickVelZ * dt
@@ -453,8 +455,8 @@ export class WeaponView {
     this.kickZ += -this.kickZ * positionSpring
     this.kickY += -this.kickY * positionSpring
     this.kickX += -this.kickX * positionSpring
-    const pitchYawSpring = 1 - Math.pow(0.0001, dt)
-    const rollSpring = 1 - Math.pow(0.0002, dt)
+    const pitchYawSpring = 1 - Math.pow(weaponConfig.viewRecoilPitchDecay, dt)
+    const rollSpring = 1 - Math.pow(weaponConfig.viewRecoilRollDecay, dt)
     this.kickPitch += -this.kickPitch * pitchYawSpring + this.pendingRecoilPitch
     this.kickYaw += -this.kickYaw * pitchYawSpring + this.pendingRecoilYaw
     this.kickRoll += -this.kickRoll * rollSpring + this.pendingRecoilRoll
@@ -462,9 +464,13 @@ export class WeaponView {
     this.pendingRecoilYaw = 0
     this.pendingRecoilRoll = 0
     if (aiming) {
-      this.kickZ = Math.min(this.kickZ, 0.014)
-      this.kickY = THREE.MathUtils.clamp(this.kickY, -0.006, 0.008)
-      this.kickX = THREE.MathUtils.clamp(this.kickX, -0.004, 0.004)
+      // 开镜只允许沿枪身回退与极小纵向起伏，避免铁瞄横向/大幅偏离准星。
+      this.kickZ = Math.min(this.kickZ, 0.028)
+      this.kickY = THREE.MathUtils.clamp(this.kickY, -0.004, 0.006)
+      this.kickX = 0
+      this.kickPitch = 0
+      this.kickYaw = 0
+      this.kickRoll *= 0.5
     }
 
     this.group.position.set(
@@ -496,7 +502,7 @@ export class WeaponView {
           params.kickPlayed = true
           const boltKick = this.aiming ? this.aimingViewModelRecoilMultiplier : 1
           this.kickZ += 0.004 * boltKick
-          this.kickPitch += 0.004 * boltKick
+          if (!this.aiming) this.kickPitch += 0.004
         }
       } else {
         let phase
@@ -838,15 +844,30 @@ export class WeaponView {
   }
 
   applyRecoil(aiming = false, recoilImpulse) {
-    const viewModelMultiplier = aiming ? this.aimingViewModelRecoilMultiplier : 1
-    const positionMultiplier = viewModelMultiplier * this.recoilMultiplier
-    this.kickVelZ += (0.55 + Math.random() * 0.12) * positionMultiplier
-    this.kickVelY += (0.18 + Math.random() * 0.08) * positionMultiplier
-    this.kickZ += 0.018 * positionMultiplier
-    this.kickY += 0.006 * positionMultiplier
-    this.kickX += (Math.random() - 0.5) * 0.008 * positionMultiplier
-    this.pendingRecoilPitch += recoilImpulse.pitch * viewModelMultiplier
-    this.pendingRecoilYaw += recoilImpulse.yaw * viewModelMultiplier
-    this.pendingRecoilRoll += recoilImpulse.roll * viewModelMultiplier
+    const weaponConfig = this.weaponConfig
+    // 开镜时枪模挂在相机上，视角后坐已带动枪口与弹道；再叠加枪模角度后坐会让铁瞄与准星/弹道脱节。
+    // 开镜只保留沿枪身的位置后坐，腰射才使用独立枪模角度后坐。
+    if (aiming) {
+      const positionMultiplier =
+        this.recoilMultiplier * this.aimingViewModelRecoilMultiplier
+      this.kickVelZ +=
+        (weaponConfig.viewModelKickVelZ + Math.random() * 0.14) * positionMultiplier
+      this.kickZ += weaponConfig.viewModelKickZ * positionMultiplier
+      this.kickVelY +=
+        (weaponConfig.viewModelKickVelY * 0.35 + Math.random() * 0.04) * positionMultiplier
+      this.kickY += weaponConfig.viewModelKickY * 0.35 * positionMultiplier
+      return
+    }
+    const positionMultiplier = this.recoilMultiplier
+    this.kickVelZ +=
+      (weaponConfig.viewModelKickVelZ + Math.random() * 0.14) * positionMultiplier
+    this.kickVelY +=
+      (weaponConfig.viewModelKickVelY + Math.random() * 0.1) * positionMultiplier
+    this.kickZ += weaponConfig.viewModelKickZ * positionMultiplier
+    this.kickY += weaponConfig.viewModelKickY * positionMultiplier
+    this.kickX += (Math.random() - 0.5) * weaponConfig.viewModelKickX * positionMultiplier
+    this.pendingRecoilPitch += recoilImpulse.pitch
+    this.pendingRecoilYaw += recoilImpulse.yaw
+    this.pendingRecoilRoll += recoilImpulse.roll
   }
 }

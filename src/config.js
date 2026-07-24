@@ -119,52 +119,66 @@ export const CFG = {
     // 玩家静止时的基础射击散布。
     baseSpread: 0.005,
     // 射击散布的最大值。
-    maxSpread: 0.08,
+    maxSpread: 0.09,
     // 连续射击额外散布的上限。
-    spreadBloomMax: 0.02,
+    spreadBloomMax: 0.034,
     // 连续射击散布每秒恢复量。
-    spreadBloomRecovery: 0.04,
+    spreadBloomRecovery: 0.05,
     // 玩家每次非瞄准射击增加的散布。
     spreadBloomPerShot: 0.005,
     // 玩家瞄准射击每次增加的散布。
     aimedSpreadBloomPerShot: 0.004,
     // 瞄准时的散布倍率。
-    aimingSpreadMultiplier: 0.28,
+    aimingSpreadMultiplier: 0.25,
     // 蹲伏时的散布倍率。
-    crouchingSpreadMultiplier: 0.65,
+    crouchingSpreadMultiplier: 0.62,
     // 冲刺时的散布倍率。
-    sprintingSpreadMultiplier: 2.6,
+    sprintingSpreadMultiplier: 2.75,
     // 普通移动时的散布倍率。
-    movingSpreadMultiplier: 1.6,
+    movingSpreadMultiplier: 1.72,
     // 离地时的散布倍率。
-    airborneSpreadMultiplier: 1.8,
+    airborneSpreadMultiplier: 2.05,
     // 换弹状态下的散布倍率。
-    reloadingSpreadMultiplier: 1.35,
+    reloadingSpreadMultiplier: 1.4,
     // 玩家开始计算移动散布的速度阈值。
     playerMovingThreshold: 0.4,
     // 玩家射击时的后坐力和屏幕震动。
     // 玩家腰射的垂直后坐力。
-    hipRecoilPitch: 0.02,
+    hipRecoilPitch: 0.024,
     // 玩家瞄准时的垂直后坐力。
-    aimingRecoilPitch: 0.01,
+    aimingRecoilPitch: 0.012,
     // 每次射击附加的随机垂直后坐力。
-    recoilPitchRandom: 0.005,
+    recoilPitchRandom: 0.0065,
     // 玩家腰射的水平后坐力。
-    hipRecoilYaw: 0.01,
+    hipRecoilYaw: 0.012,
     // 玩家瞄准时的水平后坐力。
-    aimingRecoilYaw: 0.004,
+    aimingRecoilYaw: 0.005,
     // 玩家腰射的横滚后坐力。
-    hipRecoilRoll: 0.015,
+    hipRecoilRoll: 0.016,
     // 玩家瞄准时的横滚后坐力。
     aimingRecoilRoll: 0.008,
-    // 开镜时枪模额外机械后坐相对实际视角后坐的倍率。
-    aimingViewModelRecoilMultiplier: 0.22,
+    // 开镜时枪模仅保留位置后坐（无额外角度后坐），相对腰射位置后坐的倍率。
+    aimingViewModelRecoilMultiplier: 0.5,
+    // 视角后坐衰减底数（对 dt 取幂），越小回中越快。
+    viewRecoilPitchDecay: 0.02,
+    viewRecoilYawDecay: 0.05,
+    viewRecoilRollDecay: 0.015,
+    // 枪模后坐速度阻尼与回弹速度。
+    viewModelKickDamping: 12,
+    viewModelKickSpring: 16,
+    // 枪模瞬时后坐位移与速度脉冲。
+    viewModelKickZ: 0.02,
+    viewModelKickY: 0.0065,
+    viewModelKickX: 0.008,
+    viewModelKickVelZ: 0.6,
+    viewModelKickVelY: 0.2,
     // 玩家腰射时的屏幕震动强度。
     hipFireShake: 0.15,
     // 玩家瞄准射击时的屏幕震动强度。
-    aimingFireShake: 0.08,
+    aimingFireShake: 0.075,
   },
-  // 可在部署界面选择的主武器。高射速武器以远距衰减和散布换取近战压制力。
+  // 可在部署界面选择的主武器。
+  // 定位：加兰德精准中远距半自动；霰弹枪近距爆发；汤姆逊近中距压制；BAR 中距重火力但难控。
   weapons: {
     garand: {
       modelId: 'garand',
@@ -172,18 +186,18 @@ export const CFG = {
       fireMode: '半自动',
       automatic: false,
       magazineSize: 8,
-      reserveAmmo: 80,
-      fireDelay: 0.18,
-      reloadDuration: 1.75,
-      emptyReloadDuration: 1.55,
-      bodyDamage: 35,
+      reserveAmmo: 72,
+      fireDelay: 0.17,
+      reloadDuration: 1.65,
+      emptyReloadDuration: 1.4,
+      bodyDamage: 36,
       headDamage: 100,
-      effectiveRange: 72,
-      minDamageMultiplier: 0.78,
-      baseSpread: 0.005,
-      spreadBloomPerShot: 0.005,
-      aimedSpreadBloomPerShot: 0.004,
-      recoilMultiplier: 1,
+      effectiveRange: 78,
+      minDamageMultiplier: 0.82,
+      baseSpread: 0.0042,
+      spreadBloomPerShot: 0.006,
+      aimedSpreadBloomPerShot: 0.0032,
+      recoilMultiplier: 1.08,
       modelScale: [1, 1, 1],
       bayonet: true,
     },
@@ -193,18 +207,18 @@ export const CFG = {
       fireMode: '泵动',
       automatic: false,
       magazineSize: 5,
-      reserveAmmo: 45,
-      fireDelay: 0.8,
-      reloadDuration: 2.1,
-      emptyReloadDuration: 2.35,
-      bodyDamage: 17,
-      headDamage: 24,
-      effectiveRange: 24,
-      minDamageMultiplier: 0.35,
-      baseSpread: 0.032,
-      spreadBloomPerShot: 0.005,
-      aimedSpreadBloomPerShot: 0.008,
-      recoilMultiplier: 1.2,
+      reserveAmmo: 40,
+      fireDelay: 0.7,
+      reloadDuration: 2.2,
+      emptyReloadDuration: 2.45,
+      bodyDamage: 16,
+      headDamage: 22,
+      effectiveRange: 16,
+      minDamageMultiplier: 0.26,
+      baseSpread: 0.04,
+      spreadBloomPerShot: 0.01,
+      aimedSpreadBloomPerShot: 0.014,
+      recoilMultiplier: 1.55,
       modelScale: [1.02, 1.02, 1.02],
       bayonet: false,
       pellets: 8,
@@ -216,17 +230,17 @@ export const CFG = {
       automatic: true,
       magazineSize: 30,
       reserveAmmo: 120,
-      fireDelay: 0.095,
-      reloadDuration: 2.15,
-      emptyReloadDuration: 2.35,
-      bodyDamage: 20,
-      headDamage: 58,
-      effectiveRange: 28,
-      minDamageMultiplier: 0.5,
-      baseSpread: 0.011,
-      spreadBloomPerShot: 0.004,
-      aimedSpreadBloomPerShot: 0.004,
-      recoilMultiplier: 0.7,
+      fireDelay: 0.088,
+      reloadDuration: 2.05,
+      emptyReloadDuration: 2.25,
+      bodyDamage: 22,
+      headDamage: 52,
+      effectiveRange: 26,
+      minDamageMultiplier: 0.4,
+      baseSpread: 0.013,
+      spreadBloomPerShot: 0.007,
+      aimedSpreadBloomPerShot: 0.0052,
+      recoilMultiplier: 0.84,
       modelScale: [1.02, 1.02, 1.02],
       bayonet: true,
     },
@@ -237,17 +251,17 @@ export const CFG = {
       automatic: true,
       magazineSize: 20,
       reserveAmmo: 80,
-      fireDelay: 0.12,
-      reloadDuration: 2.45,
-      emptyReloadDuration: 2.65,
-      bodyDamage: 30,
-      headDamage: 86,
-      effectiveRange: 60,
-      minDamageMultiplier: 0.72,
-      baseSpread: 0.009,
-      spreadBloomPerShot: 0.0045,
-      aimedSpreadBloomPerShot: 0.005,
-      recoilMultiplier: 0.96,
+      fireDelay: 0.125,
+      reloadDuration: 2.65,
+      emptyReloadDuration: 2.9,
+      bodyDamage: 32,
+      headDamage: 78,
+      effectiveRange: 58,
+      minDamageMultiplier: 0.66,
+      baseSpread: 0.0078,
+      spreadBloomPerShot: 0.0072,
+      aimedSpreadBloomPerShot: 0.0058,
+      recoilMultiplier: 1.2,
       modelScale: [1.04, 1.04, 1.04],
       bayonet: true,
     },
@@ -399,15 +413,15 @@ export const CFG = {
     // Bot 移动碰撞半径。
     radius: 0.4,
     // Bot 技能值随机范围的下限。
-    skillMin: 0.25,
+    skillMin: 0.12,
     // Bot 技能值随机范围的宽度。
-    skillRange: 0.35,
+    skillRange: 0.28,
     // Bot 最大视野距离。
     viewDistance: 70,
     // Bot 两次主动扫描之间的时间，避免每帧重复遍历整张地图。
-    perceptionInterval: 0.14,
+    perceptionInterval: 0.2,
     // 每次扫描最多进行精确视线检测的候选数。
-    maxPerceptionTargets: 6,
+    maxPerceptionTargets: 4,
     // 导航网格单元边长。
     navigationCellSize: 4.5,
     // 单次寻路允许展开的最大节点数。
@@ -421,14 +435,14 @@ export const CFG = {
     // Bot 听到玩家开火声的最大距离。
     playerShotHearingDistance: 90,
     // Bot 根据玩家开火声搜索的最长时间。
-    playerShotMemory: 4,
+    playerShotMemory: 2.6,
     // Bot 发现目标后的反应时间基准。
-    reactionTime: 0.5,
+    reactionTime: 0.7,
     // 视野判定：前方夹角阈值、视线起点高度和最小侧视距离。
     // Bot 视野前方点积阈值。
-    viewForwardThreshold: 0.3,
+    viewForwardThreshold: 0.42,
     // Bot 近距离目标允许绕过前方点积限制的距离。
-    viewForwardMinDistance: 5,
+    viewForwardMinDistance: 4,
     // Bot 视线检测起点高度。
     viewOriginHeight: 1.6,
     // Bot 射击和目标判断时使用的高度。
@@ -444,7 +458,7 @@ export const CFG = {
     // Bot 到达搜索点的判定距离。
     alertArrivalDistance: 3,
     // Bot 丢失目标后转入搜索状态的等待时间。
-    lostTargetTime: 3,
+    lostTargetTime: 2.2,
     // Bot 搜索掩体的最大距离。
     coverSearchDistance: 36,
     // 掩体评分最多评估的近距离候选数。
@@ -498,9 +512,9 @@ export const CFG = {
     // 高压状态刷新间隔。
     pressureRefreshInterval: 0.22,
     // Bot 接敌后首次射击的基础延迟。
-    engageFireBaseDelay: 0.7,
+    engageFireBaseDelay: 1.05,
     // Bot 技能对射击延迟的影响范围。
-    engageFireSkillDelay: 0.9,
+    engageFireSkillDelay: 1.35,
     // Bot 到达掩体的判定距离。
     seekCoverArrivalDistance: 1.5,
     // Bot 到达掩体后转入侧翼状态的概率。
@@ -533,7 +547,7 @@ export const CFG = {
     // Bot 低于该速度时视为静止。
     stationarySpeedThreshold: 0.1,
     // Bot 转向目标的跟随速度。
-    turnSpeed: 6,
+    turnSpeed: 4.2,
     // Bot 身体命中体宽度。
     hitboxBodyWidth: 0.77,
     // Bot 身体命中体深度。
