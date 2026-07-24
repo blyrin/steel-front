@@ -122,8 +122,8 @@
           跳跃
         </div>
         <div>
-          <span>左键</span> 射击　<span>R</span> 装弹　<span>右键</span> 瞄准　<span>F</span>
-          刺刀　<span>G</span> 手雷　<span>H</span> 道具　<span>E</span> 补给　<span>TAB</span>
+          <span>左键</span> 射击/引爆　<span>1/2</span> 切换装备　<span>滚轮</span> 切换　<span>R</span> 装弹　<span>右键</span> 瞄准/投 C4
+          <span>F</span> 刺刀　<span>G</span> 手雷　<span>H</span> 道具　<span>E</span> 补给　<span>TAB</span>
           计分板　<span>ESC</span> 暂停
         </div>
         <div>
@@ -245,7 +245,8 @@
         <button class="btn quit-btn" id="quitBtn">退出战场</button>
         <div id="controls">
           <span><b>WASD</b> 移动</span><span><b>SHIFT</b> 冲刺</span><span><b>C</b> 切换下蹲</span>
-          <span><b>左键</b> 射击</span><span><b>R</b> 装弹</span><span><b>右键</b> 瞄准</span
+          <span><b>左键</b> 射击/引爆</span><span><b>1/2</b> 切换装备</span><span><b>滚轮</b> 切换</span
+          ><span><b>R</b> 装弹</span><span><b>右键</b> 瞄准/投 C4</span
           ><span><b>F</b> 刺刀</span><span><b>G</b> 手雷</span><span><b>H</b> 道具</span
           ><span><b>E</b> 补给</span><span><b>TAB</b> 计分板</span><span><b>ESC</b> 暂停</span>
         </div>
@@ -289,6 +290,9 @@
           <button type="button" class="touch-btn" id="touchMelee" data-touch-action aria-label="刺刀">
             <span class="touch-icon" aria-hidden="true">✦</span><span class="touch-label">刺刀</span>
           </button>
+          <button type="button" class="touch-btn" id="touchWeaponSwitch" data-touch-action aria-label="切换装备">
+            <span class="touch-icon" aria-hidden="true">⇄</span><span class="touch-label">副</span>
+          </button>
           <button type="button" class="touch-btn" id="touchReload" data-touch-action aria-label="装弹">
             <span class="touch-icon" aria-hidden="true">↻</span><span class="touch-label">装弹</span>
           </button>
@@ -318,6 +322,10 @@
         <div class="loadout-section">
           <div class="loadout-label">主武器</div>
           <div class="loadout-options" id="loadoutWeapons"></div>
+        </div>
+        <div class="loadout-section">
+          <div class="loadout-label">副武器</div>
+          <div class="loadout-options compact" id="loadoutSecondaries"></div>
         </div>
         <div class="loadout-section">
           <div class="loadout-label">手雷</div>

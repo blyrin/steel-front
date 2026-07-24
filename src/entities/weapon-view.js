@@ -34,6 +34,7 @@ export class WeaponView {
     this.recoilMultiplier = 1
     this.activeReload = null
     this.activeMelee = null
+    this.activeRpgReload = null
     this.reloadFlags = createReloadFlags()
     this.smoothPos = new THREE.Vector3()
     this.build()
@@ -46,7 +47,9 @@ export class WeaponView {
     const dark = this.matLib.metalDark
     const brass = this.matLib.brass
     const blued = this.matLib.blued
-    const add = (mesh, parent = this.group) => {
+    this.primaryRoot = new THREE.Group()
+    this.group.add(this.primaryRoot)
+    const add = (mesh, parent = this.primaryRoot) => {
       mesh.castShadow = false
       mesh.receiveShadow = true
       parent.add(mesh)
@@ -102,7 +105,7 @@ export class WeaponView {
     guard.position.set(0, -0.014, -0.02)
     this.bayonet.add(guard)
     this.bayonet.position.set(0, -0.004, -0.98)
-    this.group.add(this.bayonet)
+    this.primaryRoot.add(this.bayonet)
 
     const frontSightBase = add(new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.008, 0.026), dark))
     frontSightBase.position.set(0, 0.03, -0.9)
@@ -151,7 +154,7 @@ export class WeaponView {
     opKnob.position.set(0.038, 0, 0.14)
     this.bolt.add(opKnob)
     this.bolt.position.set(0, 0.014, -0.19)
-    this.group.add(this.bolt)
+    this.primaryRoot.add(this.bolt)
     this.boltBase = new THREE.Vector3(0, 0.014, -0.19)
 
     const thompsonParts = new THREE.Group()
@@ -163,7 +166,7 @@ export class WeaponView {
     thompsonPistolGrip.position.set(0, -0.085, -0.005)
     thompsonPistolGrip.rotation.x = 0.25
     thompsonParts.add(thompsonPistolGrip)
-    this.group.add(thompsonParts)
+    this.primaryRoot.add(thompsonParts)
 
     const barParts = new THREE.Group()
     const bipodMount = add(
@@ -194,7 +197,63 @@ export class WeaponView {
       foot.position.copy(bipodBottom)
       foot.rotation.y = side * 0.18
     }
-    this.group.add(barParts)
+    this.primaryRoot.add(barParts)
+
+    const secondaryRoot = new THREE.Group()
+    secondaryRoot.visible = false
+
+    const c4Parts = new THREE.Group()
+    const c4Body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.12), dark)
+    c4Body.position.set(0, -0.02, -0.18)
+    c4Parts.add(c4Body)
+    // 绑带抬高并略厚，避免与本体顶面共面闪烁。
+    const c4Band = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.018, 0.05), brass)
+    c4Band.position.set(0, 0.03, -0.18)
+    c4Parts.add(c4Band)
+    const c4Light = new THREE.Mesh(
+      new THREE.SphereGeometry(0.012, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff3b30 })
+    )
+    c4Light.position.set(0.05, 0.048, -0.14)
+    c4Parts.add(c4Light)
+    secondaryRoot.add(c4Parts)
+
+    const rpgParts = new THREE.Group()
+    // RPG-7：后喷口 + 发射管 + 中段护木 + 握把 + 前置火箭。
+    const rpgNozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.078, 0.16, 10), dark)
+    rpgNozzle.rotation.x = Math.PI / 2
+    rpgNozzle.position.set(0.06, -0.03, 0.16)
+    rpgParts.add(rpgNozzle)
+    const rpgTube = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.074, 0.78, 10), blued)
+    rpgTube.rotation.x = Math.PI / 2
+    rpgTube.position.set(0.06, -0.02, -0.28)
+    rpgParts.add(rpgTube)
+    const rpgWood = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.3, 10), wood)
+    rpgWood.rotation.x = Math.PI / 2
+    rpgWood.position.set(0.06, -0.02, -0.12)
+    rpgParts.add(rpgWood)
+    const rpgGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.07), wood)
+    rpgGrip.position.set(0.06, -0.13, -0.02)
+    rpgGrip.rotation.x = 0.22
+    rpgParts.add(rpgGrip)
+    const rpgRocket = new THREE.Group()
+    const rpgMotor = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.052, 0.22, 8), dark)
+    rpgMotor.rotation.x = Math.PI / 2
+    rpgMotor.position.set(0, 0, 0.12)
+    rpgRocket.add(rpgMotor)
+    const rpgWarheadBody = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.16, 8), blued)
+    rpgWarheadBody.rotation.x = Math.PI / 2
+    rpgWarheadBody.position.set(0, 0, -0.02)
+    rpgRocket.add(rpgWarheadBody)
+    const rpgWarhead = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 8), dark)
+    rpgWarhead.rotation.x = -Math.PI / 2
+    rpgWarhead.position.set(0, 0, -0.16)
+    rpgRocket.add(rpgWarhead)
+    this.rpgRocketHome = new THREE.Vector3(0.06, -0.02, -0.78)
+    rpgRocket.position.copy(this.rpgRocketHome)
+    rpgParts.add(rpgRocket)
+    secondaryRoot.add(rpgParts)
+    this.group.add(secondaryRoot)
 
     this.modelParts = {
       buttPad,
@@ -213,12 +272,23 @@ export class WeaponView {
       frontSightWings,
       thompsonParts,
       barParts,
+      secondaryRoot,
+      c4Parts,
+      rpgParts,
+      rpgRocket,
       brass,
       dark,
     }
 
     this.basePosition = new THREE.Vector3(0.18, -0.18, -0.28)
-    this.aimPosition = new THREE.Vector3(-this.sightCenter.x, -this.sightCenter.y - 0.006, -0.3)
+    this.primaryAimPosition = new THREE.Vector3(
+      -this.sightCenter.x,
+      -this.sightCenter.y - 0.006,
+      -0.3
+    )
+    // RPG 瞄准只略收枪，不居中遮挡视野。
+    this.rpgAimPosition = new THREE.Vector3(0.12, -0.12, -0.3)
+    this.aimPosition = this.primaryAimPosition.clone()
     this.aimPitch = 0
     this.smoothPos.copy(this.basePosition)
     this.group.position.copy(this.basePosition)
@@ -234,8 +304,13 @@ export class WeaponView {
     this.weaponModelId = weapon.modelId
     this.recoilMultiplier = weapon.recoilMultiplier
     this.group.scale.set(...weapon.modelScale)
+    this.aimPosition.copy(this.primaryAimPosition)
 
     const parts = this.modelParts
+    this.primaryRoot.visible = true
+    parts.secondaryRoot.visible = false
+    parts.c4Parts.visible = false
+    parts.rpgParts.visible = false
     parts.buttPad.position.set(0, -0.04, 0.3)
     parts.buttPad.scale.set(1, 1, 1)
     parts.butt.position.set(0, -0.04, 0.2)
@@ -291,7 +366,7 @@ export class WeaponView {
       parts.muzzle.position.z = -0.78
       parts.muzzle.scale.set(1.55, 1.1, 1.55)
       this.muzzlePos.position.z = -0.86
-      this.bayonetBaseZ = -0.82
+      this.bayonetBaseZ = -0.86
       parts.frontSightBase.position.z = -0.74
       parts.frontSightPost.position.z = -0.74
       for (const wing of parts.frontSightWings) wing.position.z = -0.74
@@ -361,6 +436,31 @@ export class WeaponView {
     this.setMagazineScale()
   }
 
+  configureSecondary(secondary, options = {}) {
+    const parts = this.modelParts
+    const isRpg = secondary.kind === 'rpg'
+    this.weaponModelId = secondary.kind
+    this.recoilMultiplier = isRpg ? 1.8 : 0.8
+    this.group.scale.set(1, 1, 1)
+    this.primaryRoot.visible = false
+    parts.secondaryRoot.visible = true
+    parts.c4Parts.visible = secondary.kind === 'c4'
+    parts.rpgParts.visible = isRpg
+    parts.rpgRocket.visible = isRpg && options.rpgLoaded !== false
+    parts.rpgRocket.position.copy(this.rpgRocketHome)
+    if (isRpg) {
+      this.aimPosition.copy(this.rpgAimPosition)
+      this.muzzlePos.position.set(0.06, -0.02, -0.96)
+    } else {
+      this.aimPosition.copy(this.primaryAimPosition)
+      this.muzzlePos.position.set(0, 0.01, -0.28)
+    }
+  }
+
+  setRpgRocketVisible(visible) {
+    this.modelParts.rpgRocket.visible = !!visible
+  }
+
   setVisible(visible) {
     this.group.visible = visible
   }
@@ -368,6 +468,7 @@ export class WeaponView {
   resetActions() {
     this.activeReload = null
     this.activeMelee = null
+    this.activeRpgReload = null
     this.pendingRecoilPitch = 0
     this.pendingRecoilYaw = 0
     this.pendingRecoilRoll = 0
@@ -388,6 +489,7 @@ export class WeaponView {
     this.bolt.rotation.set(0, 0, 0)
     this.bayonet.position.z = this.bayonetBaseZ
     this.bayonet.rotation.x = 0
+    this.modelParts.rpgRocket.position.copy(this.rpgRocketHome)
   }
 
   update(
@@ -839,6 +941,62 @@ export class WeaponView {
     } else {
       this.activeMelee = null
     }
+
+    const switchAction = actions.weaponSwitch
+    if (switchAction) {
+      const progress = switchAction.progress
+      let dip
+      if (progress < 0.48) {
+        const time = progress / 0.48
+        dip = time * time * (3 - 2 * time)
+      } else {
+        const time = (progress - 0.48) / 0.52
+        dip = Math.pow(1 - time, 2.2)
+      }
+      this.group.position.y -= 0.28 * dip
+      this.group.position.z += 0.12 * dip
+      rotationX += 0.55 * dip
+      rotationZ += 0.18 * dip
+    }
+
+    const rpgReloadAction = actions.rpgReload
+    if (rpgReloadAction && this.weaponModelId === 'rpg') {
+      if (rpgReloadAction !== this.activeRpgReload) {
+        this.activeRpgReload = rpgReloadAction
+        this.modelParts.rpgRocket.visible = false
+      }
+      const progress = rpgReloadAction.progress
+      const smooth = value => value * value * (3 - 2 * value)
+      let dip = 0
+      if (progress < 0.2) dip = smooth(progress / 0.2)
+      else if (progress < 0.78) dip = 1
+      else dip = 1 - smooth((progress - 0.78) / 0.22)
+      this.group.position.y -= 0.12 * dip
+      this.group.position.z += 0.08 * dip
+      rotationX += 0.28 * dip
+      // 管口偏向屏幕左侧，方便从左前上弹。
+      rotationY += 0.18 * dip
+
+      const rocket = this.modelParts.rpgRocket
+      if (progress < 0.42) {
+        rocket.visible = false
+      } else if (progress < 0.82) {
+        const time = smooth((progress - 0.42) / 0.4)
+        rocket.visible = true
+        // 从玩家左前方插入：-X 为左，更负的 Z 为前方。
+        rocket.position.set(
+          this.rpgRocketHome.x - 0.16 * (1 - time),
+          this.rpgRocketHome.y - 0.03 * (1 - time),
+          this.rpgRocketHome.z - 0.22 * (1 - time)
+        )
+      } else {
+        rocket.visible = true
+        rocket.position.copy(this.rpgRocketHome)
+      }
+    } else {
+      this.activeRpgReload = null
+    }
+
     if (this.weaponModelId === 'shotgun') this.mag.visible = false
     this.group.rotation.set(rotationX, rotationY, rotationZ)
   }

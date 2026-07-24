@@ -49,6 +49,7 @@ const IDS = [
   'touchGrenade',
   'touchItem',
   'touchSupply',
+  'touchWeaponSwitch',
   'touchScoreboard',
   'touchPause',
   'rotateHint',
@@ -81,6 +82,7 @@ const IDS = [
   'spawnMarkers',
   'loadoutPanel',
   'loadoutWeapons',
+  'loadoutSecondaries',
   'loadoutGrenades',
   'loadoutItems',
 ]

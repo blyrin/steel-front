@@ -48,7 +48,7 @@ export function createEffectsSystem({ scene, state, audio, config }) {
       particle.life -= dt
       if (particle.life <= 0) {
         scene.remove(particle.mesh)
-        particle.onComplete?.()
+        particle.onComplete?.(particle)
         if (particle.poolType) release(particle.poolType, particle.mesh)
         state.particles.splice(i, 1)
       } else {
@@ -402,6 +402,66 @@ export function createEffectsSystem({ scene, state, audio, config }) {
     }
   }
 
+  function stickParticle(particle, normal) {
+    if (normal) particle.mesh.position.addScaledVector(normal, 0.02)
+    particle.vel.set(0, 0, 0)
+    particle.stuck = true
+    return true
+  }
+
+  function simulateThrownBody(dt, particle, radius, options = {}) {
+    const bounce = options.bounce ?? config.grenade.bounce
+    const stick = !!options.stick
+    particle.vel.y -= config.grenade.gravity * dt
+    const previous = particle.mesh.position.clone()
+    const next = previous.clone().addScaledVector(particle.vel, dt)
+    let obstacleHit = null
+    let obstacleHitTime = Infinity
+    for (const obstacle of state.obstacles) {
+      if (obstacle.type === 'ground' || obstacle.type === 'crater') continue
+      const hitTime = sweepSphereObstacle(previous, next, radius, obstacle)
+      if (hitTime == null || hitTime >= obstacleHitTime) continue
+      obstacleHit = obstacle
+      obstacleHitTime = hitTime
+    }
+
+    const previousGround = state.groundHeightAt(previous.x, previous.z) + radius
+    const nextGround = state.groundHeightAt(next.x, next.z) + radius
+    let groundHitTime = Infinity
+    if (previous.y <= previousGround + 0.002 && particle.vel.y <= 0) groundHitTime = 0
+    else if (next.y <= nextGround) {
+      const distance = previous.y - previousGround - (next.y - nextGround)
+      groundHitTime =
+        distance > 1e-6
+          ? THREE.MathUtils.clamp((previous.y - previousGround) / distance, 0, 1)
+          : 0
+    }
+
+    if (groundHitTime < Infinity && groundHitTime <= obstacleHitTime) {
+      particle.mesh.position.copy(previous).lerp(next, groundHitTime)
+      particle.mesh.position.y =
+        state.groundHeightAt(particle.mesh.position.x, particle.mesh.position.z) + radius
+      if (stick) return stickParticle(particle)
+      particle.vel.y = Math.abs(particle.vel.y) * bounce
+      particle.vel.x *= 0.68
+      particle.vel.z *= 0.68
+      return false
+    }
+
+    if (obstacleHit) {
+      particle.mesh.position.copy(previous).lerp(next, obstacleHitTime)
+      const normalData = getObstacleNormal(particle.mesh.position, obstacleHit, particle.vel)
+      const normal = new THREE.Vector3(normalData.x, normalData.y, normalData.z)
+      if (stick) return stickParticle(particle, normal)
+      if (particle.vel.dot(normal) < 0) particle.vel.reflect(normal).multiplyScalar(0.62)
+      particle.mesh.position.addScaledVector(normal, 0.004)
+      return false
+    }
+
+    particle.mesh.position.copy(next)
+    return false
+  }
+
   function spawnThrownGrenade(origin, velocity, grenade, onDetonate) {
     const radius = 0.09
     const mesh = new THREE.Mesh(
@@ -418,50 +478,128 @@ export function createEffectsSystem({ scene, state, audio, config }) {
       maxLife: grenade.fuse,
       vel: velocity.clone(),
       update: (dt, time, particle) => {
-        particle.vel.y -= config.grenade.gravity * dt
-        const previous = particle.mesh.position.clone()
-        const next = previous.clone().addScaledVector(particle.vel, dt)
-        let obstacleHit = null
-        let obstacleHitTime = Infinity
-        for (const obstacle of state.obstacles) {
-          if (obstacle.type === 'ground' || obstacle.type === 'crater') continue
-          const hitTime = sweepSphereObstacle(previous, next, radius, obstacle)
-          if (hitTime == null || hitTime >= obstacleHitTime) continue
-          obstacleHit = obstacle
-          obstacleHitTime = hitTime
-        }
-
-        const previousGround = state.groundHeightAt(previous.x, previous.z) + radius
-        const nextGround = state.groundHeightAt(next.x, next.z) + radius
-        let groundHitTime = Infinity
-        if (previous.y <= previousGround + 0.002 && particle.vel.y <= 0) groundHitTime = 0
-        else if (next.y <= nextGround) {
-          const distance = (previous.y - previousGround) - (next.y - nextGround)
-          groundHitTime = distance > 1e-6
-            ? THREE.MathUtils.clamp((previous.y - previousGround) / distance, 0, 1)
-            : 0
-        }
-
-        if (groundHitTime < Infinity && groundHitTime <= obstacleHitTime) {
-          particle.mesh.position.copy(previous).lerp(next, groundHitTime)
-          particle.mesh.position.y =
-            state.groundHeightAt(particle.mesh.position.x, particle.mesh.position.z) + radius
-          particle.vel.y = Math.abs(particle.vel.y) * config.grenade.bounce
-          particle.vel.x *= 0.68
-          particle.vel.z *= 0.68
-        } else if (obstacleHit) {
-          particle.mesh.position.copy(previous).lerp(next, obstacleHitTime)
-          const normalData = getObstacleNormal(particle.mesh.position, obstacleHit, particle.vel)
-          const normal = new THREE.Vector3(normalData.x, normalData.y, normalData.z)
-          if (particle.vel.dot(normal) < 0) particle.vel.reflect(normal).multiplyScalar(0.62)
-          particle.mesh.position.addScaledVector(normal, 0.004)
-        } else {
-          particle.mesh.position.copy(next)
-        }
+        simulateThrownBody(dt, particle, radius)
         particle.mesh.rotation.x += dt * 9
         particle.mesh.rotation.z += dt * 7
       },
       onComplete: () => onDetonate(mesh.position.clone()),
+    })
+  }
+
+  function spawnThrownC4(origin, velocity, secondary) {
+    const radius = 0.11
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.1, 0.14),
+      new THREE.MeshToonMaterial({ color: secondary.color })
+    )
+    mesh.position.copy(origin)
+    const charge = {
+      mesh,
+      secondary,
+      position: mesh.position,
+      particle: null,
+      active: true,
+    }
+    const particle = {
+      mesh,
+      type: 'c4',
+      life: 120,
+      maxLife: 120,
+      vel: velocity.clone(),
+      stuck: false,
+      update: (dt, time, particleState) => {
+        if (!charge.active) {
+          particleState.life = 0
+          return
+        }
+        if (particleState.stuck) {
+          particleState.life = particleState.maxLife
+          return
+        }
+        if (!simulateThrownBody(dt, particleState, radius, { stick: true })) {
+          particleState.mesh.rotation.x += dt * 8
+          particleState.mesh.rotation.z += dt * 6
+        }
+      },
+    }
+    charge.particle = particle
+    addParticle(particle)
+    return charge
+  }
+
+  function removeCharge(charge) {
+    charge.active = false
+    charge.particle.life = 0
+  }
+
+  function createRocketMesh(color) {
+    const rocket = new THREE.Group()
+    const bodyMat = new THREE.MeshToonMaterial({ color })
+    const noseMat = new THREE.MeshToonMaterial({ color: 0x2f3528 })
+    // 本地朝向 -Z，与相机前向一致。
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.36, 8), bodyMat)
+    body.rotation.x = Math.PI / 2
+    rocket.add(body)
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.14, 8), noseMat)
+    nose.rotation.x = -Math.PI / 2
+    nose.position.z = -0.22
+    rocket.add(nose)
+    return rocket
+  }
+
+  function orientRocket(mesh, direction) {
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), direction)
+  }
+
+  function spawnRocket(origin, velocity, secondary, muzzle, onHit) {
+    const radius = 0.08
+    const mesh = createRocketMesh(secondary.color)
+    mesh.position.copy(muzzle || origin)
+    const direction = velocity.clone().normalize()
+    orientRocket(mesh, direction)
+    let hitPosition = null
+    addParticle({
+      mesh,
+      type: 'rocket',
+      life: 4,
+      maxLife: 4,
+      vel: velocity.clone(),
+      update: (dt, time, particle) => {
+        const previous = particle.mesh.position.clone()
+        const next = previous.clone().addScaledVector(particle.vel, dt)
+        let hitTime = Infinity
+        for (const obstacle of state.obstacles) {
+          if (obstacle.type === 'ground' || obstacle.type === 'crater') continue
+          const t = sweepSphereObstacle(previous, next, radius, obstacle)
+          if (t != null && t < hitTime) hitTime = t
+        }
+        for (const actor of state.actors) {
+          if (!actor.alive) continue
+          for (const hitbox of actor.getHitboxes()) {
+            const t = sweepSphereObstacle(previous, next, radius, hitbox)
+            if (t != null && t < hitTime) hitTime = t
+          }
+        }
+        const previousGround = state.groundHeightAt(previous.x, previous.z) + radius
+        const nextGround = state.groundHeightAt(next.x, next.z) + radius
+        if (next.y <= nextGround) {
+          const distance = previous.y - previousGround - (next.y - nextGround)
+          const groundHitTime =
+            distance > 1e-6
+              ? THREE.MathUtils.clamp((previous.y - previousGround) / distance, 0, 1)
+              : 0
+          if (groundHitTime < hitTime) hitTime = groundHitTime
+        }
+        if (hitTime < Infinity) {
+          particle.mesh.position.copy(previous).lerp(next, hitTime)
+          hitPosition = particle.mesh.position.clone()
+          particle.life = 0
+          return
+        }
+        particle.mesh.position.copy(next)
+        orientRocket(particle.mesh, particle.vel.clone().normalize())
+      },
+      onComplete: () => onHit((hitPosition || mesh.position).clone()),
     })
   }
 
@@ -541,6 +679,9 @@ export function createEffectsSystem({ scene, state, audio, config }) {
     spawnSpark,
     spawnBlood,
     spawnThrownGrenade,
+    spawnThrownC4,
+    spawnRocket,
+    removeCharge,
     spawnExplosion,
     spawnSmokeCloud,
   }

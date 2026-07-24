@@ -22,7 +22,7 @@ export class AudioSystem {
     this.ambienceName = null
     this._fwd = new THREE.Vector3()
     this._up = new THREE.Vector3()
-    this.active = 0
+    this.voices = []
     this.maxVoices = config.audio.maxVoices
     this.overflowVoices = config.audio.overflowVoices
     this._lastWorldShot = 0
@@ -195,6 +195,47 @@ export class AudioSystem {
     }
   }
 
+  _stopVoiceAt(index) {
+    const voice = this.voices[index]
+    if (!voice) return
+    voice.src.onended = null
+    try {
+      voice.src.stop()
+    } catch {
+      /* already stopped */
+    }
+    this.voices.splice(index, 1)
+  }
+
+  // 抢占更低优先级声道；priority >= 2 时也可抢占同级最旧声道，确保玩家关键音效不被吞。
+  _trySteal(newPriority) {
+    let bestIdx = -1
+    let bestPri = Infinity
+    let bestStart = Infinity
+    for (let i = 0; i < this.voices.length; i++) {
+      const voice = this.voices[i]
+      if (voice.priority > newPriority) continue
+      if (voice.priority === newPriority && newPriority < 2) continue
+      if (voice.priority < bestPri || (voice.priority === bestPri && voice.start < bestStart)) {
+        bestPri = voice.priority
+        bestStart = voice.start
+        bestIdx = i
+      }
+    }
+    if (bestIdx < 0) return false
+    this._stopVoiceAt(bestIdx)
+    return true
+  }
+
+  _reserveVoice(priority) {
+    const softLimit = this.maxVoices
+    const hardLimit = this.maxVoices + this.overflowVoices
+    if (this.voices.length < softLimit) return true
+    if (priority < 1) return false
+    if (this.voices.length < hardLimit) return true
+    return this._trySteal(priority)
+  }
+
   play(
     keys,
     {
@@ -212,13 +253,11 @@ export class AudioSystem {
   ) {
     if (!this.enabled || !this.ready) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
-    if (this.active >= this.maxVoices && priority < 1) return
-    if (this.active >= this.maxVoices + this.overflowVoices) return
-
     if (pos && this.camera.position.distanceTo(pos) > max) return
     const list = Array.isArray(keys) ? keys : [keys]
     const buf = this.buffers[list[Math.floor(Math.random() * list.length)]]
     if (!buf) return
+    if (!this._reserveVoice(priority)) return
 
     const src = this.ctx.createBufferSource()
     src.buffer = buf
@@ -256,9 +295,11 @@ export class AudioSystem {
       if (slap) gain.connect(this.slapIn)
     }
 
-    this.active++
+    const voice = { src, priority, start: this.ctx.currentTime }
+    this.voices.push(voice)
     src.onended = () => {
-      this.active = Math.max(0, this.active - 1)
+      const index = this.voices.indexOf(voice)
+      if (index >= 0) this.voices.splice(index, 1)
     }
     src.start(0)
     return src
@@ -368,6 +409,16 @@ export class AudioSystem {
       rate: 0.94,
       rateJitter: 0.035,
       wet: 0.24,
+      slap: true,
+      priority: 2,
+    })
+  }
+  rpgShot() {
+    this.play('rpg_shot', {
+      vol: 0.92,
+      rate: 0.96,
+      rateJitter: 0.03,
+      wet: 0.22,
       slap: true,
       priority: 2,
     })
@@ -733,7 +784,8 @@ export class AudioSystem {
       ref: 18,
       max: 80,
       rolloff: 0.35,
-      priority: 1,
+      // 玩家本地命中反馈无 pos，优先级拉高避免被环境声吞掉
+      priority: pos ? 1 : 2,
     })
   }
   pain(chance = 0.3, pos = null) {
@@ -745,6 +797,7 @@ export class AudioSystem {
       ref: 18,
       max: 80,
       rolloff: 0.35,
+      priority: pos ? 0 : 2,
     })
   }
   bodyFall(pos) {
@@ -755,6 +808,7 @@ export class AudioSystem {
       ref: 16,
       max: 70,
       rolloff: 0.35,
+      priority: pos ? 0 : 1,
     })
   }
   bulletWhiz(pos) {
@@ -796,7 +850,7 @@ export class AudioSystem {
       rate: 1.05,
       rateJitter: 0.06,
       wet: 0.08,
-      priority: 1,
+      priority: 2,
     })
   }
   stabHitFlesh(pos) {
@@ -806,7 +860,7 @@ export class AudioSystem {
       pos: pos || null,
       ref: 6,
       max: 30,
-      priority: 1,
+      priority: 2,
     })
     this.play('stab_flesh', {
       vol: 0.4,
@@ -814,7 +868,7 @@ export class AudioSystem {
       pos: pos || null,
       ref: 6,
       max: 30,
-      priority: 1,
+      priority: 2,
     })
   }
   stabHitMetal(pos) {
@@ -824,7 +878,7 @@ export class AudioSystem {
       pos: pos || null,
       ref: 7,
       max: 35,
-      priority: 1,
+      priority: 2,
     })
   }
   killConfirm(kind = 'normal') {

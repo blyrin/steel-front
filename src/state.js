@@ -62,6 +62,7 @@ function createDefaultSettings() {
     mouseSensitivity: CFG.settings.mouseSensitivity,
     loadout: {
       weapon: CFG.loadout.defaultWeapon,
+      secondary: CFG.loadout.defaultSecondary,
       grenade: CFG.loadout.defaultGrenade,
       item: CFG.loadout.defaultItem,
     },
@@ -82,6 +83,9 @@ function loadSettings() {
       weapon: Object.hasOwn(CFG.weapons, loadout.weapon)
         ? loadout.weapon
         : defaults.loadout.weapon,
+      secondary: Object.hasOwn(CFG.secondaries, loadout.secondary)
+        ? loadout.secondary
+        : defaults.loadout.secondary,
       grenade: Object.hasOwn(CFG.grenades, loadout.grenade)
         ? loadout.grenade
         : defaults.loadout.grenade,

@@ -75,7 +75,11 @@ export class Player {
     this.lastFire = 0
     this.grenadeCount = 0
     this.itemUses = 0
+    this.secondaryCount = 0
+    this.activeSlot = 1
+    this.plantedCharges = []
     this.lastGrenade = 0
+    this.lastSecondaryFire = 0
     this.nextSupplyAt = 0
     this.applyLoadout(this.loadout, false)
     this.lastMelee = 0
@@ -125,27 +129,77 @@ export class Player {
   }
 
   applyLoadout(loadout, preserveHealth = true) {
+    this.clearPlantedCharges()
     this.loadout = { ...loadout }
     this.weaponData = this.config.weapons[this.loadout.weapon]
-    this.weapon.configure(this.weaponData)
+    this.secondaryData = this.config.secondaries[this.loadout.secondary]
+    this.grenadeData = this.config.grenades[this.loadout.grenade]
+    this.itemData = this.config.items[this.loadout.item]
     this.magSize = this.weaponData.magazineSize
     this.fireDelay = this.weaponData.fireDelay
     this.baseSpread = this.weaponData.baseSpread
     this.maxHealth = this.config.player.maxHealth
     this.health = preserveHealth ? Math.min(this.health, this.maxHealth) : this.maxHealth
-    this.grenadeData = this.config.grenades[this.loadout.grenade]
-    this.itemData = this.config.items[this.loadout.item]
+    this.secondaryCount = this.secondaryData.count
     this.grenadeCount = this.grenadeData.count
     this.itemUses = this.itemData.uses || 0
+    this.rpgLoaded = this.secondaryData.kind === 'rpg'
+    this.activeSlot = 1
     this.nextSupplyAt = 0
     this.ammo = this.magSize
     this.reserveAmmo = this.weaponData.reserveAmmo
     this.actions.cancelAll()
     this.weapon.resetActions()
+    this.weapon.configure(this.weaponData)
+  }
+
+  clearPlantedCharges() {
+    for (const charge of this.plantedCharges) this.effects.removeCharge(charge)
+    this.plantedCharges.length = 0
+  }
+
+  setActiveSlot(slot) {
+    if (!this.alive || this.deploy.phase !== 'none') return
+    if (slot !== 1 && slot !== 2) return
+    if (this.activeSlot === slot) return
+    if (this.actions.isActive('weaponSwitch')) return
+    this.aiming = false
+    this.actions.cancelAll()
+    this.weapon.resetActions()
+    this.actions.play(this.actionDefs.weaponSwitch, {
+      fromSlot: this.activeSlot,
+      toSlot: slot,
+      swapped: false,
+    })
+  }
+
+  applyActiveSlot(slot) {
+    this.activeSlot = slot
+    if (slot === 1) {
+      this.weapon.configure(this.weaponData)
+    } else {
+      this.weapon.configureSecondary(this.secondaryData, {
+        rpgLoaded: this.rpgLoaded,
+      })
+      if (
+        this.secondaryData.kind === 'rpg' &&
+        !this.rpgLoaded &&
+        this.secondaryCount > 0
+      ) {
+        this.actions.play(this.actionDefs.queueRpgReload)
+      }
+    }
+    this.hud.updateAmmo()
+    this.hud.updateCrosshair()
+    this.input.updateTouchUi?.()
+  }
+
+  cycleActiveSlot() {
+    this.setActiveSlot(this.activeSlot === 1 ? 2 : 1)
   }
 
   get reloading() {
-    return this.actions.isActive('reload')
+    return this.actions.isActive('reload') || this.actions.isActive('rpgReload')
   }
 
   isHandsBusy() {
@@ -196,6 +250,8 @@ export class Player {
     this.crouching = false
     this.sprinting = false
     this.aiming = false
+    this.activeSlot = 1
+    this.clearPlantedCharges()
     this.actions.cancelAll()
     this.weapon.resetActions()
     this.input.reset()
@@ -228,8 +284,13 @@ export class Player {
   }
 
   fire() {
+    if (!this.alive) return
+    if (this.activeSlot === 2) {
+      this.fireSecondary()
+      return
+    }
     const weaponConfig = this.config.weapon
-    if (!this.alive || this.isHandsBusy() || this.ammo <= 0) return
+    if (this.isHandsBusy() || this.ammo <= 0) return
     const now = performance.now()
     if (now - this.lastFire < this.fireDelay * 1000) return
     this.lastFire = now
@@ -311,8 +372,102 @@ export class Player {
     this.hud.updateCrosshair()
   }
 
+  throwC4() {
+    if (!this.alive || this.isHandsBusy()) return
+    if (this.activeSlot !== 2 || this.secondaryData.kind !== 'c4') return
+    if (this.secondaryCount <= 0) return
+    const now = performance.now()
+    if (now - this.lastSecondaryFire < this.config.grenade.cooldown * 1000) return
+    this.lastSecondaryFire = now
+    this.secondaryCount--
+    this.aiming = false
+    const direction = new THREE.Vector3()
+    this.camera.getWorldDirection(direction)
+    const charge = this.combat.throwC4(
+      this.camera.position.clone().addScaledVector(direction, 0.5),
+      direction,
+      this.secondaryData
+    )
+    this.plantedCharges.push(charge)
+    this.viewRecoilPitch += 0.01
+    this.weapon.kickZ += 0.03
+    this.hud.updateAmmo()
+  }
+
+  fireSecondary() {
+    if (this.isHandsBusy()) return
+    const secondary = this.secondaryData
+    if (secondary.kind === 'c4') {
+      this.detonatePlantedCharges()
+      return
+    }
+
+    if (this.secondaryCount <= 0 || !this.rpgLoaded) return
+    const now = performance.now()
+    if (now - this.lastSecondaryFire < secondary.fireDelay * 1000) return
+    this.lastSecondaryFire = now
+    this.secondaryCount--
+    this.rpgLoaded = false
+    this.state.lastPlayerShot = {
+      x: this.position.x,
+      z: this.position.z,
+      at: now,
+    }
+    this.audio.rpgShot()
+    const aimDirection = new THREE.Vector3()
+    this.camera.getWorldDirection(aimDirection)
+    const muzzle = this.weapon.muzzlePos.getWorldPosition(new THREE.Vector3())
+    this.viewRecoilPitch += 0.05
+    this.viewRecoilYaw += (Math.random() - 0.5) * 0.02
+    this.viewRecoilRoll += (Math.random() - 0.5) * 0.03
+    this.weapon.kickZ += 0.08
+    this.weapon.kickY += 0.02
+    this.weapon.setRpgRocketVisible(false)
+    this.addShake(0.28)
+    this.effects.spawnMuzzleFlash(muzzle, aimDirection, true)
+    this.effects.spawnSmokePuff(muzzle)
+    this.combat.fireRocket(
+      this.camera.position.clone(),
+      aimDirection,
+      secondary,
+      this.team,
+      this,
+      muzzle
+    )
+    this.hud.updateAmmo()
+    if (this.secondaryCount > 0) this.actions.play(this.actionDefs.queueRpgReload)
+  }
+
+  reloadRpg() {
+    if (!this.alive || this.activeSlot !== 2 || this.secondaryData.kind !== 'rpg') return
+    if (this.isHandsBusy()) return
+    if (this.rpgLoaded || this.secondaryCount <= 0) return
+    this.actions.cancel('queueRpgReload')
+    this.actions.play(this.actionDefs.rpgReload)
+  }
+
+  finishRpgReload() {
+    if (!this.alive || this.secondaryData.kind !== 'rpg') return
+    if (this.secondaryCount <= 0) return
+    this.rpgLoaded = true
+    this.weapon.setRpgRocketVisible(true)
+    this.hud.updateAmmo()
+  }
+
+  detonatePlantedCharges() {
+    if (!this.alive || this.plantedCharges.length === 0) return false
+    const charges = this.plantedCharges.splice(0)
+    for (const charge of charges) this.combat.detonateC4(charge, this.team, this)
+    this.hud.showActionMessage('C4 已引爆')
+    return true
+  }
+
   reload() {
     if (!this.alive || this.isHandsBusy()) return
+    if (this.activeSlot === 2) {
+      this.reloadRpg()
+      return
+    }
     if (this.ammo >= this.magSize || this.reserveAmmo <= 0) return
     this.actions.cancel('queueReload')
     this.actions.cancel('bolt')
@@ -405,10 +560,12 @@ export class Player {
     }
     const maxGrenades = this.grenadeData.count
     const maxItemUses = this.itemData.uses || 0
+    const maxSecondary = this.secondaryData.count
     const needsResupply =
       this.reserveAmmo < this.weaponData.reserveAmmo ||
       this.grenadeCount < maxGrenades ||
-      this.itemUses < maxItemUses
+      this.itemUses < maxItemUses ||
+      this.secondaryCount < maxSecondary
     if (!needsResupply) {
       this.hud.showActionMessage('补给已满')
       return true
@@ -416,14 +573,22 @@ export class Player {
     this.reserveAmmo = this.weaponData.reserveAmmo
     this.grenadeCount = maxGrenades
     this.itemUses = maxItemUses
+    this.secondaryCount = maxSecondary
+    if (this.secondaryData.kind === 'rpg' && maxSecondary > 0) this.rpgLoaded = true
     this.nextSupplyAt = now + this.config.supply.cooldown * 1000
     this.hud.updateAmmo()
-    this.hud.showActionMessage('弹药、投掷物和道具补给完成')
+    this.hud.showActionMessage('弹药、特殊装备和道具补给完成')
     return true
   }
 
   melee() {
-    if (!this.alive || this.isHandsBusy()) return
+    if (
+      !this.alive ||
+      this.activeSlot !== 1 ||
+      !this.weaponData.bayonet ||
+      this.isHandsBusy()
+    )
+      return
     const now = performance.now()
     if (now - this.lastMelee < this.meleeDelay * 1000) return
     this.lastMelee = now
@@ -441,16 +606,25 @@ export class Player {
     for (const event of events) {
       if (event.type === 'complete') {
         if (event.action === 'reload') this.finishReload()
+        else if (event.action === 'rpgReload') this.finishRpgReload()
         else if (event.action === 'queueReload' && this.alive && this.ammo === 0) this.reload()
-      } else if (event.type === 'marker' && event.action === 'melee') {
-        if (event.name === 'prep') {
-          if (!this.alive || this.deploy.phase !== 'none') continue
-          this.viewRecoilPitch += 0.03
-          this.viewRecoilRoll *= 0.3
-          this.addShake(0.22)
-        } else if (event.name === 'hit') {
-          this.resolveMelee()
-        }
+        else if (event.action === 'queueRpgReload') this.reloadRpg()
+        continue
+      }
+      if (event.type !== 'marker') continue
+      if (event.action === 'melee' && event.name === 'prep') {
+        if (!this.alive || this.deploy.phase !== 'none') continue
+        this.viewRecoilPitch += 0.03
+        this.viewRecoilRoll *= 0.3
+        this.addShake(0.22)
+      } else if (event.action === 'melee' && event.name === 'hit') {
+        this.resolveMelee()
+      } else if (event.action === 'weaponSwitch' && event.name === 'swap') {
+        if (event.params.swapped) continue
+        event.params.swapped = true
+        this.applyActiveSlot(event.params.toSlot)
+      } else if (event.action === 'rpgReload' && event.name === 'insert') {
+        this.audio.reloadStage('insert')
       }
     }
   }
@@ -536,6 +710,11 @@ export class Player {
     )
     const lookDelta = this.input.consumeLookDelta()
     if (this.input.consumePressed('KeyC')) this.crouching = !this.crouching
+    if (this.input.consumePressed('Digit1')) this.setActiveSlot(1)
+    if (this.input.consumePressed('Digit2')) this.setActiveSlot(2)
+    if (this.input.consumePressed('WeaponNext') || this.input.consumePressed('WeaponPrev')) {
+      this.cycleActiveSlot()
+    }
     if (this.input.consumePressed('KeyR')) this.reload()
     if (this.input.consumePressed('KeyF')) this.melee()
     if (this.input.consumePressed('KeyG')) this.throwGrenade()
@@ -544,7 +723,12 @@ export class Player {
       if (!this.useMedicalStation()) this.useAmmoStation()
     }
 
-    const aiming = this.input.isMouseDown('right') && !this.isHandsBusy()
+    const rightDown = this.input.isMouseDown('right')
+    if (this.input.consumePressed('MouseRight')) this.throwC4()
+    const canAim =
+      this.activeSlot === 1 ||
+      (this.activeSlot === 2 && this.secondaryData.kind === 'rpg')
+    const aiming = canAim && rightDown && !this.isHandsBusy()
     const sprintHeld =
       this.input.isKeyDown('ShiftLeft') ||
       this.input.isKeyDown('ShiftRight') ||
@@ -553,7 +737,9 @@ export class Player {
     this.aiming = aiming
     this.sprinting = sprintHeld && !this.crouching && !this.aiming
     const firePressed = this.input.consumePressed('MouseLeft')
-    if (this.weaponData.automatic ? this.input.isMouseDown('left') : firePressed) this.fire()
+    const canAuto =
+      this.activeSlot === 1 && this.weaponData.automatic && this.input.isMouseDown('left')
+    if (canAuto || firePressed) this.fire()
 
     this.handleActionEvents(this.actions.update(dt))
 
@@ -717,6 +903,8 @@ export class Player {
         bolt: this.actions.get('bolt'),
         reload: this.actions.get('reload'),
         melee: this.actions.get('melee'),
+        weaponSwitch: this.actions.get('weaponSwitch'),
+        rpgReload: this.actions.get('rpgReload'),
       }
     )
     this.actions.flush()

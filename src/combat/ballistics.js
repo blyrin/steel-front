@@ -79,19 +79,19 @@ export function createCombatSystem({ state, effects, audio, hud, config, getMode
     }
   }
 
-  function explodeGrenade(position, grenade, team, owner) {
-    if (grenade.kind === 'smoke') {
+  function explodeAt(position, explosive, team, owner, attackType = 'grenade') {
+    if (explosive.kind === 'smoke') {
       state.smokeClouds.push({
         position: position.clone(),
-        radius: grenade.radius,
-        expiresAt: performance.now() + grenade.duration * 1000,
+        radius: explosive.radius,
+        expiresAt: performance.now() + explosive.duration * 1000,
       })
-      effects.spawnSmokeCloud(position, grenade.radius, grenade.duration)
+      effects.spawnSmokeCloud(position, explosive.radius, explosive.duration)
       audio.smokeGrenade(position)
       return
     }
 
-    effects.spawnExplosion(position, grenade.radius)
+    effects.spawnExplosion(position, explosive.radius)
     audio.grenadeExplosion(position)
     const targets = getEnemyTargets(team)
     let ownerHitTarget = false
@@ -103,10 +103,10 @@ export function createCombatSystem({ state, effects, audio, hud, config, getMode
         targetY - position.y,
         target.position.z - position.z
       )
-      if (distance >= grenade.radius) continue
-      const damage = grenade.damage * (1 - (distance / grenade.radius) * 0.78)
-      if (target === state.player) target.takeDamage(damage, position, owner, 'grenade')
-      else target.takeDamage(damage, owner, false, 'grenade')
+      if (distance >= explosive.radius) continue
+      const damage = explosive.damage * (1 - (distance / explosive.radius) * 0.78)
+      if (target === state.player) target.takeDamage(damage, position, owner, attackType)
+      else target.takeDamage(damage, owner, false, attackType)
       effects.spawnBlood(target.position.clone().setY(1.1))
       if (owner === state.player) ownerHitTarget = true
     }
@@ -120,8 +120,26 @@ export function createCombatSystem({ state, effects, audio, hud, config, getMode
       origin,
       velocity,
       grenade,
-      position => explodeGrenade(position, grenade, team, owner)
+      position => explodeAt(position, grenade, team, owner)
     )
+  }
+
+  function throwC4(origin, direction, secondary) {
+    const velocity = direction.clone().normalize().multiplyScalar(secondary.throwSpeed)
+    velocity.y += secondary.throwSpeed * config.grenade.throwLift
+    return effects.spawnThrownC4(origin, velocity, secondary)
+  }
+
+  function fireRocket(origin, direction, secondary, team, owner, muzzle) {
+    const velocity = direction.clone().normalize().multiplyScalar(secondary.rocketSpeed)
+    effects.spawnRocket(origin, velocity, secondary, muzzle, position =>
+      explodeAt(position, secondary, team, owner)
+    )
+  }
+
+  function detonateC4(charge, team, owner) {
+    effects.removeCharge(charge)
+    explodeAt(charge.position, charge.secondary, team, owner)
   }
 
   function update() {
@@ -131,5 +149,5 @@ export function createCombatSystem({ state, effects, audio, hud, config, getMode
     }
   }
 
-  return { fireBullet, throwGrenade, update }
+  return { fireBullet, throwGrenade, throwC4, fireRocket, detonateC4, update }
 }

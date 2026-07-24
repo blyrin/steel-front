@@ -114,6 +114,10 @@ export const CFG = {
     meleeAnimationDuration: 0.58,
     // 枪机往复动画时长。
     boltAnimationDuration: 0.36,
+    // 主武器与 2 号位切换动画时长。
+    weaponSwitchDuration: 0.52,
+    // RPG 上弹药动画时长。
+    rpgReloadDuration: 1.85,
     // 两次近战攻击之间的最短间隔。
     meleeDelay: 0.72,
     // 近战判定距离。
@@ -225,7 +229,7 @@ export const CFG = {
       aimedSpreadBloomPerShot: 0.014,
       recoilMultiplier: 1.55,
       modelScale: [1.02, 1.02, 1.02],
-      bayonet: false,
+      bayonet: true,
       pellets: 8,
     },
     thompson: {
@@ -271,6 +275,28 @@ export const CFG = {
       bayonet: true,
     },
   },
+  // 2 号位特殊装备：部署时二选一，局内用 1/2 与滚轮切换。
+  secondaries: {
+    c4: {
+      name: 'C4 遥控炸药',
+      kind: 'c4',
+      count: 3,
+      throwSpeed: 14,
+      radius: 16,
+      damage: 180,
+      color: 0x2f3330,
+    },
+    rpg: {
+      name: 'RPG-7',
+      kind: 'rpg',
+      count: 2,
+      fireDelay: 0.45,
+      rocketSpeed: 52,
+      radius: 14,
+      damage: 210,
+      color: 0x4d5c3a,
+    },
+  },
   grenades: {
     frag: {
       name: 'MK II 破片手雷',
@@ -308,6 +334,7 @@ export const CFG = {
   },
   loadout: {
     defaultWeapon: 'garand',
+    defaultSecondary: 'c4',
     defaultGrenade: 'frag',
     defaultItem: 'medkit',
   },
@@ -741,10 +768,10 @@ export const CFG = {
   },
   // Web Audio 同时播放的声音数量限制。
   audio: {
-    // 达到该数量后降低普通声音的播放优先级。
-    maxVoices: 24,
-    // 允许超过最大声音数的额外声音数量。
-    overflowVoices: 10,
+    // 软上限：普通音效（priority 0）达到后直接丢弃。
+    maxVoices: 48,
+    // 硬上限溢出：priority >= 1 可占用；满载后由高优先级抢占低优先级声道。
+    overflowVoices: 12,
   },
   // 相机、雾效、像素比的运行时渲染参数（动漫三渲二，无阴影，低像素比 + MSAA）。
   render: {

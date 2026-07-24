@@ -132,8 +132,25 @@ export function createPlayerWeaponActions(weaponConfig) {
         { at: 0.36, name: 'hit' },
       ],
     },
+    weaponSwitch: {
+      id: 'weaponSwitch',
+      channel: 'hands',
+      duration: () => weaponConfig.weaponSwitchDuration,
+      markers: [{ at: 0.48, name: 'swap' }],
+    },
+    rpgReload: {
+      id: 'rpgReload',
+      channel: 'hands',
+      duration: () => weaponConfig.rpgReloadDuration,
+      markers: [{ at: 0.58, name: 'insert' }],
+    },
     queueReload: {
       id: 'queueReload',
+      channel: 'queueReload',
+      duration: () => weaponConfig.emptyReloadDelay,
+    },
+    queueRpgReload: {
+      id: 'queueRpgReload',
       channel: 'queueReload',
       duration: () => weaponConfig.emptyReloadDelay,
     },

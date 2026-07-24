@@ -1509,7 +1509,7 @@ body.touch-mode #controls {
   bottom: max(12px, env(safe-area-inset-bottom));
   left: 50%;
   display: grid;
-  grid-template-columns: repeat(5, 48px);
+  grid-template-columns: repeat(6, 48px);
   gap: 4px;
   transform: translateX(-50%);
 }
@@ -1651,6 +1651,10 @@ body.touch-mode #controls {
 #touchSupply {
   border-style: dashed;
   background: var(--paper);
+}
+#touchWeaponSwitch {
+  background: var(--green);
+  color: var(--paper);
 }
 .touch-meta .touch-btn {
   position: relative;
@@ -2293,7 +2297,7 @@ body.touch-mode #controls {
     min-height: 56px;
   }
   .touch-utility {
-    grid-template-columns: repeat(5, 46px);
+    grid-template-columns: repeat(6, 46px);
     gap: 3px;
   }
   .touch-utility .touch-btn {

@@ -55,24 +55,47 @@ export function createHud({ dom, state, deploy, audio, config, getMode }) {
 
   function updateAmmo() {
     const player = state.player
-    const lowAmmoVisibleNow = player.ammo <= hudConfig.lowAmmoThreshold && !player.reloading
-    if (player.ammo !== ammoCurrent) {
-      ammoCurrent = player.ammo
-      dom.ammoCur.textContent = player.ammo
+    let currentAmmo = player.ammo
+    let currentReserve = player.reserveAmmo
+    let currentName = player.weaponData.name
+    let currentMode = player.weaponData.fireMode
+    let lowAmmoVisibleNow =
+      player.ammo <= hudConfig.lowAmmoThreshold && !player.reloading
+
+    if (player.activeSlot === 2) {
+      const secondary = player.secondaryData
+      currentName = secondary.name
+      if (secondary.kind === 'rpg') {
+        currentAmmo = player.rpgLoaded ? 1 : 0
+        currentReserve = Math.max(0, player.secondaryCount - currentAmmo)
+        currentMode = player.rpgLoaded ? '已上弹' : '需上弹'
+        lowAmmoVisibleNow =
+          !(player.rpgLoaded && player.secondaryCount > 0) && !player.reloading
+      } else {
+        currentAmmo = player.secondaryCount
+        currentReserve = secondary.count
+        currentMode = '遥控炸药'
+        lowAmmoVisibleNow = false
+      }
     }
-    if (player.reserveAmmo !== ammoReserve) {
-      ammoReserve = player.reserveAmmo
-      dom.ammoRes.textContent = player.reserveAmmo
+
+    if (currentAmmo !== ammoCurrent) {
+      ammoCurrent = currentAmmo
+      dom.ammoCur.textContent = currentAmmo
     }
-    if (player.weaponData.name !== weaponName) {
-      weaponName = player.weaponData.name
+    if (currentReserve !== ammoReserve) {
+      ammoReserve = currentReserve
+      dom.ammoRes.textContent = currentReserve
+    }
+    if (currentName !== weaponName) {
+      weaponName = currentName
       dom.weaponName.textContent = weaponName
     }
-    if (player.weaponData.fireMode !== fireMode) {
-      fireMode = player.weaponData.fireMode
+    if (currentMode !== fireMode) {
+      fireMode = currentMode
       dom.fireMode.textContent = fireMode
     }
-    const equipmentText = `${player.grenadeData.name} ×${player.grenadeCount} · ${player.itemData.name} ×${player.itemUses}`
+    const equipmentText = `1 ${player.weaponData.name} · 2 ${player.secondaryData.name} ×${player.secondaryCount} · ${player.grenadeData.name} ×${player.grenadeCount} · ${player.itemData.name} ×${player.itemUses}`
     if (equipmentText !== equipmentStatus) {
       equipmentStatus = equipmentText
       dom.equipmentStatus.textContent = equipmentText

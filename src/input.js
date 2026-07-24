@@ -53,6 +53,8 @@ const CONTROL_KEYS = new Set([
   'KeyH',
   'KeyE',
   'KeyC',
+  'Digit1',
+  'Digit2',
   'Space',
   'ShiftLeft',
   'ShiftRight',
@@ -66,6 +68,7 @@ const TOUCH_PRESS_CODES = {
   grenade: 'KeyG',
   item: 'KeyH',
   supply: 'KeyE',
+  weaponSwitch: 'WeaponNext',
   scoreboard: 'Tab',
 }
 
@@ -284,6 +287,48 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
     if (!landscapeOk) clearTouchActions()
   }
 
+  function setTouchButtonLabel(button, text, ariaLabel, iconText) {
+    if (!button) return
+    const label = button.querySelector('.touch-label')
+    if (label) label.textContent = text
+    if (iconText != null) {
+      const icon = button.querySelector('.touch-icon')
+      if (icon) icon.textContent = iconText
+    }
+    button.setAttribute('aria-label', ariaLabel)
+  }
+
+  function updateTouchActionLabels() {
+    const player = state.player
+    if (!player || !dom) return
+    const onC4 = player.activeSlot === 2 && player.secondaryData?.kind === 'c4'
+    const onRpg = player.activeSlot === 2 && player.secondaryData?.kind === 'rpg'
+
+    setTouchButtonLabel(dom.touchAim, onC4 ? '投C4' : '瞄准', onC4 ? '投掷C4' : '瞄准', onC4 ? '◇' : '◎')
+    if (onC4 && aimToggled) setAimToggled(false)
+
+    let fireLabel = '开火'
+    let fireAria = '开火'
+    if (onC4) {
+      fireLabel = '引爆'
+      fireAria = '引爆C4'
+    } else if (onRpg) {
+      fireLabel = '发射'
+      fireAria = '发射火箭'
+    }
+    setTouchButtonLabel(dom.touchFire, fireLabel, fireAria)
+    setTouchButtonLabel(
+      dom.touchReload,
+      onRpg ? '上弹' : '装弹',
+      onRpg ? 'RPG上弹' : '装弹'
+    )
+    setTouchButtonLabel(
+      dom.touchWeaponSwitch,
+      player.activeSlot === 1 ? '副' : '主',
+      player.activeSlot === 1 ? '切换到副武器' : '切换到主武器'
+    )
+  }
+
   function updateTouchUi() {
     const show =
       touchMode &&
@@ -294,6 +339,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
       landscapeOk
     if (dom?.touchControls) dom.touchControls.classList.toggle('show', show)
     if (!show) clearTouchActions()
+    else updateTouchActionLabels()
   }
 
   function getStickRadius() {
@@ -499,14 +545,26 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
       if (!mouseDown.left) pressed.add('MouseLeft')
       mouseDown.left = true
     }
-    if (event.button === 2) mouseDown.right = true
+    if (event.button === 2) {
+      if (!mouseDown.right) pressed.add('MouseRight')
+      mouseDown.right = true
+    }
   })
   document.addEventListener('mouseup', event => {
     if (event.button === 0) mouseDown.left = false
     if (event.button === 2) mouseDown.right = false
   })
   document.addEventListener('contextmenu', event => event.preventDefault())
-  document.addEventListener('wheel', event => event.preventDefault(), { passive: false })
+  document.addEventListener(
+    'wheel',
+    event => {
+      event.preventDefault()
+      if (!canControl()) return
+      if (event.deltaY > 0) pressed.add('WeaponNext')
+      else if (event.deltaY < 0) pressed.add('WeaponPrev')
+    },
+    { passive: false }
+  )
   document.addEventListener('dragstart', event => event.preventDefault())
   document.addEventListener('selectstart', event => event.preventDefault())
   document.addEventListener('pointerlockchange', () => {
@@ -573,6 +631,13 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
       event.preventDefault()
       event.stopPropagation()
       if (!canControl()) return
+      const player = state.player
+      // C4 模式下该键改为投掷；主武器/RPG 仍为瞄准切换。
+      if (player?.activeSlot === 2 && player.secondaryData?.kind === 'c4') {
+        setAimToggled(false)
+        pressed.add('MouseRight')
+        return
+      }
       setAimToggled(!aimToggled)
     })
   }
@@ -583,6 +648,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
   bindTogglePress(dom?.touchGrenade, TOUCH_PRESS_CODES.grenade)
   bindTogglePress(dom?.touchItem, TOUCH_PRESS_CODES.item)
   bindTogglePress(dom?.touchSupply, TOUCH_PRESS_CODES.supply)
+  bindTogglePress(dom?.touchWeaponSwitch, TOUCH_PRESS_CODES.weaponSwitch)
   bindHoldButton(
     dom?.touchScoreboard,
     () => {

@@ -65,6 +65,7 @@ export function createDeploymentSystem({
     loadoutBuilt = true
     const groups = [
       ['weapon', config.weapons, dom.loadoutWeapons],
+      ['secondary', config.secondaries, dom.loadoutSecondaries],
       ['grenade', config.grenades, dom.loadoutGrenades],
       ['item', config.items, dom.loadoutItems],
     ]
@@ -82,6 +83,7 @@ export function createDeploymentSystem({
         detail.className = 'loadout-option-detail'
         if (kind === 'weapon') detail.textContent = `${data.fireMode} · ${data.magazineSize} 发`
         else if (kind === 'grenade') detail.textContent = `${data.count} 枚`
+        else if (kind === 'secondary') detail.textContent = `${data.count} 发`
         else detail.textContent = `${data.uses} 次`
         button.append(name, detail)
         button.addEventListener('click', () => {
