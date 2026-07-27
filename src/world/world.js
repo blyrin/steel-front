@@ -3,14 +3,56 @@ import * as THREE from 'three'
 export function createWorldSystem({ scene, matLib, state, map }) {
   const sharedGeometry = {
     sandbag: new THREE.CapsuleGeometry(0.28, 0.35, 4, 8),
+    sandbagPlank: new THREE.BoxGeometry(3.1, 0.08, 0.35),
+    box: new THREE.BoxGeometry(1, 1, 1),
     root: new THREE.BoxGeometry(0.15, 0.12, 0.7),
     wirePost: new THREE.CylinderGeometry(0.07, 0.1, 1.55, 6),
     wire: new THREE.CylinderGeometry(0.015, 0.015, 3.2, 5),
     coil: new THREE.TorusGeometry(0.22, 0.025, 5, 12),
     craterMound: new THREE.SphereGeometry(1, 6, 4),
+    dirtPatch: new THREE.CircleGeometry(1, 10),
+    crater: new THREE.CircleGeometry(1, 20),
+    craterRim: new THREE.TorusGeometry(0.85, 0.1, 6, 16),
     trunk: new THREE.CylinderGeometry(1, 1, 1, 7),
     branch: new THREE.CylinderGeometry(1, 1, 1, 5),
     foliage: new THREE.IcosahedronGeometry(1, 0),
+    hill: new THREE.ConeGeometry(1, 1, 7),
+  }
+  const instanceTransform = new THREE.Object3D()
+
+  function addInstanceTransform(
+    matrices,
+    x,
+    y,
+    z,
+    rx,
+    ry,
+    rz,
+    sx,
+    sy,
+    sz
+  ) {
+    instanceTransform.position.set(x, y, z)
+    instanceTransform.rotation.set(rx, ry, rz)
+    instanceTransform.scale.set(sx, sy, sz)
+    instanceTransform.updateMatrix()
+    matrices.push(instanceTransform.matrix.clone())
+  }
+
+  function addNestedInstance(matrices, parentMatrix, ...transform) {
+    addInstanceTransform(matrices, ...transform)
+    matrices[matrices.length - 1].premultiply(parentMatrix)
+  }
+
+  function addInstances(geometry, material, matrices, receiveShadow = true) {
+    if (!matrices.length) return
+    const mesh = new THREE.InstancedMesh(geometry, material, matrices.length)
+    matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix))
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.receiveShadow = receiveShadow
+    mesh.computeBoundingSphere()
+    scene.add(mesh)
   }
 
   function pushBoxObstacle({ type, x, z, w, d, h, rot, minY = 0 }) {
@@ -121,25 +163,23 @@ export function createWorldSystem({ scene, matLib, state, map }) {
     ground.rotation.x = -Math.PI / 2
     scene.add(ground)
 
-    // 泥地斑块
+    const dirtPatchInstances = []
     for (let i = 0; i < map.dirtPatchCount; i++) {
-      const patch = enableShadow(
-        new THREE.Mesh(
-          new THREE.CircleGeometry(3 + Math.random() * 6, 10),
-          matLib.dirt
-        ),
-        false,
-        true
-      )
-      patch.rotation.x = -Math.PI / 2
-      patch.position.set(
+      const radius = 3 + Math.random() * 6
+      addInstanceTransform(
+        dirtPatchInstances,
         (Math.random() - 0.5) * mapSize * 0.85,
         0.015 + Math.random() * 0.01,
-        (Math.random() - 0.5) * mapSize * 0.85
+        (Math.random() - 0.5) * mapSize * 0.85,
+        -Math.PI / 2,
+        0,
+        Math.random() * Math.PI,
+        radius,
+        radius,
+        1
       )
-      patch.rotation.z = Math.random() * Math.PI
-      scene.add(patch)
     }
+    addInstances(sharedGeometry.dirtPatch, matLib.dirt, dirtPatchInstances)
 
     const roadNS = enableShadow(
       new THREE.Mesh(new THREE.PlaneGeometry(11, mapSize), matLib.road),
@@ -171,11 +211,15 @@ export function createWorldSystem({ scene, matLib, state, map }) {
       scene.add(shoulder)
     }
 
+    const craterInstances = { discs: [], rims: [], mounds: [] }
     for (let i = 0; i < map.craterCount; i++) {
       const angle = Math.random() * Math.PI * 2
       const radius = 18 + Math.random() * (half - 28)
-      createCrater(Math.cos(angle) * radius, Math.sin(angle) * radius)
+      createCrater(Math.cos(angle) * radius, Math.sin(angle) * radius, craterInstances)
     }
+    addInstances(sharedGeometry.crater, matLib.crater, craterInstances.discs)
+    addInstances(sharedGeometry.craterRim, matLib.dirt, craterInstances.rims)
+    addInstances(sharedGeometry.craterMound, matLib.dirt, craterInstances.mounds)
 
     const buildings = [
       { x: -40, z: -30 },
@@ -222,8 +266,14 @@ export function createWorldSystem({ scene, matLib, state, map }) {
       { x: -70, z: 30 },
       { x: 70, z: -30 },
     ]
-    sandbags.forEach(({ x, z }) => createSandbags(x, z, Math.random() * Math.PI))
+    const sandbagInstances = { bags: [], planks: [] }
+    sandbags.forEach(({ x, z }) =>
+      createSandbags(x, z, Math.random() * Math.PI, sandbagInstances)
+    )
+    addInstances(sharedGeometry.sandbag, matLib.sandbag, sandbagInstances.bags)
+    addInstances(sharedGeometry.sandbagPlank, matLib.wood, sandbagInstances.planks)
 
+    const crateInstances = { wood: [], metal: [] }
     for (let i = 0; i < map.crateCount; i++) {
       const x = (Math.random() - 0.5) * mapSize * 0.9
       const z = (Math.random() - 0.5) * mapSize * 0.9
@@ -232,8 +282,10 @@ export function createWorldSystem({ scene, matLib, state, map }) {
         Math.abs(z) < map.centerExclusionRadius
       )
         continue
-      createCrate(x, z, Math.random() * Math.PI * 2)
+      createCrate(x, z, Math.random() * Math.PI * 2, crateInstances)
     }
+    addInstances(sharedGeometry.box, matLib.wood, crateInstances.wood)
+    addInstances(sharedGeometry.box, matLib.metalDark, crateInstances.metal)
 
     createWreckTank(-40, -20, 0.6)
     createWreckTank(45, 28, -0.8)
@@ -246,11 +298,16 @@ export function createWorldSystem({ scene, matLib, state, map }) {
       const radius = 55 + (i % 3) * 18
       createBarbedWire(Math.cos(angle) * radius, Math.sin(angle) * radius, angle + Math.PI / 2)
     }
+    const treeInstances = { trunks: [], branches: [], foliage: [], roots: [] }
     for (let i = 0; i < map.treeCount; i++) {
       const angle = Math.random() * Math.PI * 2
       const radius = half * 0.52 + Math.random() * half * 0.42
-      createTree(Math.cos(angle) * radius, Math.sin(angle) * radius)
+      createTree(Math.cos(angle) * radius, Math.sin(angle) * radius, treeInstances)
     }
+    addInstances(sharedGeometry.trunk, matLib.treeTrunk, treeInstances.trunks)
+    addInstances(sharedGeometry.branch, matLib.treeBranch, treeInstances.branches)
+    addInstances(sharedGeometry.foliage, matLib.treeFoliage, treeInstances.foliage)
+    addInstances(sharedGeometry.root, matLib.dirt, treeInstances.roots)
     for (let i = 0; i < map.debrisCount; i++) {
       createDebris(
         (Math.random() - 0.5) * mapSize * 0.85,
@@ -364,93 +421,121 @@ export function createWorldSystem({ scene, matLib, state, map }) {
       fog: true,
       depthWrite: false,
     })
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMat))
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(440, 24, 12), skyMat))
 
     const cloudGeometry = new THREE.DodecahedronGeometry(1, 0)
     const cloudMat = new THREE.MeshBasicMaterial({ color: 0xe8f1e6 })
     const cloudShadeMat = new THREE.MeshBasicMaterial({ color: 0x82adbd })
+    const cloudInstances = []
+    const cloudShadeInstances = []
     for (let i = 0; i < 15; i++) {
-      const cloud = new THREE.Group()
       const baseAngle = Math.random() * Math.PI * 2
-      const baseRadius = 170 + Math.random() * 300
+      const baseRadius = 155 + Math.random() * 160
       const baseY = 54 + Math.random() * 55
+      const baseX = Math.cos(baseAngle) * baseRadius
+      const baseZ = Math.sin(baseAngle) * baseRadius
       for (let j = 0; j < 5; j++) {
         const scale = 11 + Math.random() * 15
         const x = (j - 2) * 11 + (Math.random() - 0.5) * 8
         const y = (Math.random() - 0.5) * 7
         const z = (Math.random() - 0.5) * 14
-        const shade = new THREE.Mesh(cloudGeometry, cloudShadeMat)
-        shade.position.set(x, y - 2.6, z + 0.8)
-        shade.scale.set(scale * 1.35, scale * 0.42, scale)
-        cloud.add(shade)
-        const puff = new THREE.Mesh(cloudGeometry, cloudMat)
-        puff.position.set(x, y, z)
-        puff.scale.set(scale * 1.35, scale * 0.42, scale)
-        cloud.add(puff)
+        addInstanceTransform(
+          cloudShadeInstances,
+          baseX + x,
+          baseY + y - 2.6,
+          baseZ + z + 0.8,
+          0,
+          0,
+          0,
+          scale * 1.35,
+          scale * 0.42,
+          scale
+        )
+        addInstanceTransform(
+          cloudInstances,
+          baseX + x,
+          baseY + y,
+          baseZ + z,
+          0,
+          0,
+          0,
+          scale * 1.35,
+          scale * 0.42,
+          scale
+        )
       }
-      cloud.position.set(Math.cos(baseAngle) * baseRadius, baseY, Math.sin(baseAngle) * baseRadius)
-      scene.add(cloud)
     }
+    addInstances(cloudGeometry, cloudShadeMat, cloudShadeInstances, false)
+    addInstances(cloudGeometry, cloudMat, cloudInstances, false)
   }
 
   function createDistantHills(half) {
     const hillMat = matLib.hill
+    const matrices = []
     for (let i = 0; i < 16; i++) {
       const angle = (i / 16) * Math.PI * 2 + Math.random() * 0.2
       const radius = half + 40 + Math.random() * 50
-      const hill = enableShadow(
-        new THREE.Mesh(
-          new THREE.ConeGeometry(28 + Math.random() * 30, 12 + Math.random() * 18, 7),
-          hillMat
-        ),
-        false,
-        true
+      const width = 28 + Math.random() * 30
+      const height = 12 + Math.random() * 18
+      addInstanceTransform(
+        matrices,
+        Math.cos(angle) * radius,
+        2,
+        Math.sin(angle) * radius,
+        0,
+        Math.random() * Math.PI,
+        0,
+        width,
+        height,
+        width
       )
-      hill.position.set(Math.cos(angle) * radius, 2, Math.sin(angle) * radius)
-      hill.rotation.y = Math.random() * Math.PI
-      scene.add(hill)
     }
+    addInstances(sharedGeometry.hill, hillMat, matrices)
   }
 
-  function createCrater(x, z) {
+  function createCrater(x, z, instances) {
     const radius = 2 + Math.random() * 1.8
-    const crater = enableShadow(
-      new THREE.Mesh(
-        new THREE.CircleGeometry(radius, 20),
-        matLib.crater
-      ),
-      false,
-      true
+    addInstanceTransform(
+      instances.discs,
+      x,
+      0.04,
+      z,
+      -Math.PI / 2,
+      0,
+      0,
+      radius,
+      radius,
+      1
     )
-    crater.rotation.x = -Math.PI / 2
-    crater.position.set(x, 0.04, z)
-    scene.add(crater)
-
-    const rim = enableShadow(
-      new THREE.Mesh(
-        new THREE.TorusGeometry(radius * 0.85, 0.28, 6, 16),
-        matLib.dirt
-      ),
-      true,
-      true
+    addInstanceTransform(
+      instances.rims,
+      x,
+      0.08,
+      z,
+      -Math.PI / 2,
+      0,
+      0,
+      radius,
+      radius,
+      0.45
     )
-    rim.rotation.x = -Math.PI / 2
-    rim.position.set(x, 0.08, z)
-    rim.scale.z = 0.45
-    scene.add(rim)
 
     for (let i = 0; i < 10; i++) {
       const angle = (i / 10) * Math.PI * 2 + Math.random() * 0.3
       const dist = radius * 0.9 + Math.random() * 0.8
       const moundRadius = 0.35 + Math.random() * 0.35
-      const mound = enableShadow(
-        new THREE.Mesh(sharedGeometry.craterMound, matLib.dirt),
-        false,
-        true
+      addInstanceTransform(
+        instances.mounds,
+        x + Math.cos(angle) * dist,
+        0.12,
+        z + Math.sin(angle) * dist,
+        0,
+        Math.random() * Math.PI,
+        0,
+        moundRadius * 1.2,
+        moundRadius * 0.45,
+        moundRadius
       )
-      mound.position.set(x + Math.cos(angle) * dist, 0.12, z + Math.sin(angle) * dist)
-      mound.scale.set(moundRadius * 1.2, moundRadius * 0.45, moundRadius)
-      scene.add(mound)
     }
     state.coverPoints.push({ x, z, r: radius + 0.5, type: 'crater' })
   }
@@ -633,77 +718,122 @@ export function createWorldSystem({ scene, matLib, state, map }) {
     state.coverPoints.push({ x, z, r: obstacle.r + 1, type: 'building' })
   }
 
-  function createSandbags(x, z, rotation = 0) {
-    const group = new THREE.Group()
-    group.position.set(x, 0, z)
-    group.rotation.y = rotation
+  function createSandbags(x, z, rotation, instances) {
+    const parentMatrix = new THREE.Matrix4().makeRotationY(rotation)
+    parentMatrix.setPosition(x, 0, z)
     for (let row = 0; row < 3; row++) {
       for (let i = -2; i <= 2; i++) {
-        const bag = enableShadow(
-          new THREE.Mesh(sharedGeometry.sandbag, matLib.sandbag),
-          true,
-          true
+        addNestedInstance(
+          instances.bags,
+          parentMatrix,
+          i * 0.58 + (row % 2) * 0.12,
+          0.28 + row * 0.32,
+          (row % 2) * 0.12,
+          0,
+          (Math.random() - 0.5) * 0.15,
+          Math.PI / 2,
+          1,
+          0.85 + Math.random() * 0.15,
+          1.05
         )
-        bag.rotation.z = Math.PI / 2
-        bag.rotation.y = (Math.random() - 0.5) * 0.15
-        bag.position.set(i * 0.58 + (row % 2) * 0.12, 0.28 + row * 0.32, (row % 2) * 0.12)
-        bag.scale.set(1, 0.85 + Math.random() * 0.15, 1.05)
-        group.add(bag)
       }
     }
-    // 支撑木板
-    const plank = enableShadow(
-      new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.08, 0.35), matLib.wood),
-      true,
-      true
+    addNestedInstance(
+      instances.planks,
+      parentMatrix,
+      0,
+      0.95,
+      -0.2,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1
     )
-    plank.position.set(0, 0.95, -0.2)
-    group.add(plank)
-
-    scene.add(group)
-    const obstacle = pushModelObstacle({ type: 'sandbag', model: group })
+    const obstacle = pushBoxObstacle({
+      type: 'sandbag',
+      x,
+      z,
+      w: 3.1,
+      d: 0.75,
+      h: 1,
+      rot: rotation,
+    })
     state.coverPoints.push({ x, z, r: obstacle.r + 0.15, type: 'sandbag' })
   }
 
-  function createCrate(x, z, rotation) {
-    const group = new THREE.Group()
-    group.position.set(x, 0, z)
-    group.rotation.y = rotation
+  function createCrate(x, z, rotation, instances) {
+    const parentMatrix = new THREE.Matrix4().makeRotationY(rotation)
+    parentMatrix.setPosition(x, 0, z)
     const size = 0.75 + Math.random() * 0.45
-    const crate = enableShadow(new THREE.Mesh(new THREE.BoxGeometry(size, size, size), matLib.wood), true, true)
-    crate.position.y = size / 2
-    group.add(crate)
-    // 加固条
-    for (const side of [-1, 1]) {
-      const band = enableShadow(
-        new THREE.Mesh(new THREE.BoxGeometry(size + 0.02, 0.05, 0.05), matLib.metalDark),
-        true,
-        true
-      )
-      band.position.set(0, size * (0.3 + side * 0.15), size / 2 + 0.01)
-      group.add(band)
-    }
-    const topBand = enableShadow(
-      new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, size + 0.02), matLib.metalDark),
-      true,
-      true
+    addNestedInstance(
+      instances.wood,
+      parentMatrix,
+      0,
+      size / 2,
+      0,
+      0,
+      0,
+      0,
+      size,
+      size,
+      size
     )
-    topBand.position.set(0, size + 0.01, 0)
-    group.add(topBand)
+    for (const side of [-1, 1]) {
+      addNestedInstance(
+        instances.metal,
+        parentMatrix,
+        0,
+        size * (0.3 + side * 0.15),
+        size / 2 + 0.01,
+        0,
+        0,
+        0,
+        size + 0.02,
+        0.05,
+        0.05
+      )
+    }
+    addNestedInstance(
+      instances.metal,
+      parentMatrix,
+      0,
+      size + 0.01,
+      0,
+      0,
+      0,
+      0,
+      0.05,
+      0.05,
+      size + 0.02
+    )
 
     if (Math.random() > 0.7) {
-      const lid = enableShadow(
-        new THREE.Mesh(new THREE.BoxGeometry(size * 0.95, 0.06, size * 0.95), matLib.wood),
-        true,
-        true
+      addNestedInstance(
+        instances.wood,
+        parentMatrix,
+        size * 0.35,
+        size * 0.7,
+        0,
+        0,
+        0,
+        -0.9,
+        size * 0.95,
+        0.06,
+        size * 0.95
       )
-      lid.position.set(size * 0.35, size * 0.7, 0)
-      lid.rotation.z = -0.9
-      group.add(lid)
     }
 
-    scene.add(group)
-    pushModelObstacle({ type: 'crate', model: group })
+    pushBoxObstacle({
+      type: 'crate',
+      x,
+      z,
+      w: size,
+      d: size,
+      h: size,
+      rot: rotation,
+    })
   }
 
   function createWreckTank(x, z, rotation) {
@@ -851,77 +981,73 @@ export function createWorldSystem({ scene, matLib, state, map }) {
     pushModelObstacle({ type: 'wire', model: group })
   }
 
-  function createTree(x, z) {
-    const group = new THREE.Group()
-    group.position.set(x, 0, z)
+  function createTree(x, z, instances) {
     const dead = Math.random() > 0.55
     const trunkH = dead ? 3.5 + Math.random() * 2.5 : 4.5 + Math.random() * 2
     const trunkRadius = 0.32 + Math.random() * 0.15
-    const trunk = enableShadow(
-      new THREE.Mesh(sharedGeometry.trunk, matLib.treeTrunk),
-      false,
-      true
+    addInstanceTransform(
+      instances.trunks,
+      x,
+      trunkH / 2,
+      z,
+      (Math.random() - 0.5) * 0.08,
+      0,
+      (Math.random() - 0.5) * 0.12,
+      trunkRadius,
+      trunkH,
+      trunkRadius
     )
-    trunk.scale.set(trunkRadius, trunkH, trunkRadius)
-    trunk.position.y = trunkH / 2
-    trunk.rotation.z = (Math.random() - 0.5) * 0.12
-    trunk.rotation.x = (Math.random() - 0.5) * 0.08
-    group.add(trunk)
 
     if (dead) {
       for (let i = 0; i < 3; i++) {
         const branchLength = 1.2 + Math.random()
-        const branch = enableShadow(
-          new THREE.Mesh(sharedGeometry.branch, matLib.treeBranch),
-          false,
-          true
-        )
-        branch.scale.set(0.08, branchLength, 0.08)
-        branch.position.set(
-          (Math.random() - 0.5) * 0.4,
+        addInstanceTransform(
+          instances.branches,
+          x + (Math.random() - 0.5) * 0.4,
           trunkH * (0.55 + Math.random() * 0.3),
-          (Math.random() - 0.5) * 0.4
+          z + (Math.random() - 0.5) * 0.4,
+          (Math.random() - 0.5) * 1.2,
+          0,
+          (Math.random() - 0.5) * 1.4,
+          0.08,
+          branchLength,
+          0.08
         )
-        branch.rotation.z = (Math.random() - 0.5) * 1.4
-        branch.rotation.x = (Math.random() - 0.5) * 1.2
-        group.add(branch)
       }
     } else {
       for (let i = 0; i < 5; i++) {
-        const foliage = enableShadow(
-          new THREE.Mesh(sharedGeometry.foliage, matLib.treeFoliage),
-          false,
-          true
-        )
-        foliage.position.set(
-          (Math.random() - 0.5) * 1.4,
-          trunkH * 0.75 + Math.random() * 1.4,
-          (Math.random() - 0.5) * 1.4
-        )
         const foliageRadius = 1.2 + Math.random() * 0.7
-        foliage.scale.set(
+        addInstanceTransform(
+          instances.foliage,
+          x + (Math.random() - 0.5) * 1.4,
+          trunkH * 0.75 + Math.random() * 1.4,
+          z + (Math.random() - 0.5) * 1.4,
+          0,
+          Math.random() * Math.PI,
+          0,
           foliageRadius * (1 + Math.random() * 0.3),
           foliageRadius * (0.75 + Math.random() * 0.3),
           foliageRadius * (1 + Math.random() * 0.3)
         )
-        group.add(foliage)
       }
     }
 
-    // 树根
     for (let i = 0; i < 3; i++) {
-      const root = enableShadow(
-        new THREE.Mesh(sharedGeometry.root, matLib.dirt),
-        false,
-        true
-      )
       const a = (i / 3) * Math.PI * 2
-      root.position.set(Math.cos(a) * 0.35, 0.05, Math.sin(a) * 0.35)
-      root.rotation.y = a
-      group.add(root)
+      addInstanceTransform(
+        instances.roots,
+        x + Math.cos(a) * 0.35,
+        0.05,
+        z + Math.sin(a) * 0.35,
+        0,
+        a,
+        0,
+        1,
+        1,
+        1
+      )
     }
 
-    scene.add(group)
     state.obstacles.push({
       type: 'tree',
       shape: 'circle',

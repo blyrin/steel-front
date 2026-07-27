@@ -14,7 +14,7 @@ import { createEffectsSystem } from './combat/effects.js'
 import { createAiSystem } from './ai/ai-system.js'
 import { createCombatSystem } from './combat/ballistics.js'
 import { createScoringSystem } from './combat/scoring.js'
-import { getDom } from './ui/dom.js'
+import { createCanvasUi } from './ui/canvas-ui.js'
 import { createHud } from './ui/hud.js'
 import { createMapSystem } from './ui/maps.js'
 import { createDeploymentSystem } from './ui/deployment.js'
@@ -23,10 +23,10 @@ import { MODE_DEFINITIONS, createMode } from './modes/registry.js'
 import { createModeMenu } from './ui/mode-menu.js'
 
 export function createGame() {
-  const dom = getDom()
   const state = createGameState()
   const deploy = createDeployState()
   const runtime = createSceneRuntime(CFG)
+  const ui = createCanvasUi({ state, deploy, config: CFG, camera: runtime.camera })
   const audio = new AudioSystem(runtime.camera, AUDIO_FILES, CFG)
   const objectives = createObjectiveSystem({
     scene: runtime.scene,
@@ -37,13 +37,14 @@ export function createGame() {
   const effects = createEffectsSystem({ scene: runtime.scene, state, audio, config: CFG })
   let mode = null
   const ai = createAiSystem({ state, config: CFG, getMode: () => mode })
-  const hud = createHud({ dom, state, deploy, audio, config: CFG, getMode: () => mode })
-  const maps = createMapSystem({ dom, state })
+  ui.bindRuntime(() => mode)
+  const hud = createHud({ ui, state, audio, config: CFG, getMode: () => mode })
+  const maps = createMapSystem({ ui })
   let deployment
   let input
 
   const modeMenu = createModeMenu({
-    container: dom.modeOptions,
+    ui,
     definitions: MODE_DEFINITIONS,
     onSelect: modeId => hud.renderRecords(modeId),
   })
@@ -69,21 +70,21 @@ export function createGame() {
   function togglePause() {
     if (deploy.phase !== 'none') return
     state.paused = !state.paused
-    dom.pauseScreen.classList.toggle('show', state.paused)
+    ui.setPaused(state.paused)
     audio.setAmbienceMuted(state.paused)
     if (state.paused) {
       input.reset()
       hud.setScoreboardVisible(false)
       if (document.pointerLockElement) document.exitPointerLock()
     } else if (!input.isTouchMode()) {
-      runtime.renderer.domElement.requestPointerLock()
+      runtime.renderer.canvas.requestPointerLock()
     }
     input.updateTouchUi()
   }
 
-  input = createInputSystem({ state, deploy, onPause: togglePause, dom, config: CFG })
+  input = createInputSystem({ state, deploy, onPause: togglePause, ui, config: CFG })
   deployment = createDeploymentSystem({
-    dom,
+    ui,
     state,
     deploy,
     getSpawnPoints: team => mode.getSpawnPoints(team),
@@ -150,7 +151,7 @@ export function createGame() {
     mode.setupMatch()
     state.match.startTime = performance.now()
     state.running = true
-    dom.hud.classList.add('show')
+    ui.showGame()
     state.player.weapon.setVisible(false)
     state.player.alive = false
     ai.start()
@@ -173,8 +174,7 @@ export function createGame() {
 
   async function runBootLoad() {
     const setProgress = (progress, text) => {
-      dom.bar.style.width = `${Math.min(100, Math.max(0, progress))}%`
-      if (text) dom.loadStatus.textContent = text
+      ui.setBoot(progress, text)
     }
     const boot = CFG.boot
     setProgress(boot.initialProgress, LOAD_STEPS[0])
@@ -195,15 +195,12 @@ export function createGame() {
     })
     setProgress(100, LOAD_STEPS[6])
     await new Promise(resolve => setTimeout(resolve, boot.readyDelay))
-    dom.loader.style.opacity = 0
-    setTimeout(() => {
-      dom.loader.style.display = 'none'
-      dom.menu.classList.add('show')
-    }, boot.menuFadeDelay)
+    setTimeout(() => ui.showMenu(), boot.menuFadeDelay)
   }
 
   const simulationStep = 1 / CFG.match.tickRate
   let simulationAccumulator = 0
+  let interfaceAccumulator = 0
   let lastTime = performance.now()
   function animate() {
     requestAnimationFrame(animate)
@@ -223,74 +220,70 @@ export function createGame() {
         for (const actor of state.actors) actor.update(simulationStep)
         combat.update()
         effects.update(simulationStep)
-        hud.updateScores()
-        if (deploy.phase === 'none') maps.updateMinimap()
-        hud.setScoreboardVisible(input.isKeyDown('Tab'))
         finishModeIfNeeded()
         simulationAccumulator -= simulationStep
       }
+      interfaceAccumulator += frameDelta
+      if (interfaceAccumulator >= 0.1) {
+        interfaceAccumulator %= 0.1
+        hud.updateScores()
+        if (deploy.phase === 'none') maps.updateMinimap()
+      }
+      hud.setScoreboardVisible(input.isKeyDown('Tab'))
     }
     audio.updateListener()
     runtime.renderer.render(runtime.scene, runtime.camera)
-  }
-
-  function syncSettingsUi() {
-    const volume = Math.round(state.settings.masterVolume * 100)
-    const sens = Math.round(state.settings.mouseSensitivity * 100)
-    dom.menuVolume.value = String(volume)
-    dom.pauseVolume.value = String(volume)
-    dom.menuSens.value = String(sens)
-    dom.pauseSens.value = String(sens)
+    ui.render(now)
   }
 
   function applyMasterVolume() {
     audio.setMasterVolume(state.settings.masterVolume)
   }
 
-  function bindSettings(volumeEl, sensEl) {
-    volumeEl.addEventListener('input', () => {
-      state.settings.masterVolume = Number(volumeEl.value) / 100
+  function applySetting(setting, value) {
+    if (setting === 'volume') {
+      state.settings.masterVolume = value / 100
       applyMasterVolume()
-      syncSettingsUi()
-      saveSettings(state.settings)
-    })
-    sensEl.addEventListener('input', () => {
-      state.settings.mouseSensitivity = Number(sensEl.value) / 100
-      syncSettingsUi()
-      saveSettings(state.settings)
-    })
+    } else {
+      state.settings.mouseSensitivity = value / 100
+    }
+    saveSettings(state.settings)
+    ui.invalidate()
   }
 
-  bindSettings(dom.menuVolume, dom.menuSens)
-  bindSettings(dom.pauseVolume, dom.pauseSens)
-  syncSettingsUi()
   applyMasterVolume()
 
-  dom.startBtn.addEventListener('click', async () => {
-    if (input.isTouchMode()) await enterMobilePresentation()
-    await audio.init()
-    applyMasterVolume()
-    dom.menu.classList.remove('show')
-    state.loading = false
-    initGame()
-    input.syncUi()
+  ui.setHandlers({
+    onStart: async () => {
+      if (input.isTouchMode()) await enterMobilePresentation()
+      await audio.init()
+      applyMasterVolume()
+      state.loading = false
+      initGame()
+      input.syncUi()
+    },
+    onMode: id => modeMenu.select(id),
+    onSetting: applySetting,
+    onResume: togglePause,
+    onRedeploy: () => {
+      if (!state.paused || deploy.phase !== 'none' || !state.player?.alive) return
+      state.paused = false
+      ui.setPaused(false)
+      audio.setAmbienceMuted(false)
+      input.reset()
+      hud.setScoreboardVisible(false)
+      if (document.pointerLockElement) document.exitPointerLock()
+      input.updateTouchUi()
+      state.player.die()
+    },
+    onQuit: () => location.reload(),
+    onRestart: () => location.reload(),
+    onLoadout: (kind, id) => deployment.selectLoadout(kind, id),
+    onSpawn: index => deployment.startAnimation(index),
   })
-  dom.resumeBtn.addEventListener('click', togglePause)
-  dom.redeployBtn.addEventListener('click', () => {
-    if (!state.paused || deploy.phase !== 'none' || !state.player?.alive) return
-    state.paused = false
-    dom.pauseScreen.classList.remove('show')
-    audio.setAmbienceMuted(false)
-    input.reset()
-    hud.setScoreboardVisible(false)
-    if (document.pointerLockElement) document.exitPointerLock()
-    input.updateTouchUi()
-    state.player.die()
-  })
-  dom.quitBtn.addEventListener('click', () => location.reload())
-  dom.restartBtn.addEventListener('click', () => location.reload())
   window.addEventListener('resize', () => {
     runtime.resize()
+    ui.resize()
     input.syncUi()
   })
 

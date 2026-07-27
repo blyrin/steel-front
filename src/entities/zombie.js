@@ -6,25 +6,22 @@ const GEOMETRY = {
   boot: new THREE.BoxGeometry(0.18, 0.13, 0.3),
   torso: new THREE.BoxGeometry(0.5, 0.72, 0.3),
   shoulder: new THREE.BoxGeometry(0.58, 0.18, 0.34),
+  collar: new THREE.BoxGeometry(0.32, 0.12, 0.34),
+  belt: new THREE.BoxGeometry(0.53, 0.09, 0.33),
+  buckle: new THREE.BoxGeometry(0.09, 0.1, 0.035),
   arm: new THREE.BoxGeometry(0.14, 0.62, 0.16),
   hand: new THREE.BoxGeometry(0.11, 0.12, 0.11),
   neck: new THREE.CylinderGeometry(0.08, 0.09, 0.12, 8),
   head: new THREE.BoxGeometry(0.28, 0.3, 0.26),
   jaw: new THREE.BoxGeometry(0.24, 0.11, 0.2),
   mouth: new THREE.BoxGeometry(0.18, 0.07, 0.025),
-  tooth: new THREE.BoxGeometry(0.035, 0.055, 0.025),
   eye: new THREE.SphereGeometry(0.035, 6, 4),
-  pupil: new THREE.SphereGeometry(0.014, 5, 4),
-  hair: new THREE.BoxGeometry(0.1, 0.12, 0.1),
   wound: new THREE.BoxGeometry(0.09, 0.12, 0.025),
-  finger: new THREE.BoxGeometry(0.035, 0.16, 0.04),
 }
 
 const EYE_MATERIAL = new THREE.MeshBasicMaterial({ color: 0xffd447 })
-const PUPIL_MATERIAL = new THREE.MeshBasicMaterial({ color: 0x16191a })
 const MOUTH_MATERIAL = new THREE.MeshBasicMaterial({ color: 0x241719 })
 const WOUND_MATERIAL = new THREE.MeshBasicMaterial({ color: 0x7b2630 })
-const HAIR_MATERIAL = new THREE.MeshBasicMaterial({ color: 0x252b29 })
 
 export class Zombie {
   constructor(spawnPosition, services) {
@@ -130,28 +127,18 @@ export class Zombie {
     const shoulder = new THREE.Mesh(GEOMETRY.shoulder, this.matLib.rust)
     shoulder.position.y = 0.68
     this.body.add(shoulder)
-    const collar = new THREE.Mesh(
-      new THREE.BoxGeometry(0.32, 0.12, 0.34),
-      this.matLib.axisUniform
-    )
+    const collar = new THREE.Mesh(GEOMETRY.collar, this.matLib.axisUniform)
     collar.position.set(0, 0.75, -0.015)
     this.body.add(collar)
-    const belt = new THREE.Mesh(
-      new THREE.BoxGeometry(0.53, 0.09, 0.33),
-      this.matLib.metalDark
-    )
+    const belt = new THREE.Mesh(GEOMETRY.belt, this.matLib.metalDark)
     belt.position.set(0, 0.17, -0.015)
     this.body.add(belt)
-    const buckle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.09, 0.1, 0.035),
-      this.matLib.brass
-    )
+    const buckle = new THREE.Mesh(GEOMETRY.buckle, this.matLib.brass)
     buckle.position.set(0, 0.17, -0.19)
     this.body.add(buckle)
     for (const wound of [
       { x: -0.16, y: 0.44, sx: 0.8 },
       { x: 0.12, y: 0.28, sx: -0.6 },
-      { x: 0.02, y: 0.57, sx: 0.35 },
     ]) {
       const patch = new THREE.Mesh(GEOMETRY.wound, WOUND_MATERIAL)
       patch.position.set(wound.x, wound.y, -0.165)
@@ -174,24 +161,10 @@ export class Zombie {
     const mouth = new THREE.Mesh(GEOMETRY.mouth, MOUTH_MATERIAL)
     mouth.position.set(0, 0.075, -0.215)
     this.head.add(mouth)
-    for (const toothX of [-0.06, 0, 0.06]) {
-      const tooth = new THREE.Mesh(GEOMETRY.tooth, this.matLib.skin)
-      tooth.position.set(toothX, 0.11, -0.23)
-      this.head.add(tooth)
-    }
-    for (const hairX of [-0.1, 0, 0.1]) {
-      const hair = new THREE.Mesh(GEOMETRY.hair, HAIR_MATERIAL)
-      hair.position.set(hairX, 0.36, 0.01 + Math.abs(hairX) * 0.25)
-      hair.rotation.z = hairX * 1.5
-      this.head.add(hair)
-    }
     for (const side of [-1, 1]) {
       const eye = new THREE.Mesh(GEOMETRY.eye, EYE_MATERIAL)
       eye.position.set(side * 0.08, 0.19, -0.13)
       this.head.add(eye)
-      const pupil = new THREE.Mesh(GEOMETRY.pupil, PUPIL_MATERIAL)
-      pupil.position.set(side * 0.08, 0.19, -0.163)
-      this.head.add(pupil)
     }
 
     const createArm = side => {
@@ -203,12 +176,6 @@ export class Zombie {
       const hand = new THREE.Mesh(GEOMETRY.hand, this.matLib.skin)
       hand.position.set(0, -0.62, -0.02)
       arm.add(hand)
-      for (let fingerIndex = 0; fingerIndex < 3; fingerIndex++) {
-        const finger = new THREE.Mesh(GEOMETRY.finger, this.matLib.skin)
-        finger.position.set((fingerIndex - 1) * 0.045, -0.7, -0.1)
-        finger.rotation.z = (fingerIndex - 1) * 0.12
-        arm.add(finger)
-      }
       this.body.add(arm)
       return arm
     }

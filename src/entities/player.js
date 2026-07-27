@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import { createCircleHitbox, rayHitObstacle, resolveObstacleCollision } from '../combat/collision.js'
 import { createActionEngine, createPlayerWeaponActions } from './action-engine.js'
 import { WeaponView } from './weapon-view.js'
-import { attachFlashlight } from './flashlight.js'
 
 export class Player {
   constructor({
@@ -119,13 +118,6 @@ export class Player {
     this._moveAxis = { x: 0, z: 0 }
     camera.position.copy(this.position)
     camera.rotation.order = 'YXZ'
-    if (this.mode?.id === 'zombie') {
-      attachFlashlight(
-        camera,
-        new THREE.Vector3(0.12, -0.1, -0.28),
-        new THREE.Vector3(0.12, -0.08, -18)
-      )
-    }
   }
 
   applyLoadout(loadout, preserveHealth = true) {
@@ -235,10 +227,7 @@ export class Player {
       playerConfig.damageRecoilPitchBase + amount * playerConfig.damageRecoilPitchScale
     this.viewRecoilYaw += (Math.random() - 0.5) * playerConfig.damageRecoilYaw
     this.viewRecoilRoll += (Math.random() - 0.5) * playerConfig.damageRecoilRoll
-    if (fromPos) {
-      const direction = new THREE.Vector3().subVectors(fromPos, this.position).setY(0).normalize()
-      this.hud.showDirDamage(Math.atan2(direction.x, -direction.z) + this.yaw)
-    }
+    if (fromPos) this.hud.showDirDamage(attacker || fromPos)
     if (this.health <= 0) this.die(attacker, attackType)
   }
 
@@ -547,7 +536,7 @@ export class Player {
     this.health = this.maxHealth
     this.nextSupplyAt = now + this.config.supply.cooldown * 1000
     this.hud.updateHealth()
-    this.hud.showActionMessage('医疗补给完成')
+    this.hud.showActionMessage('补给完成')
     return true
   }
 
@@ -577,7 +566,7 @@ export class Player {
     if (this.secondaryData.kind === 'rpg' && maxSecondary > 0) this.rpgLoaded = true
     this.nextSupplyAt = now + this.config.supply.cooldown * 1000
     this.hud.updateAmmo()
-    this.hud.showActionMessage('弹药、特殊装备和道具补给完成')
+    this.hud.showActionMessage('补给完成')
     return true
   }
 

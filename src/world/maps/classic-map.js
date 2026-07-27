@@ -11,8 +11,8 @@ const MAP = {
   barbedWireCount: 14,
   treeCount: 90,
   debrisCount: 40,
-  smokeColumnCount: 12,
-  smokePuffsPerColumn: 7,
+  smokeColumnCount: 6,
+  smokePuffsPerColumn: 5,
   // 木箱生成时避开地图中心的半径。
   centerExclusionRadius: 8,
   // 烟柱生成时避开地图中心的半径。

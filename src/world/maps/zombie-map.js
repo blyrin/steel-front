@@ -13,17 +13,26 @@ const SPAWN_POINTS = {
 }
 
 const ZOMBIE_COLORS = {
-  ground: 0x334b3d,
-  mud: 0x4c3f38,
-  asphalt: 0x242b2d,
-  concrete: 0x72706a,
-  concreteDark: 0x454843,
-  brick: 0x6f4d45,
-  rust: 0x7b4039,
-  wood: 0x5b4435,
-  warning: 0xd19a38,
-  fog: 0x242c2a,
+  ground: 0x596d5c,
+  mud: 0x705e50,
+  asphalt: 0x4c5455,
+  concrete: 0x96958b,
+  concreteDark: 0x6c706a,
+  brick: 0x89695e,
+  rust: 0x956157,
+  wood: 0x795f4d,
+  warning: 0xe2b75b,
+  fog: 0x697b7b,
 }
+
+const LAMP_POOL_GEOMETRY = new THREE.CircleGeometry(11, 16)
+const LAMP_POOL_MATERIAL = new THREE.MeshBasicMaterial({
+  color: 0xe6aa62,
+  transparent: true,
+  opacity: 0.3,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+})
 
 export function createZombieMap({ scene, matLib, state, config, objectives }) {
   const mapSize = MAP.size
@@ -423,13 +432,20 @@ export function createZombieMap({ scene, matLib, state, config, objectives }) {
     )
     lamp.material.color.set(0xffb86b)
     lamp.material.emissive.set(0xff7a3d)
-    lamp.material.emissiveIntensity = 3.2
+    lamp.material.emissiveIntensity = 4
     lamp.position.set(0.95, 4.42, 0)
     group.add(lamp)
-    const light = new THREE.PointLight(0xffb86b, 6, 26, 1.5)
-    light.position.set(0.95, 4.32, 0)
+    const light = new THREE.PointLight(0xffc27a, 38, 52, 1.35)
+    light.position.set(0.95, 4.15, 0)
     group.add(light)
+    const pool = new THREE.Mesh(LAMP_POOL_GEOMETRY, LAMP_POOL_MATERIAL)
+    pool.rotation.x = -Math.PI / 2
+    pool.position.set(0.95, 0.055, 0)
+    pool.renderOrder = 1
+    group.add(pool)
     addMesh(group)
+    pool.castShadow = false
+    pool.receiveShadow = false
   }
 
   function createBurialGround() {
@@ -462,21 +478,21 @@ export function createZombieMap({ scene, matLib, state, config, objectives }) {
   function createLightingAndSky() {
     scene.traverse(object => {
       if (object.isAmbientLight) {
-        object.color.set(0x344247)
-        object.intensity = 0.32
+        object.color.set(0xc3c9b8)
+        object.intensity = 0.72
       } else if (object.isHemisphereLight) {
-        object.color.set(0x9aaeb2)
-        object.groundColor.set(0x1d2524)
-        object.intensity = 0.78
+        object.color.set(0xc6d8d5)
+        object.groundColor.set(0x666858)
+        object.intensity = 1.05
       } else if (object.isDirectionalLight) {
-        object.color.set(object.castShadow ? 0xb8c8c1 : 0x6b8588)
-        object.intensity = object.castShadow ? 1.35 : 0.3
+        object.color.set(object.castShadow ? 0xd5dfce : 0x9fb6b5)
+        object.intensity = object.castShadow ? 1.25 : 0.48
       }
     })
     scene.background = new THREE.Color(ZOMBIE_COLORS.fog)
     if (scene.fog) {
       scene.fog.color.set(ZOMBIE_COLORS.fog)
-      scene.fog.density = 0.014
+      scene.fog.density = 0.0065
     }
     const moon = new THREE.Mesh(
       new THREE.SphereGeometry(12, 16, 10),
@@ -499,10 +515,10 @@ export function createZombieMap({ scene, matLib, state, config, objectives }) {
     state.groundRegions = groundRegions
     createGround()
     createCentralPlaza()
-    createStreetLamp(-23, -18, 0.2)
-    createStreetLamp(23, -18, -0.2)
-    createStreetLamp(-23, 20, Math.PI + 0.2)
-    createStreetLamp(23, 20, Math.PI - 0.2)
+    createStreetLamp(-42, -36, 0.2)
+    createStreetLamp(42, -36, -0.2)
+    createStreetLamp(-42, 40, Math.PI + 0.2)
+    createStreetLamp(42, 40, Math.PI - 0.2)
     createRuinedHouse(-48, -45, -0.2, 1.25)
     createRuinedHouse(44, -42, 0.18, 0.95)
     createRuinedHouse(-74, 42, 0.4, 0.85)

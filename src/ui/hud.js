@@ -1,149 +1,7 @@
-const MULTI_TITLES = [
-  '',
-  '',
-  '双杀',
-  '三杀',
-  '四杀',
-  '五杀',
-  '势不可挡',
-  '无人能挡',
-]
+const MULTI_TITLES = ['', '', '双杀', '三杀', '四杀', '五杀', '势不可挡', '无人能挡']
 
-export function createHud({ dom, state, deploy, audio, config, getMode }) {
+export function createHud({ ui, state, audio, config, getMode }) {
   const hudConfig = config.hud
-  let healthWidth = ''
-  let healthText = ''
-  let healthLow = null
-  let ammoCurrent = null
-  let ammoReserve = null
-  let weaponName = ''
-  let fireMode = ''
-  let equipmentStatus = ''
-  let lowAmmoVisible = null
-  let crosshairAiming = null
-  let crosshairGap = ''
-  let crosshairSize = ''
-  let crosshairLengthSet = false
-  let scoreboardVisible = false
-  let scoreboardAlliesScore = null
-  let scoreboardAxisScore = null
-  let scoreboardPlayerKills = null
-  let scoreboardPlayerDeaths = null
-  let scoreboardPlayerAlive = null
-  let scoreboardModeKind = ''
-  let scoreboardObjectiveText = ''
-  const scoreboardBotStats = []
-
-  function updateHealth() {
-    const player = state.player
-    const width = `${(player.health / player.maxHealth) * 100}%`
-    const text = `${Math.ceil(player.health)} / ${player.maxHealth}`
-    const low = player.health < hudConfig.lowHealthThreshold
-    if (width !== healthWidth) {
-      healthWidth = width
-      dom.healthFill.style.width = width
-    }
-    if (text !== healthText) {
-      healthText = text
-      dom.healthText.textContent = text
-    }
-    if (low !== healthLow) {
-      healthLow = low
-      dom.healthFill.classList.toggle('low', low)
-    }
-  }
-
-  function updateAmmo() {
-    const player = state.player
-    let currentAmmo = player.ammo
-    let currentReserve = player.reserveAmmo
-    let currentName = player.weaponData.name
-    let currentMode = player.weaponData.fireMode
-    let lowAmmoVisibleNow =
-      player.ammo <= hudConfig.lowAmmoThreshold && !player.reloading
-
-    if (player.activeSlot === 2) {
-      const secondary = player.secondaryData
-      currentName = secondary.name
-      if (secondary.kind === 'rpg') {
-        currentAmmo = player.rpgLoaded ? 1 : 0
-        currentReserve = Math.max(0, player.secondaryCount - currentAmmo)
-        currentMode = player.rpgLoaded ? '已上弹' : '需上弹'
-        lowAmmoVisibleNow =
-          !(player.rpgLoaded && player.secondaryCount > 0) && !player.reloading
-      } else {
-        currentAmmo = player.secondaryCount
-        currentReserve = secondary.count
-        currentMode = '遥控炸药'
-        lowAmmoVisibleNow = false
-      }
-    }
-
-    if (currentAmmo !== ammoCurrent) {
-      ammoCurrent = currentAmmo
-      dom.ammoCur.textContent = currentAmmo
-    }
-    if (currentReserve !== ammoReserve) {
-      ammoReserve = currentReserve
-      dom.ammoRes.textContent = currentReserve
-    }
-    if (currentName !== weaponName) {
-      weaponName = currentName
-      dom.weaponName.textContent = weaponName
-    }
-    if (currentMode !== fireMode) {
-      fireMode = currentMode
-      dom.fireMode.textContent = fireMode
-    }
-    const equipmentText = `1 ${player.weaponData.name} · 2 ${player.secondaryData.name} ×${player.secondaryCount} · ${player.grenadeData.name} ×${player.grenadeCount} · ${player.itemData.name} ×${player.itemUses}`
-    if (equipmentText !== equipmentStatus) {
-      equipmentStatus = equipmentText
-      dom.equipmentStatus.textContent = equipmentText
-    }
-    if (lowAmmoVisibleNow !== lowAmmoVisible) {
-      lowAmmoVisible = lowAmmoVisibleNow
-      dom.lowAmmo.classList.toggle('show', lowAmmoVisibleNow)
-    }
-  }
-
-  function updateCrosshair() {
-    if (!state.player || deploy.phase !== 'none') return
-    const aiming = !!state.player.aiming
-    if (aiming !== crosshairAiming) {
-      crosshairAiming = aiming
-      dom.crosshair.classList.toggle('aiming', aiming)
-    }
-    if (aiming) return
-    const spread = state.player.currentSpread || state.player.getSpread()
-    const gapValue = hudConfig.crosshairBaseGap + spread * hudConfig.crosshairSpreadScale
-    const gap = `${gapValue.toFixed(1)}px`
-    const size = `${(
-      hudConfig.crosshairBaseSize + 2 * gapValue
-    ).toFixed(1)}px`
-    if (gap !== crosshairGap) {
-      crosshairGap = gap
-      dom.crosshair.style.setProperty('--ch-gap', gap)
-    }
-    if (size !== crosshairSize) {
-      crosshairSize = size
-      dom.crosshair.style.setProperty('--ch-size', size)
-    }
-    if (!crosshairLengthSet) {
-      crosshairLengthSet = true
-      dom.crosshair.style.setProperty('--ch-len', `${hudConfig.crosshairLength}px`)
-    }
-  }
-
-  function updateScores() {
-    const modeState = getMode()?.getHudState()
-    if (!modeState) return
-    dom.alliesScore.textContent = modeState.alliesScore
-    dom.axisScore.textContent = modeState.axisScore
-    dom.alliesLabel.textContent = modeState.alliesLabel
-    dom.axisLabel.textContent = modeState.axisLabel
-    dom.scoreStatus.textContent = modeState.kind === 'zombie' ? '防守' : '对战'
-    dom.targetKill.textContent = modeState.targetText
-  }
 
   function formatRatio(kills, deaths) {
     return (kills / Math.max(1, deaths)).toFixed(2)
@@ -156,8 +14,7 @@ export function createHud({ dom, state, deploy, audio, config, getMode }) {
   function formatPlayTime(seconds) {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor(seconds / 60) % 60
-    if (hours > 0) return `${hours} 小时 ${minutes} 分`
-    return `${minutes} 分钟`
+    return hours > 0 ? `${hours} 小时 ${minutes} 分` : `${minutes} 分钟`
   }
 
   function getRecords(modeId = state.match.modeId || 'classic') {
@@ -166,7 +23,7 @@ export function createHud({ dom, state, deploy, audio, config, getMode }) {
 
   function renderRecords(modeId = state.match.modeId || 'classic') {
     const records = getRecords(modeId)
-    const entries = [
+    ui.setRecords([
       ['总场次', records.matches],
       ['胜率', formatWinRate(records)],
       ['总击杀', records.kills],
@@ -176,156 +33,32 @@ export function createHud({ dom, state, deploy, audio, config, getMode }) {
       ['投掷物击杀', records.grenadeKills],
       ['最高连杀', records.bestKillStreak],
       ['战斗时长', formatPlayTime(records.totalSeconds)],
-    ]
-    dom.recordsStats.replaceChildren(
-      ...entries.map(([labelText, valueText]) => {
-        const item = document.createElement('div')
-        item.className = 'record-item'
-        const label = document.createElement('span')
-        label.className = 'record-label'
-        label.textContent = labelText
-        const value = document.createElement('strong')
-        value.className = 'record-value'
-        value.textContent = String(valueText)
-        item.append(label, value)
-        return item
-      })
-    )
-  }
-
-  function showHitMarker() {
-    dom.hitMarker.classList.remove('show')
-    void dom.hitMarker.offsetWidth
-    dom.hitMarker.classList.add('show')
+    ])
   }
 
   function showKillNotify(victimName, headshot) {
     const player = state.player
     if (!player) return
     const now = performance.now()
-    if (now - (player.lastKillAt || 0) < hudConfig.killStreakWindow) player.killStreak = (player.killStreak || 0) + 1
-    else player.killStreak = 1
+    player.killStreak = now - (player.lastKillAt || 0) < hudConfig.killStreakWindow
+      ? (player.killStreak || 0) + 1
+      : 1
     player.lastKillAt = now
     const streak = player.killStreak
-    dom.killNotify.classList.remove('show', 'out', 'headshot', 'multi')
-    void dom.killNotify.offsetWidth
-    let kind = 'normal'
-    let titleText = headshot ? '爆头' : '击倒敌人'
+    let kind = headshot ? 'head' : 'normal'
+    let title = headshot ? '爆头' : '击倒敌人'
     if (streak >= 2) {
-      titleText = MULTI_TITLES[Math.min(streak, MULTI_TITLES.length - 1)] || `${streak} 连杀`
+      title = MULTI_TITLES[Math.min(streak, MULTI_TITLES.length - 1)] || `${streak} 连杀`
       kind = 'multi'
-      dom.killNotify.classList.add('multi')
+      if (headshot) title = `爆头 · ${title}`
     }
-    if (headshot) {
-      dom.killNotify.classList.add('headshot')
-      if (streak < 2) kind = 'head'
-      else titleText = `爆头 · ${titleText}`
-    }
-    dom.killTitle.textContent = titleText
-    dom.killSub.textContent = `已击杀 ${victimName || '敌人'}`
-    dom.killStreak.textContent = streak > 1 ? `${streak} 连杀` : ''
-    dom.killNotify.classList.add('show')
+    ui.showKillNotice(title, `已击杀 ${victimName || '敌人'}`, hudConfig.killNotifyCleanupDelay)
     audio.killConfirm(kind)
-    clearTimeout(dom.killNotify._timer)
-    clearTimeout(dom.killNotify._outTimer)
-    dom.killNotify._outTimer = setTimeout(() => {
-      dom.killNotify.classList.remove('show')
-      dom.killNotify.classList.add('out')
-    }, hudConfig.killNotifyOutDelay)
-    dom.killNotify._timer = setTimeout(() => {
-      dom.killNotify.classList.remove('out', 'headshot', 'multi')
-    }, hudConfig.killNotifyCleanupDelay)
-  }
-
-  function showDamageVignette() {
-    dom.damageVignette.classList.add('hit')
-    setTimeout(
-      () => dom.damageVignette.classList.remove('hit'),
-      hudConfig.damageVignetteDuration
-    )
-  }
-
-  function showDirDamage(angle) {
-    dom.dirDamage.style.transform = `translate(-50%,-50%) rotate(${angle}rad)`
-    dom.dirDamage.classList.add('show')
-    setTimeout(
-      () => dom.dirDamage.classList.remove('show'),
-      hudConfig.directionDamageDuration
-    )
-  }
-
-  function showCenterMessage(message, duration = hudConfig.centerMessageDuration, big = '') {
-    dom.centerMsg.replaceChildren()
-    if (big) {
-      const bigText = document.createElement('span')
-      bigText.className = 'big'
-      bigText.textContent = big
-      dom.centerMsg.appendChild(bigText)
-    }
-    dom.centerMsg.append(message)
-    dom.centerMsg.classList.add('show')
-    clearTimeout(dom.centerMsg._timer)
-    dom.centerMsg._timer = setTimeout(() => dom.centerMsg.classList.remove('show'), duration)
-  }
-
-  function showActionMessage(message) {
-    dom.actionMsg.textContent = message
-    dom.actionMsg.classList.add('show')
-    clearTimeout(dom.actionMsg._timer)
-    dom.actionMsg._timer = setTimeout(
-      () => dom.actionMsg.classList.remove('show'),
-      hudConfig.actionMessageDuration
-    )
   }
 
   function showDeathScreen(attacker) {
-    dom.killerInfo.replaceChildren()
-    if (attacker) {
-      dom.killerInfo.append('被 ')
-      const name = document.createElement('span')
-      name.className = 'kname'
-      name.textContent = attacker.name || '敌方士兵'
-      dom.killerInfo.append(name, ' 击杀')
-    } else {
-      dom.killerInfo.textContent = '阵亡'
-    }
-    dom.deathScreen.classList.add('show')
-    dom.hud.classList.add('death-active')
-    dom.crosshair.classList.add('hidden')
-    dom.hitMarker.classList.remove('show')
-    dom.killNotify.classList.remove('show', 'out', 'headshot', 'multi')
-    dom.centerMsg.classList.remove('show')
-    dom.actionMsg.classList.remove('show')
-    dom.dirDamage.classList.remove('show')
-    setScoreboardVisible(false)
-  }
-
-  function hideDeathScreen() {
-    dom.deathScreen.classList.remove('show')
-    dom.hud.classList.remove('death-active')
-  }
-
-  function addKillFeed(type, killerName, victimName, victimTeam) {
-    const item = document.createElement('div')
-    item.className = `kill-msg${type === 'player' ? ' player' : ''}`
-    const killer = document.createElement('span')
-    let killerClass = 'enemy'
-    if (type === 'player') killerClass = 'me'
-    else if (type === 'ally') killerClass = 'ally'
-    killer.className = killerClass
-    killer.textContent = killerName
-    const weapon = document.createElement('span')
-    weapon.style.color = '#6a5a40'
-    weapon.style.margin = '0 4px'
-    weapon.textContent = '⚔'
-    const victim = document.createElement('span')
-    victim.className = victimTeam === 'allies' ? 'ally' : 'enemy'
-    victim.textContent = victimName
-    item.append(killer, weapon, victim)
-    dom.killFeed.insertBefore(item, dom.killFeed.firstChild)
-    setTimeout(() => item.remove(), hudConfig.killFeedItemDuration)
-    while (dom.killFeed.children.length > hudConfig.killFeedMaxItems)
-      dom.killFeed.lastChild.remove()
+    ui.showDeath(attacker ? `被 ${attacker.name || '敌方士兵'} 击杀` : '阵亡')
+    ui.setScoreboardVisible(false)
   }
 
   function showEndScreen(result) {
@@ -333,167 +66,44 @@ export function createHud({ dom, state, deploy, audio, config, getMode }) {
     const modeState = getMode()?.getHudState()
     state.running = false
     if (document.pointerLockElement) document.exitPointerLock()
-    dom.deployScreen.classList.remove('show')
-    dom.deathScreen.classList.remove('show')
-    dom.hud.classList.remove('death-active')
-    if (dom.touchControls) dom.touchControls.classList.remove('show')
-    if (dom.rotateHint) dom.rotateHint.classList.remove('show')
-    setScoreboardVisible(false)
     const records = getRecords()
-    dom.endTitle.textContent = outcome.title || (outcome.playerWon ? '胜利' : '战败')
-    dom.endTitle.className = outcome.playerWon ? 'win' : 'lose'
     renderRecords()
-    const stats = [
-      `${modeState?.alliesLabel || '我方击杀'}: ${modeState?.alliesScore ?? state.match.score.allies}　${modeState?.axisLabel || '敌方击杀'}: ${modeState?.axisScore ?? state.match.score.axis}`,
-      ...(outcome.reason ? [`结算: ${outcome.reason}`] : []),
-      ...(outcome.details || []),
-      `个人击杀: ${state.player.kills}　阵亡次数: ${state.player.deaths}`,
-      `本局 K/D: ${formatRatio(state.player.kills, state.player.deaths)}　爆头: ${state.player.headshots}`,
-      `近战击杀: ${state.player.meleeKills}　投掷物击杀: ${state.player.grenadeKills}`,
-      `累计 K/D: ${formatRatio(records.kills, records.deaths)}　胜率: ${formatWinRate(records)}`,
-      `战斗时长: ${Math.floor((performance.now() - state.match.startTime) / 1000)} 秒`,
-    ]
-    dom.endStats.replaceChildren(
-      ...stats.map(text => {
-        const row = document.createElement('div')
-        row.textContent = text
-        return row
-      })
-    )
-    dom.endScreen.classList.add('show')
-  }
-
-  function compareEntries(a, b) {
-    if (b.kills !== a.kills) return b.kills - a.kills
-    return a.deaths - b.deaths
-  }
-
-  function renderRows(container, entries) {
-    container.replaceChildren(
-      ...entries.map((entry, index) => {
-        const row = document.createElement('div')
-        row.className = `sb-row${entry.isPlayer ? ' me' : ''}${entry.alive ? '' : ' dead'}`
-        const rank = document.createElement('span')
-        rank.className = 'sb-rank'
-        rank.textContent = String(index + 1)
-        const name = document.createElement('span')
-        name.className = 'sb-name'
-        name.textContent = entry.name
-        const kills = document.createElement('span')
-        kills.className = 'sb-stat'
-        kills.textContent = String(entry.kills)
-        const deaths = document.createElement('span')
-        deaths.className = 'sb-stat'
-        deaths.textContent = String(entry.deaths)
-        row.append(rank, name, kills, deaths)
-        return row
-      })
-    )
-  }
-
-  function updateScoreboard() {
-    if (!state.player) return
-    const scoreboardData = getMode()?.getScoreboardData()
-    if (!scoreboardData) return
-    let changed =
-      scoreboardData.kind !== scoreboardModeKind ||
-      scoreboardData.objectiveText !== scoreboardObjectiveText ||
-      state.match.score.allies !== scoreboardAlliesScore ||
-      state.match.score.axis !== scoreboardAxisScore ||
-      state.player.kills !== scoreboardPlayerKills ||
-      state.player.deaths !== scoreboardPlayerDeaths ||
-      state.player.alive !== scoreboardPlayerAlive ||
-      scoreboardBotStats.length !== state.actors.length * 3
-    for (let i = 0; i < state.actors.length && !changed; i++) {
-      const bot = state.actors[i]
-      const offset = i * 3
-      changed =
-        bot.kills !== scoreboardBotStats[offset] ||
-        bot.deaths !== scoreboardBotStats[offset + 1] ||
-        bot.alive !== scoreboardBotStats[offset + 2]
-    }
-    if (!changed) return
-    scoreboardModeKind = scoreboardData.kind
-    scoreboardObjectiveText = scoreboardData.objectiveText || ''
-    scoreboardAlliesScore = state.match.score.allies
-    scoreboardAxisScore = state.match.score.axis
-    scoreboardPlayerKills = state.player.kills
-    scoreboardPlayerDeaths = state.player.deaths
-    scoreboardPlayerAlive = state.player.alive
-    scoreboardBotStats.length = state.actors.length * 3
-    for (let i = 0; i < state.actors.length; i++) {
-      const bot = state.actors[i]
-      const offset = i * 3
-      scoreboardBotStats[offset] = bot.kills
-      scoreboardBotStats[offset + 1] = bot.deaths
-      scoreboardBotStats[offset + 2] = bot.alive
-    }
-    const allies = [
-      {
-        name: '你',
-        kills: state.player.kills,
-        deaths: state.player.deaths,
-        alive: state.player.alive,
-        isPlayer: true,
-      },
-    ]
-    const axis = []
-    for (const bot of state.actors) {
-      const entry = {
-        name: bot.name,
-        kills: bot.kills,
-        deaths: bot.deaths,
-        alive: bot.alive,
-        isPlayer: false,
-      }
-      if (bot.team === 'allies') allies.push(entry)
-      else axis.push(entry)
-    }
-    allies.sort(compareEntries)
-    axis.sort(compareEntries)
-    const modeHudState = getMode().getHudState()
-    dom.sbAlliesLabel.textContent = scoreboardData.alliesLabel
-    dom.sbAxisLabel.textContent = scoreboardData.axisLabel
-    dom.sbAlliesColumnLabel.textContent = scoreboardData.alliesLabel
-    dom.sbAxisColumnLabel.textContent = scoreboardData.axisLabel
-    dom.sbAlliesScore.textContent = modeHudState.alliesScore
-    dom.sbAxisScore.textContent = modeHudState.axisScore
-    renderRows(dom.sbAlliesRows, allies)
-    if (scoreboardData.kind === 'zombie') {
-      const objective = document.createElement('div')
-      objective.className = 'sb-objective'
-      objective.textContent = scoreboardData.objectiveText
-      dom.sbAxisRows.replaceChildren(objective)
-    } else {
-      renderRows(dom.sbAxisRows, axis)
-    }
-  }
-
-  function setScoreboardVisible(visible) {
-    if (visible) updateScoreboard()
-    if (visible === scoreboardVisible) return
-    scoreboardVisible = visible
-    dom.scoreboard.classList.toggle('show', visible)
+    ui.showEnd({
+      won: outcome.playerWon,
+      title: outcome.title || (outcome.playerWon ? '胜利' : '战败'),
+      stats: [
+        `${modeState?.alliesLabel || '我方'}: ${modeState?.alliesScore ?? state.match.score.allies}    ${modeState?.axisLabel || '敌方'}: ${modeState?.axisScore ?? state.match.score.axis}`,
+        ...(outcome.reason ? [`结算: ${outcome.reason}`] : []),
+        ...(outcome.details || []),
+        `个人击杀: ${state.player.kills}    阵亡: ${state.player.deaths}`,
+        `本局 K/D: ${formatRatio(state.player.kills, state.player.deaths)}    爆头: ${state.player.headshots}`,
+        `近战击杀: ${state.player.meleeKills}    投掷物击杀: ${state.player.grenadeKills}`,
+        `累计 K/D: ${formatRatio(records.kills, records.deaths)}    胜率: ${formatWinRate(records)}`,
+        `战斗时长: ${Math.floor((performance.now() - state.match.startTime) / 1000)} 秒`,
+      ],
+    })
   }
 
   renderRecords()
 
   return {
-    updateHealth,
-    updateAmmo,
-    updateCrosshair,
-    updateScores,
-    showHitMarker,
+    updateHealth: () => ui.invalidate(),
+    updateAmmo: () => ui.invalidate(),
+    updateCrosshair: () => ui.invalidate(),
+    updateScores: () => ui.invalidate(),
+    showHitMarker: () => ui.showHitMarker(),
     showKillNotify,
-    showDamageVignette,
-    showDirDamage,
-    showCenterMessage,
-    showActionMessage,
+    showDamageVignette: () => ui.showDamage(),
+    showDirDamage: source => ui.showDirectionDamage(source),
+    showCenterMessage: (message, duration = hudConfig.centerMessageDuration, big = '') =>
+      ui.showCenter(message, duration, big),
+    showActionMessage: message => ui.showAction(message, hudConfig.actionMessageDuration),
     showDeathScreen,
-    hideDeathScreen,
-    addKillFeed,
+    hideDeathScreen: () => ui.hideDeath(),
+    addKillFeed: (type, killerName, victimName, victimTeam) =>
+      ui.addFeed({ type, killer: killerName, victim: victimName, victimTeam }, hudConfig.killFeedItemDuration),
     showEndScreen,
     renderRecords,
-    setScoreboardVisible,
+    setScoreboardVisible: visible => ui.setScoreboardVisible(visible),
   }
 }

@@ -68,7 +68,7 @@ const TOUCH_PRESS_CODES = {
   grenade: 'KeyG',
   item: 'KeyH',
   supply: 'KeyE',
-  weaponSwitch: 'WeaponNext',
+  weapon: 'WeaponNext',
   scoreboard: 'Tab',
 }
 
@@ -96,7 +96,7 @@ function isAllowedPointer(event) {
   return event.button === 0 || event.pointerType !== 'mouse'
 }
 
-export function createInputSystem({ state, deploy, onPause, dom, config }) {
+export function createInputSystem({ state, deploy, onPause, ui, config }) {
   const inputConfig = config.input
   const heldKeys = new Set()
   const pressed = new Set()
@@ -149,7 +149,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
   function setAimToggled(on) {
     aimToggled = on
     mouseDown.right = on
-    if (dom?.touchAim) dom.touchAim.classList.toggle('active', on)
+    ui.setTouchActive('aim', on)
   }
 
   function clearTouchPointers() {
@@ -159,9 +159,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
     moveAxisX = 0
     moveAxisZ = 0
     stickSprint = false
-    if (dom?.touchStickKnob) {
-      dom.touchStickKnob.style.transform = 'translate(-50%, -50%)'
-    }
+    ui.setStickOffset(0, 0)
   }
 
   function clearTouchActions() {
@@ -276,35 +274,24 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
 
   function refreshTouchMode() {
     touchMode = detectTouchMode()
-    if (dom?.body) dom.body.classList.toggle('touch-mode', touchMode)
+    ui.setTouchMode(touchMode)
     updateLandscapeState()
     updateTouchUi()
   }
 
   function updateLandscapeState() {
     landscapeOk = !touchMode || window.innerWidth >= window.innerHeight
-    if (dom?.rotateHint) dom.rotateHint.classList.toggle('show', touchMode && state.running && !landscapeOk)
+    ui.setRotateVisible(touchMode && state.running && !landscapeOk)
     if (!landscapeOk) clearTouchActions()
-  }
-
-  function setTouchButtonLabel(button, text, ariaLabel, iconText) {
-    if (!button) return
-    const label = button.querySelector('.touch-label')
-    if (label) label.textContent = text
-    if (iconText != null) {
-      const icon = button.querySelector('.touch-icon')
-      if (icon) icon.textContent = iconText
-    }
-    button.setAttribute('aria-label', ariaLabel)
   }
 
   function updateTouchActionLabels() {
     const player = state.player
-    if (!player || !dom) return
+    if (!player) return
     const onC4 = player.activeSlot === 2 && player.secondaryData?.kind === 'c4'
     const onRpg = player.activeSlot === 2 && player.secondaryData?.kind === 'rpg'
 
-    setTouchButtonLabel(dom.touchAim, onC4 ? '投C4' : '瞄准', onC4 ? '投掷C4' : '瞄准', onC4 ? '◇' : '◎')
+    ui.setTouchLabel('aim', onC4 ? '投C4' : '瞄准')
     if (onC4 && aimToggled) setAimToggled(false)
 
     let fireLabel = '开火'
@@ -316,17 +303,9 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
       fireLabel = '发射'
       fireAria = '发射火箭'
     }
-    setTouchButtonLabel(dom.touchFire, fireLabel, fireAria)
-    setTouchButtonLabel(
-      dom.touchReload,
-      onRpg ? '上弹' : '装弹',
-      onRpg ? 'RPG上弹' : '装弹'
-    )
-    setTouchButtonLabel(
-      dom.touchWeaponSwitch,
-      player.activeSlot === 1 ? '副' : '主',
-      player.activeSlot === 1 ? '切换到副武器' : '切换到主武器'
-    )
+    ui.setTouchLabel('fire', fireLabel)
+    ui.setTouchLabel('reload', onRpg ? '上弹' : '装弹')
+    ui.setTouchLabel('weapon', player.activeSlot === 1 ? '副' : '主')
   }
 
   function updateTouchUi() {
@@ -337,22 +316,17 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
       state.player?.alive &&
       deploy.phase === 'none' &&
       landscapeOk
-    if (dom?.touchControls) dom.touchControls.classList.toggle('show', show)
+    ui.setTouchVisible(show)
     if (!show) clearTouchActions()
     else updateTouchActionLabels()
   }
 
   function getStickRadius() {
-    if (!dom?.touchStickBase) return inputConfig.touchStickRadius
-    return Math.max(
-      inputConfig.touchStickMinRadius,
-      dom.touchStickBase.clientWidth * 0.5
-    )
+    return Math.max(inputConfig.touchStickMinRadius, ui.getTouchStickRect().width * 0.5)
   }
 
   function setStickVisual(dx, dy) {
-    if (!dom?.touchStickKnob) return
-    dom.touchStickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`
+    ui.setStickOffset(dx, dy)
   }
 
   function updateStick(clientX, clientY) {
@@ -380,47 +354,6 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
     stickSprint = scale >= inputConfig.touchSprintThreshold
   }
 
-  function bindHoldButton(el, onDown, onUp, onMove) {
-    if (!el) return
-    el.addEventListener('pointerdown', event => {
-      if (!isAllowedPointer(event)) return
-      event.preventDefault()
-      event.stopPropagation()
-      el.setPointerCapture(event.pointerId)
-      activePointers.set(event.pointerId, {
-        kind: 'button',
-        el,
-        onUp,
-        onMove,
-        lastX: event.clientX,
-        lastY: event.clientY,
-      })
-      onDown()
-    })
-  }
-
-  function bindPressButton(el, code) {
-    bindHoldButton(
-      el,
-      () => {
-        if (!canControl()) return
-        setHeld(code, true)
-      },
-      () => setHeld(code, false)
-    )
-  }
-
-  function bindTogglePress(el, code) {
-    if (!el) return
-    el.addEventListener('pointerdown', event => {
-      if (!isAllowedPointer(event)) return
-      event.preventDefault()
-      event.stopPropagation()
-      if (!canControl()) return
-      pressed.add(code)
-    })
-  }
-
   function onStickDown(event) {
     if (!canControl() || stickPointerId != null) return
     if (!isAllowedPointer(event)) return
@@ -428,24 +361,58 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
     event.stopPropagation()
     stickPointerId = event.pointerId
     stickRadius = getStickRadius()
-    const rect = dom.touchStickBase.getBoundingClientRect()
+    const rect = ui.getTouchStickRect()
     stickOriginX = rect.left + rect.width * 0.5
     stickOriginY = rect.top + rect.height * 0.5
     activePointers.set(event.pointerId, { kind: 'stick' })
-    dom.touchStickBase.setPointerCapture(event.pointerId)
     updateStick(event.clientX, event.clientY)
   }
 
   function onLookDown(event) {
     if (!canControl() || lookPointerId != null) return
-    if (event.target.closest('[data-touch-action], #touchStick')) return
     if (!isAllowedPointer(event)) return
     event.preventDefault()
     lookPointerId = event.pointerId
     lookLastX = event.clientX
     lookLastY = event.clientY
     activePointers.set(event.pointerId, { kind: 'look' })
-    dom.touchLookPad.setPointerCapture(event.pointerId)
+  }
+
+  function onTouchDown(action, event) {
+    if (action === 'stick') return onStickDown(event)
+    if (action === 'look') return onLookDown(event)
+    if (action === 'pause') {
+      if (state.running && deploy.phase === 'none') onPause()
+      return
+    }
+    if (!canControl()) return
+    if (action === 'fire') {
+      if (!mouseDown.left) pressed.add('MouseLeft')
+      mouseDown.left = true
+      activePointers.set(event.pointerId, {
+        kind: 'fire',
+        lastX: event.clientX,
+        lastY: event.clientY,
+      })
+      return
+    }
+    if (action === 'aim') {
+      const player = state.player
+      if (player?.activeSlot === 2 && player.secondaryData?.kind === 'c4') {
+        setAimToggled(false)
+        pressed.add('MouseRight')
+      } else {
+        setAimToggled(!aimToggled)
+      }
+      return
+    }
+    const code = TOUCH_PRESS_CODES[action]
+    if (action === 'jump' || action === 'scoreboard') {
+      setHeld(code, true)
+      activePointers.set(event.pointerId, { kind: 'held', code })
+    } else {
+      pressed.add(code)
+    }
   }
 
   function onPointerMove(event) {
@@ -464,9 +431,14 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
       lookLastY = event.clientY
       return
     }
-    if (entry.kind === 'button' && entry.onMove) {
+    if (entry.kind === 'fire') {
       if (!canControl()) return
-      entry.onMove(event.clientX, event.clientY, entry)
+      if (lookPointerId == null) {
+        mouseDeltaX += (event.clientX - entry.lastX) * inputConfig.touchLookScale
+        mouseDeltaY += (event.clientY - entry.lastY) * inputConfig.touchLookScale
+      }
+      entry.lastX = event.clientX
+      entry.lastY = event.clientY
     }
   }
 
@@ -486,9 +458,8 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
       lookPointerId = null
       return
     }
-    if (entry.kind === 'button') {
-      entry.onUp?.()
-    }
+    if (entry.kind === 'fire') mouseDown.left = false
+    if (entry.kind === 'held') setHeld(entry.code, false)
   }
 
   document.addEventListener(
@@ -592,77 +563,7 @@ export function createInputSystem({ state, deploy, onPause, dom, config }) {
     resetGyroBaseline()
   })
 
-  if (dom?.touchStickBase) {
-    dom.touchStickBase.addEventListener('pointerdown', onStickDown)
-  }
-  if (dom?.touchLookPad) {
-    dom.touchLookPad.addEventListener('pointerdown', onLookDown)
-  }
-  document.addEventListener('pointermove', onPointerMove, { passive: false })
-  document.addEventListener('pointerup', onPointerEnd)
-  document.addEventListener('pointercancel', onPointerEnd)
-  document.addEventListener('lostpointercapture', onPointerEnd)
-
-  bindHoldButton(
-    dom?.touchFire,
-    () => {
-      if (!canControl()) return
-      if (!mouseDown.left) pressed.add('MouseLeft')
-      mouseDown.left = true
-    },
-    () => {
-      mouseDown.left = false
-    },
-    (clientX, clientY, entry) => {
-      if (lookPointerId != null) {
-        entry.lastX = clientX
-        entry.lastY = clientY
-        return
-      }
-      mouseDeltaX += (clientX - entry.lastX) * inputConfig.touchLookScale
-      mouseDeltaY += (clientY - entry.lastY) * inputConfig.touchLookScale
-      entry.lastX = clientX
-      entry.lastY = clientY
-    }
-  )
-  if (dom?.touchAim) {
-    dom.touchAim.addEventListener('pointerdown', event => {
-      if (!isAllowedPointer(event)) return
-      event.preventDefault()
-      event.stopPropagation()
-      if (!canControl()) return
-      const player = state.player
-      // C4 模式下该键改为投掷；主武器/RPG 仍为瞄准切换。
-      if (player?.activeSlot === 2 && player.secondaryData?.kind === 'c4') {
-        setAimToggled(false)
-        pressed.add('MouseRight')
-        return
-      }
-      setAimToggled(!aimToggled)
-    })
-  }
-  bindPressButton(dom?.touchJump, TOUCH_PRESS_CODES.jump)
-  bindTogglePress(dom?.touchCrouch, TOUCH_PRESS_CODES.crouch)
-  bindTogglePress(dom?.touchReload, TOUCH_PRESS_CODES.reload)
-  bindTogglePress(dom?.touchMelee, TOUCH_PRESS_CODES.melee)
-  bindTogglePress(dom?.touchGrenade, TOUCH_PRESS_CODES.grenade)
-  bindTogglePress(dom?.touchItem, TOUCH_PRESS_CODES.item)
-  bindTogglePress(dom?.touchSupply, TOUCH_PRESS_CODES.supply)
-  bindTogglePress(dom?.touchWeaponSwitch, TOUCH_PRESS_CODES.weaponSwitch)
-  bindHoldButton(
-    dom?.touchScoreboard,
-    () => {
-      if (state.running && !state.paused) heldKeys.add('Tab')
-    },
-    () => heldKeys.delete('Tab')
-  )
-  if (dom?.touchPause) {
-    dom.touchPause.addEventListener('pointerdown', event => {
-      event.preventDefault()
-      event.stopPropagation()
-      if (state.running && deploy.phase === 'none') onPause()
-    })
-  }
+  ui.setTouchHandlers({ down: onTouchDown, move: onPointerMove, up: onPointerEnd })
 
   refreshTouchMode()
 

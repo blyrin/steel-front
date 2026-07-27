@@ -449,7 +449,7 @@ export const CFG = {
     // Bot 技能值随机范围的宽度。
     skillRange: 0.28,
     // Bot 最大视野距离。
-    viewDistance: 70,
+    viewDistance: 50,
     // Bot 两次主动扫描之间的时间，避免每帧重复遍历整张地图。
     perceptionInterval: 0.2,
     // 每次扫描最多进行精确视线检测的候选数。
@@ -465,18 +465,18 @@ export const CFG = {
     // 导航路径点到达判定距离。
     navigationWaypointArrivalDistance: 1.7,
     // Bot 听到玩家开火声的最大距离。
-    playerShotHearingDistance: 90,
+    playerShotHearingDistance: 70,
     // Bot 根据玩家开火声搜索的最长时间。
     playerShotMemory: 2.6,
     // Bot 发现目标后的反应时间基准。
-    reactionTime: 0.7,
+    reactionTime: 1.0,
     // 视野判定：前方夹角阈值、视线起点高度和最小侧视距离。
     // Bot 视野前方点积阈值。
     viewForwardThreshold: 0.42,
     // Bot 近距离目标允许绕过前方点积限制的距离。
     viewForwardMinDistance: 4,
     // Bot 视线检测起点高度。
-    viewOriginHeight: 1.6,
+    viewOriginHeight: 1.5,
     // Bot 射击和目标判断时使用的高度。
     targetHeight: 1,
     // Bot 巡逻区域相对地图半径的比例。
@@ -677,8 +677,6 @@ export const CFG = {
     deployYawResetStart: 0.68,
     // 出生动画水平角回正的结束时间点。
     deployYawResetEnd: 0.98,
-    // 出生动画开始显示落地暗角的时间点。
-    landingVignetteStart: 0.86,
     // 出生动画触发落地音效和震动的时间点。
     landingImpactStart: 0.88,
   },
@@ -757,6 +755,8 @@ export const CFG = {
     damageVignetteDuration: 400,
     // 方向伤害提示的显示时长。
     directionDamageDuration: 800,
+    // 准星离开角色后血条继续显示的时长。
+    healthBarHoldDuration: 1200,
     // 击杀 feed 单条消息的显示时长。
     killFeedItemDuration: 5000,
     // 击杀 feed 同时保留的最大消息数。
@@ -773,7 +773,7 @@ export const CFG = {
     // 硬上限溢出：priority >= 1 可占用；满载后由高优先级抢占低优先级声道。
     overflowVoices: 12,
   },
-  // 相机、雾效、像素比的运行时渲染参数（动漫三渲二，无阴影，低像素比 + MSAA）。
+  // 相机、雾效与低分辨率像素渲染参数。
   render: {
     // 相机近裁剪面距离。
     cameraNear: 0.04,
@@ -781,10 +781,10 @@ export const CFG = {
     cameraFar: 1200,
     // 指数平方雾密度，远处渐进消隐而不产生硬交界线。
     fogDensity: 0.0032,
-    // 桌面设备的像素比上限（卡通风格优先帧率，硬件 MSAA 兜底边缘）。
-    desktopPixelRatio: 1,
-    // 触摸设备的像素比上限。
-    touchPixelRatio: 1.25,
+    // 桌面端内部渲染高度，画布由浏览器最近邻放大到视口。
+    desktopRenderHeight: 500,
+    // 触摸端内部渲染高度。
+    touchRenderHeight: 400,
     // 纹理各向异性过滤等级上限。
     maxAnisotropy: 2,
   },

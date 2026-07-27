@@ -1,26 +1,17 @@
 import * as THREE from 'three'
 import { createBoxHitbox } from '../combat/collision.js'
-import { attachFlashlight } from './flashlight.js'
 
 const BOT_GEOMETRY = {
   leg: new THREE.BoxGeometry(0.17, 0.72, 0.2),
   boot: new THREE.BoxGeometry(0.16, 0.14, 0.28),
   torso: new THREE.BoxGeometry(0.48, 0.68, 0.28),
-  chest: new THREE.BoxGeometry(0.46, 0.28, 0.3),
   belt: new THREE.BoxGeometry(0.5, 0.07, 0.3),
-  pouch: new THREE.BoxGeometry(0.1, 0.12, 0.08),
   pack: new THREE.BoxGeometry(0.34, 0.38, 0.16),
-  patch: new THREE.BoxGeometry(0.1, 0.16, 0.04),
-  stripe: new THREE.BoxGeometry(0.26, 0.07, 0.3),
-  sash: new THREE.BoxGeometry(0.1, 0.52, 0.3),
   neck: new THREE.CylinderGeometry(0.07, 0.08, 0.1, 8),
   head: new THREE.BoxGeometry(0.24, 0.26, 0.24),
   allyHelmet: new THREE.SphereGeometry(0.175, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.55),
   axisHelmet: new THREE.SphereGeometry(0.17, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.58),
   allyBrim: new THREE.CylinderGeometry(0.2, 0.23, 0.03, 10),
-  allyNet: new THREE.BoxGeometry(0.08, 0.04, 0.08),
-  axisRear: new THREE.BoxGeometry(0.28, 0.08, 0.16),
-  axisSkirt: new THREE.BoxGeometry(0.06, 0.12, 0.18),
   arm: new THREE.BoxGeometry(0.13, 0.58, 0.15),
   hand: new THREE.BoxGeometry(0.1, 0.1, 0.1),
   rifleBarrel: new THREE.CylinderGeometry(0.018, 0.022, 0.72, 8),
@@ -28,18 +19,6 @@ const BOT_GEOMETRY = {
   rifleStock: new THREE.BoxGeometry(0.055, 0.07, 0.28),
   rifleMag: new THREE.BoxGeometry(0.06, 0.18, 0.11),
   rifleGrip: new THREE.BoxGeometry(0.07, 0.18, 0.08),
-  markerPole: new THREE.CylinderGeometry(0.02, 0.02, 0.28, 6),
-  markerPlate: new THREE.BoxGeometry(0.22, 0.22, 0.04),
-  markerCore: new THREE.BoxGeometry(0.1, 0.1, 0.05),
-  markerTriangle: new THREE.ConeGeometry(0.14, 0.22, 3),
-  markerDot: new THREE.SphereGeometry(0.045, 6, 4),
-}
-
-const BOT_MARKER_MATERIALS = {
-  allies: new THREE.MeshBasicMaterial({ color: 0x00c7e6 }),
-  axis: new THREE.MeshBasicMaterial({ color: 0xff3f5f }),
-  alliesCore: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-  axisCore: new THREE.MeshBasicMaterial({ color: 0xffe056 }),
 }
 
 export class Bot {
@@ -336,9 +315,6 @@ export class Bot {
     const isAlly = this.team === 'allies'
     const uniform = isAlly ? this.matLib.allyUniform : this.matLib.axisUniform
     const helmetMat = isAlly ? this.matLib.helmetAlly : this.matLib.helmetAxis
-    const accent = isAlly ? this.matLib.allyAccent : this.matLib.axisAccent
-    const markerMat = isAlly ? BOT_MARKER_MATERIALS.allies : BOT_MARKER_MATERIALS.axis
-    const markerCoreMat = isAlly ? BOT_MARKER_MATERIALS.alliesCore : BOT_MARKER_MATERIALS.axisCore
     const bootMat = this.matLib.metalDark
 
     this.body = new THREE.Group()
@@ -369,41 +345,15 @@ export class Bot {
     torso.castShadow = true
     torso.receiveShadow = true
     this.body.add(torso)
-    const chest = new THREE.Mesh(BOT_GEOMETRY.chest, uniform)
-    chest.position.set(0, 0.57, 0.02)
-    chest.castShadow = false
-    this.body.add(chest)
     const belt = new THREE.Mesh(BOT_GEOMETRY.belt, bootMat)
     belt.position.set(0, 0.08, 0)
     this.body.add(belt)
-    for (const side of [-1, 1]) {
-      const pouch = new THREE.Mesh(BOT_GEOMETRY.pouch, this.matLib.wood)
-      pouch.position.set(side * 0.16, 0.08, 0.16)
-      this.body.add(pouch)
-    }
 
     const pack = new THREE.Mesh(BOT_GEOMETRY.pack, uniform)
     pack.position.set(0, 0.44, 0.2)
     pack.castShadow = true
     this.body.add(pack)
     this.pack = pack
-
-    const patchLeft = new THREE.Mesh(BOT_GEOMETRY.patch, accent)
-    patchLeft.position.set(-0.26, 0.56, 0)
-    this.body.add(patchLeft)
-    const patchRight = new THREE.Mesh(BOT_GEOMETRY.patch, accent)
-    patchRight.position.set(0.26, 0.56, 0)
-    this.body.add(patchRight)
-    if (isAlly) {
-      const stripe = new THREE.Mesh(BOT_GEOMETRY.stripe, accent)
-      stripe.position.set(0, 0.5, 0)
-      this.body.add(stripe)
-    } else {
-      const sash = new THREE.Mesh(BOT_GEOMETRY.sash, accent)
-      sash.position.set(0.08, 0.4, 0)
-      sash.rotation.z = 0.45
-      this.body.add(sash)
-    }
 
     this.head = new THREE.Group()
     this.head.position.set(0, 0.74, 0)
@@ -427,9 +377,6 @@ export class Bot {
       const brim = new THREE.Mesh(BOT_GEOMETRY.allyBrim, helmetMat)
       brim.position.set(0, 0.2, 0)
       this.head.add(brim)
-      const net = new THREE.Mesh(BOT_GEOMETRY.allyNet, this.matLib.allyAccent)
-      net.position.set(0, 0.38, 0)
-      this.head.add(net)
     } else {
       const dome = new THREE.Mesh(
         BOT_GEOMETRY.axisHelmet,
@@ -439,14 +386,6 @@ export class Bot {
       dome.scale.set(1.08, 0.92, 1.18)
       dome.castShadow = true
       this.head.add(dome)
-      const rear = new THREE.Mesh(BOT_GEOMETRY.axisRear, helmetMat)
-      rear.position.set(0, 0.2, 0.12)
-      this.head.add(rear)
-      for (const side of [-1, 1]) {
-        const skirt = new THREE.Mesh(BOT_GEOMETRY.axisSkirt, helmetMat)
-        skirt.position.set(side * 0.16, 0.2, 0.02)
-        this.head.add(skirt)
-      }
     }
 
     const armGeometry = BOT_GEOMETRY.arm
@@ -489,53 +428,6 @@ export class Bot {
     this.configureRifleModel()
     this.body.add(this.rifle)
 
-    this.marker = new THREE.Group()
-    const pole = new THREE.Mesh(
-      BOT_GEOMETRY.markerPole,
-      markerMat
-    )
-    pole.position.y = 0.1
-    this.marker.add(pole)
-    if (isAlly) {
-      const plate = new THREE.Mesh(
-        BOT_GEOMETRY.markerPlate,
-        markerMat
-      )
-      plate.position.y = 0.32
-      plate.rotation.z = Math.PI / 4
-      this.marker.add(plate)
-      const core = new THREE.Mesh(
-        BOT_GEOMETRY.markerCore,
-        markerCoreMat
-      )
-      core.position.y = 0.32
-      core.rotation.z = Math.PI / 4
-      this.marker.add(core)
-    } else {
-      const triangle = new THREE.Mesh(
-        BOT_GEOMETRY.markerTriangle,
-        markerMat
-      )
-      triangle.position.y = 0.34
-      triangle.rotation.y = Math.PI / 6
-      this.marker.add(triangle)
-      const core = new THREE.Mesh(
-        BOT_GEOMETRY.markerDot,
-        markerCoreMat
-      )
-      core.position.y = 0.3
-      this.marker.add(core)
-    }
-    this.marker.position.set(0, 2.06, 0)
-    this.marker.scale.setScalar(1.15)
-    this.group.add(this.marker)
-    if (this.mode?.id === 'zombie') {
-      attachFlashlight(
-        this.group,
-        new THREE.Vector3(0.18, 1.18, -0.38),
-        new THREE.Vector3(0.18, 1.12, -18)
-      )
-    }
     this.matLib.addOutline(this.group, 1.045)
     this.legPhase = Math.random() * Math.PI * 2
     this.animationTime = Math.random() * Math.PI * 2
@@ -687,11 +579,6 @@ export class Bot {
 
   update(dt) {
     this.advanceFromAi(dt)
-    if (this.alive) {
-      const cameraDeltaX = this.camera.position.x - this.position.x
-      const cameraDeltaZ = this.camera.position.z - this.position.z
-      this.marker.rotation.y = Math.atan2(cameraDeltaX, cameraDeltaZ) - this.yaw
-    }
     this.spreadBloom = Math.max(
       0,
       this.spreadBloom - dt * this.config.weapon.spreadBloomRecovery
@@ -934,8 +821,6 @@ export class Bot {
     this.head.rotation.y += (headYawTarget - this.head.rotation.y) * headEase
     this.head.rotation.z += (headRollTarget - this.head.rotation.z) * headEase
 
-    const markerY = 2.06 + Math.sin(this.animationTime * 2.1) * 0.025
-    this.marker.position.y += (markerY - this.marker.position.y) * (1 - Math.exp(-8 * dt))
   }
 
   getSpread() {
@@ -1021,7 +906,6 @@ export class Bot {
     this._aiZ = this.position.z
     this._aiYaw = this.yaw
     this.group.rotation.z = 0
-    this.marker.visible = false
     this.group.position.y = this.position.y + 0.1
     const fallPosition = this.position.clone().setY(this.position.y + 0.3)
     this.effects.spawnBlood(this.position.clone().setY(this.position.y + 1.2))
@@ -1068,8 +952,6 @@ export class Bot {
     this.rifle.position.set(0.22, 0.46, -0.38)
     this.rifle.rotation.set(0, 0, 0)
     this._workerTurnDifference = 0
-    this.marker.position.y = 2.06
-    this.marker.visible = true
     this.group.rotation.set(0, this.yaw, 0)
     this.group.position.copy(this.position)
     this.ai.respawnActor(this)
