@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 
 export class AudioSystem {
-  constructor(camera, files, config) {
-    this.camera = camera
+  constructor(files, config) {
+    this.camera = null
     this.files = files
     this.ctx = null
     this.enabled = false
@@ -155,8 +155,12 @@ export class AudioSystem {
     return buf
   }
 
+  setCamera(camera) {
+    this.camera = camera
+  }
+
   updateListener() {
-    if (!this.ready || !this.ctx) return
+    if (!this.ready || !this.ctx || !this.camera) return
     const listener = this.ctx.listener
     const position = this.camera.position
     this.camera.getWorldDirection(this._fwd)

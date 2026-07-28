@@ -40,7 +40,7 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
 
-export function createCanvasUi({ state, deploy, config, camera }) {
+export function createCanvasUi({ state, deploy, config }) {
   const canvas = document.createElement('canvas')
   canvas.id = 'uiCanvas'
   canvas.setAttribute('aria-label', '游戏界面')
@@ -48,6 +48,7 @@ export function createCanvasUi({ state, deploy, config, camera }) {
   const ctx = canvas.getContext('2d', { alpha: true })
   ctx.imageSmoothingEnabled = false
 
+  let camera = null
   let width = 960
   let height = 540
   let touchMode = false
@@ -309,6 +310,7 @@ export function createCanvasUi({ state, deploy, config, camera }) {
   }
 
   function drawActorHealthBars(now) {
+    if (!camera) return
     for (const actor of state.actors) {
       if (!actor.alive) {
         healthBarUntil.delete(actor)
@@ -779,6 +781,7 @@ export function createCanvasUi({ state, deploy, config, camera }) {
 
   return {
     canvas,
+    setCamera(value) { camera = value },
     bindRuntime(callback) { getMode = callback },
     setHandlers(value) { handlers = value },
     setTouchHandlers(value) { touchHandlers = value },

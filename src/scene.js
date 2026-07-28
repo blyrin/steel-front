@@ -296,8 +296,7 @@ export function createSceneRuntime(config) {
   rawRenderer.shadowMap.autoUpdate = false
   rawRenderer.toneMapping = THREE.NoToneMapping
   rawRenderer.outputColorSpace = THREE.SRGBColorSpace
-  sceneCanvas.style.width = '100%'
-  sceneCanvas.style.height = '100%'
+  sceneCanvas.style.display = 'block'
   document.body.appendChild(sceneCanvas)
 
   const maxAniso = rawRenderer.capabilities.getMaxAnisotropy()
@@ -381,6 +380,9 @@ export function createSceneRuntime(config) {
     const width = Math.max(1, Math.round((height * innerWidth) / innerHeight))
     rawRenderer.setSize(width, height, false)
     renderTarget.setSize(width, height)
+    // 用窗口像素写显示尺寸，避免 100% 在桌面端不触发合成
+    sceneCanvas.style.width = `${innerWidth}px`
+    sceneCanvas.style.height = `${innerHeight}px`
   }
 
   resize()

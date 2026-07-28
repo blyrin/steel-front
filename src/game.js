@@ -25,22 +25,20 @@ import { createModeMenu } from './ui/mode-menu.js'
 export function createGame() {
   const state = createGameState()
   const deploy = createDeployState()
-  const runtime = createSceneRuntime(CFG)
-  const ui = createCanvasUi({ state, deploy, config: CFG, camera: runtime.camera })
-  const audio = new AudioSystem(runtime.camera, AUDIO_FILES, CFG)
-  const objectives = createObjectiveSystem({
-    scene: runtime.scene,
-    matLib: runtime.matLib,
-    state,
-    config: CFG,
-  })
-  const effects = createEffectsSystem({ scene: runtime.scene, state, audio, config: CFG })
+  let runtime = null
   let mode = null
+  let objectives = null
+  let effects = null
+  let deployment = null
+  let combat = null
+  let scoring = null
+
+  const ui = createCanvasUi({ state, deploy, config: CFG })
+  const audio = new AudioSystem(AUDIO_FILES, CFG)
   const ai = createAiSystem({ state, config: CFG, getMode: () => mode })
   ui.bindRuntime(() => mode)
   const hud = createHud({ ui, state, audio, config: CFG, getMode: () => mode })
   const maps = createMapSystem({ ui })
-  let deployment
   let input
 
   const modeMenu = createModeMenu({
@@ -83,34 +81,48 @@ export function createGame() {
   }
 
   input = createInputSystem({ state, deploy, onPause: togglePause, ui, config: CFG })
-  deployment = createDeploymentSystem({
-    ui,
-    state,
-    deploy,
-    getSpawnPoints: team => mode.getSpawnPoints(team),
-    camera: runtime.camera,
-    renderer: runtime.renderer,
-    audio,
-    input,
-    hud,
-    config: CFG,
-    saveSettings,
-  })
 
-  const combat = createCombatSystem({
-    state,
-    effects,
-    audio,
-    hud,
-    config: CFG,
-    getMode: () => mode,
-  })
-  const scoring = createScoringSystem({
-    state,
-    hud,
-    onElimination: event => mode.onElimination(event),
-    saveRecords,
-  })
+  function ensureWorld() {
+    if (runtime) return
+    runtime = createSceneRuntime(CFG)
+    runtime.camera.position.y = CFG.match.initialCameraHeight
+    ui.setCamera(runtime.camera)
+    audio.setCamera(runtime.camera)
+    objectives = createObjectiveSystem({
+      scene: runtime.scene,
+      matLib: runtime.matLib,
+      state,
+      config: CFG,
+    })
+    effects = createEffectsSystem({ scene: runtime.scene, state, audio, config: CFG })
+    deployment = createDeploymentSystem({
+      ui,
+      state,
+      deploy,
+      getSpawnPoints: team => mode.getSpawnPoints(team),
+      camera: runtime.camera,
+      renderer: runtime.renderer,
+      audio,
+      input,
+      hud,
+      config: CFG,
+      saveSettings,
+    })
+    combat = createCombatSystem({
+      state,
+      effects,
+      audio,
+      hud,
+      config: CFG,
+      getMode: () => mode,
+    })
+    scoring = createScoringSystem({
+      state,
+      hud,
+      onElimination: event => mode.onElimination(event),
+      saveRecords,
+    })
+  }
 
   function createModeMap(modeId) {
     return createMap(modeId, {
@@ -123,6 +135,7 @@ export function createGame() {
   }
 
   function initGame() {
+    ensureWorld()
     const modeId = modeMenu.getSelectedModeId()
     const map = createModeMap(modeId)
     mode = createMode(modeId, {
@@ -178,7 +191,6 @@ export function createGame() {
     }
     const boot = CFG.boot
     setProgress(boot.initialProgress, LOAD_STEPS[0])
-    runtime.camera.position.y = CFG.match.initialCameraHeight
     setProgress(boot.worldProgress, LOAD_STEPS[1])
     await new Promise(resolve => setTimeout(resolve, boot.initialDelay))
     setProgress(boot.coverProgress, LOAD_STEPS[2])
@@ -236,8 +248,10 @@ export function createGame() {
     renderAccumulator += elapsed
     if (renderAccumulator < minFrameTime) return
     renderAccumulator %= minFrameTime
-    audio.updateListener()
-    runtime.renderer.render(runtime.scene, runtime.camera)
+    if (runtime) {
+      audio.updateListener()
+      runtime.renderer.render(runtime.scene, runtime.camera)
+    }
     ui.render(now)
   }
 
@@ -287,7 +301,7 @@ export function createGame() {
     onSpawn: index => deployment.startAnimation(index),
   })
   window.addEventListener('resize', () => {
-    runtime.resize()
+    runtime?.resize()
     ui.resize()
     input.syncUi()
   })
