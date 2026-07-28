@@ -15,6 +15,11 @@ let events = []
 let navigation = null
 let coverReservations = new Map()
 
+const MOVEMENT_DECISION_INTERVAL = 1 / 20
+const ZOMBIE_ATTACK_SCAN_INTERVAL = 1 / 20
+const GRENADE_DECISION_INTERVAL = 1 / 8
+const COVER_SEARCH_INTERVAL = 0.5
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
@@ -873,32 +878,41 @@ function addSeparation(actor, direction) {
 
 function chooseMovementDirection(actor, desired) {
   const desiredDirection = normalizeDirection(desired.x, desired.z)
-  if (desiredDirection.x === 0 && desiredDirection.z === 0) return desiredDirection
-  if (actor.unstuckTimer <= 0 && !directionBlocked(actor, desiredDirection)) {
-    return addSeparation(actor, desiredDirection)
+  if (desiredDirection.x === 0 && desiredDirection.z === 0) {
+    actor.movementDirection = desiredDirection
+    return desiredDirection
   }
+  if (actor.aiTime < actor.nextMovementDecisionAt) return actor.movementDirection
 
-  const actorConfigData = actorConfig(actor)
-  const baseAngle = Math.atan2(desiredDirection.z, desiredDirection.x)
-  const probeAngle = actorConfigData.movementProbeAngle
-  const unstuckOffset = actor.unstuckTimer > 0 ? actor.unstuckSign * 1.05 : 0
-  const angles = actor.unstuckTimer > 0
-    ? [unstuckOffset, probeAngle + unstuckOffset, -probeAngle + unstuckOffset, Math.PI * 0.75 + unstuckOffset]
-    : [probeAngle, -probeAngle, probeAngle * 2, -probeAngle * 2]
-  let best = desiredDirection
-  let bestScore = -Infinity
-  for (const offset of angles) {
-    const angle = baseAngle + offset
-    const direction = { x: Math.cos(angle), z: Math.sin(angle) }
-    const blocked = directionBlocked(actor, direction)
-    let score = (direction.x * desiredDirection.x + direction.z * desiredDirection.z) * 5
-    score += blocked ? -8 : 2
-    if (score > bestScore) {
-      bestScore = score
-      best = direction
+  let movement
+  if (actor.unstuckTimer <= 0 && !directionBlocked(actor, desiredDirection)) {
+    movement = addSeparation(actor, desiredDirection)
+  } else {
+    const actorConfigData = actorConfig(actor)
+    const baseAngle = Math.atan2(desiredDirection.z, desiredDirection.x)
+    const probeAngle = actorConfigData.movementProbeAngle
+    const unstuckOffset = actor.unstuckTimer > 0 ? actor.unstuckSign * 1.05 : 0
+    const angles = actor.unstuckTimer > 0
+      ? [unstuckOffset, probeAngle + unstuckOffset, -probeAngle + unstuckOffset, Math.PI * 0.75 + unstuckOffset]
+      : [probeAngle, -probeAngle, probeAngle * 2, -probeAngle * 2]
+    let best = desiredDirection
+    let bestScore = -Infinity
+    for (const offset of angles) {
+      const angle = baseAngle + offset
+      const direction = { x: Math.cos(angle), z: Math.sin(angle) }
+      const blocked = directionBlocked(actor, direction)
+      let score = (direction.x * desiredDirection.x + direction.z * desiredDirection.z) * 5
+      score += blocked ? -8 : 2
+      if (score > bestScore) {
+        bestScore = score
+        best = direction
+      }
     }
+    movement = addSeparation(actor, best)
   }
-  return addSeparation(actor, best)
+  actor.movementDirection = movement
+  actor.nextMovementDecisionAt = actor.aiTime + MOVEMENT_DECISION_INTERVAL
+  return movement
 }
 
 function moveWithDirection(actor, direction, speed) {
@@ -1369,7 +1383,7 @@ function tryThrowGrenade(actor, dt, smokeClouds, needsCover) {
     throwChance = config.grenade.aiThrowChancePerSecond * (closeEnough || underFire ? 1 : 0.55)
   }
 
-  if (!targetPoint || Math.random() >= throwChance * dt) return
+  if (!targetPoint || Math.random() >= 1 - Math.exp(-throwChance * dt)) return
   const origin = { x: actor.x, y: actor.y + 1.3, z: actor.z }
   const direction = solveThrowDirection(origin, targetPoint, grenade)
   if (!direction) return
@@ -1429,13 +1443,22 @@ function updateBotMovement(actor, dt, smokeClouds) {
     actor.suppression > botConfig.coverExitSuppression ||
     underPressure
   const needsCover = inCoverState ? stayCover : enterCover
-  tryThrowGrenade(actor, dt, smokeClouds, needsCover)
+  actor.grenadeDecisionTimer -= dt
+  actor.grenadeDecisionElapsed += dt
+  if (actor.grenadeDecisionTimer <= 0) {
+    tryThrowGrenade(actor, actor.grenadeDecisionElapsed, smokeClouds, needsCover)
+    actor.grenadeDecisionTimer = GRENADE_DECISION_INTERVAL
+    actor.grenadeDecisionElapsed = 0
+  }
 
+  actor.coverSearchTimer -= dt
   if (
     targetPosition &&
     needsCover &&
+    actor.coverSearchTimer <= 0 &&
     (!actor.cover || actor.stateTimer > botConfig.coverRefreshInterval)
   ) {
+    actor.coverSearchTimer = COVER_SEARCH_INTERVAL
     const cover = findCover(actor, targetPosition, smokeClouds)
     if (cover) {
       coverReservations.set(cover.coverId, actor.id)
@@ -1712,6 +1735,16 @@ function getZombieSiegePoint(actor) {
   }
 }
 
+function refreshZombieAttackTarget(actor, dt) {
+  actor.attackScanTimer -= dt
+  const cached = getTarget(actor.attackTargetId)
+  if (actor.attackScanTimer > 0 && cached?.alive) return cached
+  actor.attackScanTimer = ZOMBIE_ATTACK_SCAN_INTERVAL
+  const target = findZombieAttackTarget(actor)
+  actor.attackTargetId = target?.id ?? null
+  return target
+}
+
 function updateZombie(actor, dt) {
   const enemyConfig = config.modes.zombie.enemy
   actor.aiTime += dt
@@ -1720,7 +1753,7 @@ function updateZombie(actor, dt) {
   actor.navigationCheckTimer = Math.max(0, actor.navigationCheckTimer - dt)
   actor.unstuckTimer = Math.max(0, actor.unstuckTimer - dt)
   updateZombiePerception(actor, dt)
-  const immediateTarget = findZombieAttackTarget(actor)
+  const immediateTarget = refreshZombieAttackTarget(actor, dt)
   if (immediateTarget) {
     actor.targetId = immediateTarget.id
     actor.targetVisible = true
@@ -1740,14 +1773,7 @@ function updateZombie(actor, dt) {
   }
   const targetDistance = Math.hypot(targetPosition.x - actor.x, targetPosition.z - actor.z)
   const fortressDistance = distance2D(actor, fortress)
-  let canAttack = false
-  if (target && actor.targetVisible && targetDistance <= enemyConfig.attackRange) {
-    canAttack = hasLineOfSight(
-      { x: actor.x, y: actor.y + 1.05, z: actor.z },
-      { x: targetPosition.x, y: targetPosition.y + 1.05, z: targetPosition.z },
-      [],
-    )
-  }
+  const canAttack = immediateTarget && targetDistance <= enemyConfig.attackRange
   if (canAttack || (!target && fortressDistance <= fortress.attackRadius)) {
     actor.vx = 0
     actor.vz = 0
@@ -1780,6 +1806,8 @@ function createActor(data) {
         : config.bot.perceptionInterval
     ),
     targetScanTimer: Math.random() * config.modes.zombie.enemy.perceptionInterval,
+    attackScanTimer: Math.random() * ZOMBIE_ATTACK_SCAN_INTERVAL,
+    attackTargetId: null,
     attackTimer: 0,
     lastSeenX: data.x,
     lastSeenY: data.y,
@@ -1793,6 +1821,8 @@ function createActor(data) {
     weaponShotTimer: 0,
     burstShotsRemaining: 0,
     grenadeCooldown: config.grenade.aiCooldownMin + Math.random() * config.grenade.aiCooldownRange,
+    grenadeDecisionTimer: Math.random() * GRENADE_DECISION_INTERVAL,
+    grenadeDecisionElapsed: 0,
     suppression: 0,
     navigationPath: [],
     navigationPathIndex: 0,
@@ -1801,6 +1831,8 @@ function createActor(data) {
     navigationTimer: 0,
     navigationCheckTimer: 0,
     navigationDirectBlocked: false,
+    movementDirection: { x: 0, z: 0 },
+    nextMovementDecisionAt: 0,
     unstuckTimer: 0,
     unstuckSign: Math.random() > 0.5 ? 1 : -1,
     stuckTimer: 0,
@@ -1808,6 +1840,7 @@ function createActor(data) {
     lastX: data.x,
     lastZ: data.z,
     cover: null,
+    coverSearchTimer: 0,
     isPeeking: false,
     coverPeekTimer: 0,
     resupplyStation: null,
