@@ -604,55 +604,236 @@ export function createEffectsSystem({ scene, state, audio, config }) {
   }
 
   function spawnExplosion(position, radius) {
-    const flash = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 10, 7),
-      new THREE.MeshBasicMaterial({ color: 0xffd447, transparent: true, depthWrite: false })
+    const r = Math.max(0.5, radius)
+    const origin = position.clone()
+    origin.y = Math.max(0.55, position.y)
+
+    // 核心白亮闪光 → 约 0.45r
+    const core = new THREE.Mesh(
+      geometry.core,
+      new THREE.MeshBasicMaterial({ color: 0xfff4b0, transparent: true, depthWrite: false })
     )
-    flash.position.copy(position)
-    flash.position.y = Math.max(0.8, position.y)
-    flash.scale.setScalar(0.2)
+    const coreStart = r * 0.04
+    const coreEnd = r * 0.45
+    core.position.copy(origin)
+    core.scale.setScalar(coreStart)
     addParticle({
-      mesh: flash,
+      mesh: core,
       type: 'explosion',
-      life: 0.42,
-      maxLife: 0.42,
+      life: 0.26,
+      maxLife: 0.26,
       update: (dt, time, particle) => {
-        const progress = time / particle.maxLife
-        particle.mesh.scale.setScalar(0.2 + radius * 0.26 * progress)
-        particle.mesh.material.opacity = 1 - progress
+        const p = time / particle.maxLife
+        particle.mesh.scale.setScalar(coreStart + (coreEnd - coreStart) * Math.min(1, p * 2.4))
+        particle.mesh.material.opacity = Math.max(0, 1 - p * 1.35)
       },
     })
+
+    // 外层火球 → 约 1.0r
+    const fireball = new THREE.Mesh(
+      geometry.side,
+      new THREE.MeshBasicMaterial({ color: 0xff7a28, transparent: true, depthWrite: false })
+    )
+    const fireStart = r * 0.06
+    const fireEnd = r
+    fireball.position.copy(origin)
+    fireball.scale.setScalar(fireStart)
+    addParticle({
+      mesh: fireball,
+      type: 'explosion',
+      life: 0.58,
+      maxLife: 0.58,
+      update: (dt, time, particle) => {
+        const p = time / particle.maxLife
+        particle.mesh.scale.setScalar(fireStart + (fireEnd - fireStart) * Math.pow(p, 0.5))
+        particle.mesh.material.opacity = Math.max(0, 0.92 * (1 - p) * (1 - p * 0.3))
+        particle.mesh.material.color.setHex(p < 0.4 ? 0xff7a28 : 0x5c4634)
+      },
+    })
+
+    // 短促点光
+    const light = take('light', () => new THREE.PointLight(0xffa040, 0, 8))
+    light.visible = true
+    light.position.copy(origin)
+    light.distance = r * 2.4
+    const lightIntensity = 0.55 * r
+    light.intensity = lightIntensity
+    addParticle({
+      mesh: light,
+      poolType: 'light',
+      type: 'explosion-light',
+      life: 0.32,
+      maxLife: 0.32,
+      update: (dt, time, particle) => {
+        const p = time / particle.maxLife
+        particle.mesh.intensity = lightIntensity * (1 - p) * (1 - p)
+      },
+    })
+
+    // 高速火花：飞散距离约 0.8r
+    for (let i = 0; i < 18; i++) {
+      const spark = take(
+        'spark',
+        () => createMesh('spark', new THREE.MeshBasicMaterial({ color: 0xffaa30, transparent: true }))
+      )
+      const sparkScale = r * (0.002 + Math.random() * 0.002)
+      spark.position.copy(origin)
+      spark.scale.setScalar(sparkScale)
+      spark.material.opacity = 1
+      spark.material.color.setHex(Math.random() < 0.35 ? 0xfff0a0 : 0xff8a30)
+      const speed = r * (1.2 + Math.random() * 1.8)
+      const vel = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        0.2 + Math.random() * 1.4,
+        (Math.random() - 0.5) * 2
+      )
+        .normalize()
+        .multiplyScalar(speed)
+      const life = 0.35 + Math.random() * 0.45
+      addParticle({
+        mesh: spark,
+        poolType: 'spark',
+        type: 'explosion-spark',
+        life,
+        maxLife: life,
+        vel,
+        update: (dt, time, particle) => {
+          particle.vel.y -= 10 * dt
+          particle.mesh.position.addScaledVector(particle.vel, dt)
+          particle.vel.multiplyScalar(0.97)
+          particle.mesh.material.opacity = 1 - time / particle.maxLife
+          particle.mesh.scale.setScalar(sparkScale * (1 - time / particle.maxLife * 0.5))
+        },
+      })
+    }
+
+    // 外扩烟团：扩散到约 1.1r
+    for (let i = 0; i < 10; i++) {
+      const smoke = take(
+        'smoke',
+        () =>
+          createMesh(
+            'smoke',
+            new THREE.MeshBasicMaterial({
+              color: 0x7a6a58,
+              transparent: true,
+              depthWrite: false,
+            })
+          )
+      )
+      const angle = (i / 10) * Math.PI * 2 + Math.random() * 0.45
+      const dist = r * (0.12 + Math.random() * 0.28)
+      smoke.position.set(
+        origin.x + Math.cos(angle) * dist,
+        origin.y + r * Math.random() * 0.06,
+        origin.z + Math.sin(angle) * dist
+      )
+      smoke.material.color.setHex(Math.random() < 0.4 ? 0x6a5a48 : 0x8c8070)
+      const baseScale = r * (0.05 + Math.random() * 0.06)
+      smoke.scale.setScalar(baseScale)
+      smoke.material.opacity = 0.5
+      const speed = r * (0.45 + Math.random() * 0.55)
+      const outward = new THREE.Vector3(
+        Math.cos(angle) * speed,
+        r * (0.12 + Math.random() * 0.18),
+        Math.sin(angle) * speed
+      )
+      const maxLife = 0.9 + Math.random() * 0.6
+      addParticle({
+        mesh: smoke,
+        poolType: 'smoke',
+        type: 'explosion-smoke',
+        life: maxLife,
+        maxLife,
+        vel: outward,
+        update: (dt, time, particle) => {
+          const p = time / particle.maxLife
+          particle.mesh.position.addScaledVector(particle.vel, dt)
+          particle.vel.multiplyScalar(0.91)
+          particle.vel.y += dt * r * 0.08
+          particle.mesh.material.opacity = 0.5 * (1 - p)
+          particle.mesh.scale.setScalar(baseScale * (1 + p * 3.6))
+        },
+      })
+    }
+
+    // 地面尘土环：外推到约 1.0r
     for (let i = 0; i < 8; i++) {
-      const direction = new THREE.Vector3(
-        Math.random() - 0.5,
-        0.25 + Math.random() * 0.75,
-        Math.random() - 0.5
-      ).normalize()
-      spawnSpark(position.clone(), direction.multiplyScalar(-1))
+      const dust = take(
+        'dust',
+        () => createMesh('dust', new THREE.MeshBasicMaterial({ color: 0xc4a078, transparent: true }))
+      )
+      const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.4
+      dust.position.set(origin.x, Math.max(0.12, origin.y * 0.25), origin.z)
+      const dustStart = r * 0.025
+      dust.scale.setScalar(dustStart)
+      dust.material.opacity = 0.48
+      const speed = r * (0.9 + Math.random() * 0.35)
+      const vel = new THREE.Vector3(
+        Math.cos(angle) * speed,
+        r * (0.05 + Math.random() * 0.1),
+        Math.sin(angle) * speed
+      )
+      addParticle({
+        mesh: dust,
+        poolType: 'dust',
+        type: 'explosion-dust',
+        life: 0.75,
+        maxLife: 0.75,
+        vel,
+        update: (dt, time, particle) => {
+          const p = time / particle.maxLife
+          particle.mesh.position.addScaledVector(particle.vel, dt)
+          particle.vel.multiplyScalar(0.88)
+          particle.mesh.material.opacity = 0.48 * (1 - p)
+          particle.mesh.scale.setScalar(dustStart + r * 0.14 * p)
+        },
+      })
     }
   }
 
   function spawnSmokeCloud(position, radius, duration) {
     const puffCount = effectsConfig.smokeCloudPuffCount
+    // 随机拉伸轴，让整体烟雾团略不规则
+    const stretchAngle = Math.random() * Math.PI * 2
+    const stretchX = Math.cos(stretchAngle)
+    const stretchZ = Math.sin(stretchAngle)
+    const stretch = 0.65 + Math.random() * 0.7
     for (let i = 0; i < puffCount; i++) {
       const smoke = new THREE.Mesh(
         geometry.smoke,
         new THREE.MeshBasicMaterial({
-          color: i % 3 === 0 ? 0x9bdbe1 : 0xd5e6df,
+          color: Math.random() < 0.35 ? 0x9bdbe1 : 0xd5e6df,
           transparent: true,
           opacity: 0,
           depthWrite: false,
         })
       )
-      const angle = (i / puffCount) * Math.PI * 2
-      const distance = radius * (0.18 + (i % 4) * 0.14)
+      const angle = Math.random() * Math.PI * 2
+      const distance = radius * Math.sqrt(Math.random()) * (0.45 + Math.random() * 0.55)
+      let ox = Math.cos(angle) * distance
+      let oz = Math.sin(angle) * distance
+      const along = ox * stretchX + oz * stretchZ
+      const acrossX = ox - along * stretchX
+      const acrossZ = oz - along * stretchZ
+      ox = along * stretchX * stretch + acrossX / Math.max(stretch, 0.5)
+      oz = along * stretchZ * stretch + acrossZ / Math.max(stretch, 0.5)
       smoke.position.set(
-        position.x + Math.cos(angle) * distance,
-        position.y + 0.6 + (i % 3) * 0.55,
-        position.z + Math.sin(angle) * distance
+        position.x + ox,
+        position.y + 0.3 + Math.random() * 2.0,
+        position.z + oz
       )
-      const scale = 0.8 + (i % 5) * 0.18
-      smoke.scale.setScalar(scale)
+      const scaleX = 0.6 + Math.random() * 1.0
+      const scaleY = 0.5 + Math.random() * 0.95
+      const scaleZ = 0.6 + Math.random() * 1.0
+      smoke.scale.set(scaleX, scaleY, scaleZ)
+      smoke.rotation.set(
+        (Math.random() - 0.5) * 0.8,
+        Math.random() * Math.PI * 2,
+        (Math.random() - 0.5) * 0.8
+      )
+      const rise = 0.012 + Math.random() * 0.03
+      const spin = 0.04 + Math.random() * 0.1
       addParticle({
         mesh: smoke,
         type: 'grenade-smoke',
@@ -662,9 +843,10 @@ export function createEffectsSystem({ scene, state, audio, config }) {
           const fadeIn = Math.min(1, time / 1.2)
           const fadeOut = Math.min(1, particle.life / 2)
           particle.mesh.material.opacity = effectsConfig.smokeCloudOpacity * fadeIn * fadeOut
-          particle.mesh.position.y += dt * 0.025
-          particle.mesh.rotation.y += dt * 0.08
-          particle.mesh.scale.setScalar(scale * (1 + Math.min(time, 4) * 0.08))
+          particle.mesh.position.y += dt * rise
+          particle.mesh.rotation.y += dt * spin
+          const grow = 1 + Math.min(time, 4) * 0.08
+          particle.mesh.scale.set(scaleX * grow, scaleY * grow, scaleZ * grow)
         },
       })
     }

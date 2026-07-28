@@ -282,7 +282,7 @@ export const CFG = {
       kind: 'c4',
       count: 3,
       throwSpeed: 14,
-      radius: 16,
+      radius: 12,
       damage: 180,
       color: 0x2f3330,
     },
@@ -292,7 +292,7 @@ export const CFG = {
       count: 2,
       fireDelay: 0.45,
       rocketSpeed: 52,
-      radius: 14,
+      radius: 12,
       damage: 210,
       color: 0x4d5c3a,
     },
@@ -317,6 +317,8 @@ export const CFG = {
       radius: 8,
       duration: 12,
       color: 0x12b6d2,
+      // Bot 视线穿过烟雾时的视野距离倍率（不完全不可见）。
+      viewFactor: 0.4,
     },
   },
   items: {

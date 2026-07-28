@@ -447,7 +447,6 @@ export class Player {
     if (!this.alive || this.plantedCharges.length === 0) return false
     const charges = this.plantedCharges.splice(0)
     for (const charge of charges) this.combat.detonateC4(charge, this.team, this)
-    this.hud.showActionMessage('C4 已引爆')
     return true
   }
 

@@ -201,7 +201,7 @@ function rayHitObstacle(origin, direction, obstacle, maxDist) {
   return hitY >= obstacle.minY && hitY <= obstacle.maxY ? hitDistance : -1
 }
 
-function isSmokeBlocked(origin, point, smokeClouds) {
+function isSmokeObscured(origin, point, smokeClouds) {
   const dx = point.x - origin.x
   const dy = point.y - origin.y
   const dz = point.z - origin.z
@@ -231,8 +231,7 @@ function isSmokeBlocked(origin, point, smokeClouds) {
   return false
 }
 
-function hasLineOfSight(origin, point, smokeClouds) {
-  if (isSmokeBlocked(origin, point, smokeClouds)) return false
+function hasLineOfSight(origin, point) {
   const dx = point.x - origin.x
   const dy = point.y - origin.y
   const dz = point.z - origin.z
@@ -668,7 +667,15 @@ function botCanSee(actor, target, smokeClouds) {
     : botConfig.viewForwardMinDistance
   if (forwardDot(actor, target) < threshold && distance > minimumDistance) return false
   const origin = { x: actor.x, y: actor.y + botConfig.viewOriginHeight, z: actor.z }
-  return hasLineOfSight(origin, targetPoint(target, botConfig.targetHeight), smokeClouds)
+  const aimPoint = targetPoint(target, botConfig.targetHeight)
+  // 烟雾只降低可视距离，不再完全遮挡
+  if (
+    isSmokeObscured(origin, aimPoint, smokeClouds) &&
+    distance > botConfig.viewDistance * config.grenades.smoke.viewFactor
+  ) {
+    return false
+  }
+  return hasLineOfSight(origin, aimPoint)
 }
 
 function targetScore(actor, target, distance) {
@@ -1052,7 +1059,7 @@ function findResupply(actor) {
   return null
 }
 
-function findCover(actor, targetPosition, smokeClouds) {
+function findCover(actor, targetPosition) {
   const botConfig = config.bot
   const targetOrigin = {
     x: targetPosition.x,
@@ -1089,7 +1096,6 @@ function findCover(actor, targetPosition, smokeClouds) {
     const protectedPosition = !hasLineOfSight(
       targetOrigin,
       { x: standX, y: standY + botConfig.targetHeight, z: standZ },
-      smokeClouds,
     )
     if (!protectedPosition) continue
 
@@ -1348,7 +1354,7 @@ function tryThrowGrenade(actor, dt, smokeClouds, needsCover) {
       distance > config.grenade.aiSmokeMaxDistance
     ) return
     const predicted = predictedTargetPoint(target, config.grenade.aiPredictionTime)
-    if (isSmokeBlocked(
+    if (isSmokeObscured(
       { x: actor.x, y: actor.y + 1.3, z: actor.z },
       predicted,
       smokeClouds,
@@ -1459,7 +1465,7 @@ function updateBotMovement(actor, dt, smokeClouds) {
     (!actor.cover || actor.stateTimer > botConfig.coverRefreshInterval)
   ) {
     actor.coverSearchTimer = COVER_SEARCH_INTERVAL
-    const cover = findCover(actor, targetPosition, smokeClouds)
+    const cover = findCover(actor, targetPosition)
     if (cover) {
       coverReservations.set(cover.coverId, actor.id)
       actor.cover = cover
@@ -1709,7 +1715,6 @@ function findZombieAttackTarget(actor) {
         y: targetGroundY(candidate) + 1.05,
         z: candidate.z,
       },
-      [],
     )
     if (!visible) return
     nearest = candidate
