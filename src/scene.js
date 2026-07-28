@@ -292,7 +292,7 @@ export function createSceneRuntime(config) {
   rawRenderer.setPixelRatio(1)
   rawRenderer.autoClear = false
   rawRenderer.shadowMap.enabled = true
-  rawRenderer.shadowMap.type = THREE.PCFShadowMap
+  rawRenderer.shadowMap.type = THREE.BasicShadowMap
   rawRenderer.shadowMap.autoUpdate = false
   rawRenderer.toneMapping = THREE.NoToneMapping
   rawRenderer.outputColorSpace = THREE.SRGBColorSpace
@@ -334,7 +334,7 @@ export function createSceneRuntime(config) {
   const renderer = {
     canvas: sceneCanvas,
     render(world, viewCamera) {
-      rawRenderer.shadowMap.needsUpdate = renderFrame++ % 3 === 0
+      rawRenderer.shadowMap.needsUpdate = renderFrame++ % 4 === 0
       rawRenderer.setRenderTarget(renderTarget)
       rawRenderer.clear(true, true, false)
       rawRenderer.render(world, viewCamera)

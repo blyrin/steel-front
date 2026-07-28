@@ -1,5 +1,9 @@
 import * as THREE from 'three'
 import { createBoxHitbox } from '../combat/collision.js'
+import { createMergedMesh } from './merge-parts.js'
+
+const ANIM_MID_DIST_SQ = 28 * 28
+const ANIM_FAR_DIST_SQ = 48 * 48
 
 const BOT_GEOMETRY = {
   leg: new THREE.BoxGeometry(0.17, 0.72, 0.2),
@@ -315,90 +319,94 @@ export class Bot {
     const isAlly = this.team === 'allies'
     const uniform = isAlly ? this.matLib.allyUniform : this.matLib.axisUniform
     const helmetMat = isAlly ? this.matLib.helmetAlly : this.matLib.helmetAxis
-    const bootMat = this.matLib.metalDark
 
     this.body = new THREE.Group()
     this.body.position.y = 0.78
     this.group.add(this.body)
 
-    const legGeometry = BOT_GEOMETRY.leg
     const createLeg = side => {
       const leg = new THREE.Group()
       leg.position.set(side * 0.12, 0.78, 0)
-      const legMesh = new THREE.Mesh(legGeometry, uniform)
-      legMesh.position.y = -0.36
-      legMesh.castShadow = true
-      legMesh.receiveShadow = true
-      leg.add(legMesh)
-      const boot = new THREE.Mesh(BOT_GEOMETRY.boot, bootMat)
-      boot.position.set(0, -0.7, -0.08)
-      boot.castShadow = false
-      leg.add(boot)
+      leg.add(
+        createMergedMesh(
+          [
+            { geometry: BOT_GEOMETRY.leg, position: [0, -0.36, 0] },
+            { geometry: BOT_GEOMETRY.boot, position: [0, -0.7, -0.08] },
+          ],
+          uniform,
+        ),
+      )
       this.group.add(leg)
       return leg
     }
     this.leftLeg = createLeg(-1)
     this.rightLeg = createLeg(1)
 
-    const torso = new THREE.Mesh(BOT_GEOMETRY.torso, uniform)
-    torso.position.set(0, 0.38, 0)
-    torso.castShadow = true
-    torso.receiveShadow = true
-    this.body.add(torso)
-    const belt = new THREE.Mesh(BOT_GEOMETRY.belt, bootMat)
-    belt.position.set(0, 0.08, 0)
-    this.body.add(belt)
-
-    const pack = new THREE.Mesh(BOT_GEOMETRY.pack, uniform)
-    pack.position.set(0, 0.44, 0.2)
-    pack.castShadow = true
-    this.body.add(pack)
-    this.pack = pack
+    const bodyMesh = createMergedMesh(
+      [
+        { geometry: BOT_GEOMETRY.torso, position: [0, 0.38, 0] },
+        { geometry: BOT_GEOMETRY.belt, position: [0, 0.08, 0] },
+        { geometry: BOT_GEOMETRY.pack, position: [0, 0.44, 0.2] },
+      ],
+      uniform,
+    )
+    bodyMesh.castShadow = true
+    bodyMesh.receiveShadow = true
+    this.body.add(bodyMesh)
 
     this.head = new THREE.Group()
     this.head.position.set(0, 0.74, 0)
     this.body.add(this.head)
-    const neck = new THREE.Mesh(BOT_GEOMETRY.neck, this.matLib.skin)
-    neck.position.set(0, 0, 0)
-    this.head.add(neck)
-    const head = new THREE.Mesh(BOT_GEOMETRY.head, this.matLib.skin)
-    head.position.set(0, 0.14, 0)
-    head.castShadow = true
-    this.head.add(head)
+    this.head.add(
+      createMergedMesh(
+        [
+          { geometry: BOT_GEOMETRY.neck },
+          { geometry: BOT_GEOMETRY.head, position: [0, 0.14, 0] },
+        ],
+        this.matLib.skin,
+      ),
+    )
     if (isAlly) {
-      const dome = new THREE.Mesh(
-        BOT_GEOMETRY.allyHelmet,
-        helmetMat
+      this.head.add(
+        createMergedMesh(
+          [
+            {
+              geometry: BOT_GEOMETRY.allyHelmet,
+              position: [0, 0.26, 0],
+              scale: [1.08, 0.88, 1.12],
+            },
+            { geometry: BOT_GEOMETRY.allyBrim, position: [0, 0.2, 0] },
+          ],
+          helmetMat,
+        ),
       )
-      dome.position.set(0, 0.26, 0)
-      dome.scale.set(1.08, 0.88, 1.12)
-      dome.castShadow = true
-      this.head.add(dome)
-      const brim = new THREE.Mesh(BOT_GEOMETRY.allyBrim, helmetMat)
-      brim.position.set(0, 0.2, 0)
-      this.head.add(brim)
     } else {
-      const dome = new THREE.Mesh(
-        BOT_GEOMETRY.axisHelmet,
-        helmetMat
+      this.head.add(
+        createMergedMesh(
+          [
+            {
+              geometry: BOT_GEOMETRY.axisHelmet,
+              position: [0, 0.28, 0],
+              scale: [1.08, 0.92, 1.18],
+            },
+          ],
+          helmetMat,
+        ),
       )
-      dome.position.set(0, 0.28, 0)
-      dome.scale.set(1.08, 0.92, 1.18)
-      dome.castShadow = true
-      this.head.add(dome)
     }
 
-    const armGeometry = BOT_GEOMETRY.arm
     const createArm = side => {
       const arm = new THREE.Group()
       arm.position.set(side * 0.31, 0.62, 0)
-      const sleeve = new THREE.Mesh(armGeometry, uniform)
-      sleeve.position.set(0, -0.29, 0)
-      sleeve.castShadow = false
-      arm.add(sleeve)
-      const hand = new THREE.Mesh(BOT_GEOMETRY.hand, this.matLib.skin)
-      hand.position.set(0, -0.59, 0.02)
-      arm.add(hand)
+      arm.add(
+        createMergedMesh(
+          [
+            { geometry: BOT_GEOMETRY.arm, position: [0, -0.29, 0] },
+            { geometry: BOT_GEOMETRY.hand, position: [0, -0.59, 0.02] },
+          ],
+          uniform,
+        ),
+      )
       this.body.add(arm)
       return arm
     }
@@ -406,22 +414,11 @@ export class Bot {
     this.rightArm = createArm(1)
 
     this.rifle = new THREE.Group()
-    this.rifleBarrel = new THREE.Mesh(
-      BOT_GEOMETRY.rifleBarrel,
-      this.matLib.metal
-    )
-    this.rifleBarrel.rotation.x = Math.PI / 2
-    this.rifle.add(this.rifleBarrel)
-    this.rifleBody = new THREE.Mesh(BOT_GEOMETRY.rifleBody, this.matLib.metalDark)
-    this.rifle.add(this.rifleBody)
-    this.rifleStock = new THREE.Mesh(BOT_GEOMETRY.rifleStock, this.matLib.wood)
-    this.rifle.add(this.rifleStock)
+    this.rifleCore = null
     this.rifleMag = new THREE.Mesh(BOT_GEOMETRY.rifleMag, this.matLib.metalDark)
     this.rifle.add(this.rifleMag)
     this.rifleClip = new THREE.Mesh(BOT_GEOMETRY.rifleMag, this.matLib.brass)
     this.rifle.add(this.rifleClip)
-    this.rifleGrip = new THREE.Mesh(BOT_GEOMETRY.rifleGrip, this.matLib.wood)
-    this.rifle.add(this.rifleGrip)
     this.rifleMuzzle = new THREE.Object3D()
     this.rifle.add(this.rifleMuzzle)
     this.rifle.position.set(0.22, 0.46, -0.38)
@@ -436,62 +433,81 @@ export class Bot {
     this.reloadPose = 0
     this.fireKick = 0
     this.deathTime = -1
+    this._animSkip = 0
+    this._animCulled = false
     this._rifleTarget = new THREE.Vector3()
   }
 
   configureRifleModel() {
     const { modelId, modelScale } = this.weaponData
     this.rifle.scale.set(...modelScale)
-    this.rifleBarrel.position.set(0, 0.02, -0.35)
-    this.rifleBarrel.scale.set(1, 1, 1)
-    this.rifleBody.position.set(0, 0.01, -0.05)
-    this.rifleBody.scale.set(1, 1, 1)
-    this.rifleStock.position.set(0, -0.01, 0.22)
-    this.rifleStock.scale.set(1, 1, 1)
-    this.rifleMag.position.set(0, -0.1, -0.04)
-    this.rifleMag.scale.set(1, 1, 1)
-    this.rifleMag.visible = false
+
+    let barrel = { z: -0.35, scale: [1, 1, 1] }
+    let body = { z: -0.05, scale: [1, 1, 1] }
+    let stock = { z: 0.22, scale: [1, 1, 1] }
+    let grip = null
+    let mag = { visible: false, y: -0.1, z: -0.04, scale: [1, 1, 1] }
+    let muzzleZ = -0.72
+
+    if (modelId === 'shotgun') {
+      barrel = { z: -0.35, scale: [1.45, 0.85, 1.45] }
+      body = { z: -0.06, scale: [1.2, 1.1, 0.9] }
+      stock = { z: 0.2, scale: [1, 1, 0.82] }
+      muzzleZ = -0.68
+    } else if (modelId === 'thompson') {
+      barrel = { z: -0.2, scale: [1.3, 0.48, 1.3] }
+      body = { z: -0.02, scale: [1.5, 1.45, 0.8] }
+      stock = { z: 0.16, scale: [1, 1, 0.62] }
+      grip = { position: [0, -0.11, -0.2], rotation: [-0.2, 0, 0] }
+      mag = { visible: true, y: -0.13, z: -0.035, scale: [1, 1.3, 0.78] }
+      muzzleZ = -0.42
+    } else if (modelId === 'bar') {
+      barrel = { z: -0.44, scale: [1.35, 1.25, 1.35] }
+      body = { z: -0.08, scale: [1.3, 1.25, 1.35] }
+      stock = { z: 0.25, scale: [1, 1, 1.15] }
+      mag = { visible: true, y: -0.12, z: -0.08, scale: [1.15, 1.15, 1.05] }
+      muzzleZ = -0.9
+    }
+
+    if (this.rifleCore) {
+      this.rifle.remove(this.rifleCore)
+      this.rifleCore.geometry.dispose()
+    }
+    const coreParts = [
+      {
+        geometry: BOT_GEOMETRY.rifleBarrel,
+        position: [0, 0.02, barrel.z],
+        rotation: [Math.PI / 2, 0, 0],
+        scale: barrel.scale,
+      },
+      {
+        geometry: BOT_GEOMETRY.rifleBody,
+        position: [0, 0.01, body.z],
+        scale: body.scale,
+      },
+      {
+        geometry: BOT_GEOMETRY.rifleStock,
+        position: [0, -0.01, stock.z],
+        scale: stock.scale,
+      },
+    ]
+    if (grip) {
+      coreParts.push({
+        geometry: BOT_GEOMETRY.rifleGrip,
+        position: grip.position,
+        rotation: grip.rotation,
+      })
+    }
+    this.rifleCore = createMergedMesh(coreParts, this.matLib.metalDark)
+    this.rifle.add(this.rifleCore)
+
+    this.rifleMag.position.set(0, mag.y, mag.z)
+    this.rifleMag.scale.set(...mag.scale)
+    this.rifleMag.visible = mag.visible
     this.rifleClip.position.set(0, 0.065, -0.06)
     this.rifleClip.scale.set(0.8, 0.16, 0.72)
     this.rifleClip.visible = false
-    this.rifleGrip.position.set(0, -0.11, -0.2)
-    this.rifleGrip.rotation.x = -0.2
-    this.rifleGrip.visible = false
-    this.rifleMuzzle.position.set(0, 0.02, -0.72)
-
-    if (modelId === 'shotgun') {
-      this.rifleBarrel.position.z = -0.35
-      this.rifleBarrel.scale.set(1.45, 0.85, 1.45)
-      this.rifleBody.position.z = -0.06
-      this.rifleBody.scale.set(1.2, 1.1, 0.9)
-      this.rifleStock.position.z = 0.2
-      this.rifleStock.scale.z = 0.82
-      this.rifleMag.visible = false
-      this.rifleMuzzle.position.z = -0.68
-    } else if (modelId === 'thompson') {
-      this.rifleBarrel.position.z = -0.2
-      this.rifleBarrel.scale.set(1.3, 0.48, 1.3)
-      this.rifleBody.position.z = -0.02
-      this.rifleBody.scale.set(1.5, 1.45, 0.8)
-      this.rifleStock.position.z = 0.16
-      this.rifleStock.scale.z = 0.62
-      this.rifleMag.position.set(0, -0.13, -0.035)
-      this.rifleMag.scale.set(1, 1.3, 0.78)
-      this.rifleMag.visible = true
-      this.rifleGrip.visible = true
-      this.rifleMuzzle.position.z = -0.42
-    } else if (modelId === 'bar') {
-      this.rifleBarrel.position.z = -0.44
-      this.rifleBarrel.scale.set(1.35, 1.25, 1.35)
-      this.rifleBody.position.z = -0.08
-      this.rifleBody.scale.set(1.3, 1.25, 1.35)
-      this.rifleStock.position.z = 0.25
-      this.rifleStock.scale.z = 1.15
-      this.rifleMag.position.set(0, -0.12, -0.08)
-      this.rifleMag.scale.set(1.15, 1.15, 1.05)
-      this.rifleMag.visible = true
-      this.rifleMuzzle.position.z = -0.9
-    }
+    this.rifleMuzzle.position.set(0, 0.02, muzzleZ)
   }
 
   getHitboxes() {
@@ -599,6 +615,33 @@ export class Bot {
       return
     }
 
+    const cam = this.camera.position
+    const distSq =
+      (this.position.x - cam.x) ** 2 +
+      (this.position.y - cam.y) ** 2 +
+      (this.position.z - cam.z) ** 2
+    if (distSq > ANIM_FAR_DIST_SQ) {
+      if (!this._animCulled) {
+        this._animCulled = true
+        this.leftLeg.rotation.set(0, 0, 0)
+        this.rightLeg.rotation.set(0, 0, 0)
+        this.leftArm.rotation.set(0, 0, 0)
+        this.rightArm.rotation.set(0, 0, 0)
+        this.body.position.y = 0.78
+        this.body.rotation.x = 0
+        this.body.rotation.z = 0
+        this.rifle.position.set(0.22, 0.46, -0.38)
+        this.rifle.rotation.set(0, 0, 0)
+      }
+      return
+    }
+    this._animCulled = false
+    if (distSq > ANIM_MID_DIST_SQ) {
+      this._animSkip ^= 1
+      if (this._animSkip) return
+      dt *= 2
+    }
+
     const speed = Math.hypot(this.velocity.x, this.velocity.z)
     const moveBlendTarget = THREE.MathUtils.clamp(speed / 1.5, 0, 1)
     this.moveBlend +=
@@ -632,8 +675,7 @@ export class Bot {
     const combatState =
       this.stateName === 'engage' ||
       this.stateName === 'seek_cover' ||
-      this.stateName === 'hold_cover' ||
-      this.stateName === 'flank'
+      this.stateName === 'hold_cover'
     let aimTarget = 0
     if (combatState) aimTarget = this.targetVisible ? 1 : 0.58
     this.aimPose += (aimTarget - this.aimPose) * (1 - Math.exp(-7 * dt))
@@ -669,7 +711,6 @@ export class Bot {
     this.body.position.y += (bodyYTarget - this.body.position.y) * bodyEase
     this.body.rotation.x += (bodyPitchTarget - this.body.rotation.x) * bodyEase
     this.body.rotation.z += (bodyRollTarget - this.body.rotation.z) * bodyEase
-    this.pack.rotation.x += (-bodyPitchTarget * 0.35 - this.pack.rotation.x) * bodyEase
 
     const carryLeftX = -stride * 0.22 * (1 - holdPose)
     const carryRightX = 1.05 + stride * 0.08 * (1 - holdPose)

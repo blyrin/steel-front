@@ -1,5 +1,9 @@
 import * as THREE from 'three'
 import { createBoxHitbox } from '../combat/collision.js'
+import { createMergedMesh } from './merge-parts.js'
+
+const ANIM_MID_DIST_SQ = 28 * 28
+const ANIM_FAR_DIST_SQ = 48 * 48
 
 const GEOMETRY = {
   leg: new THREE.BoxGeometry(0.2, 0.7, 0.22),
@@ -20,8 +24,6 @@ const GEOMETRY = {
 }
 
 const EYE_MATERIAL = new THREE.MeshBasicMaterial({ color: 0xffd447 })
-const MOUTH_MATERIAL = new THREE.MeshBasicMaterial({ color: 0x241719 })
-const WOUND_MATERIAL = new THREE.MeshBasicMaterial({ color: 0x7b2630 })
 
 export class Zombie {
   constructor(spawnPosition, services) {
@@ -106,82 +108,89 @@ export class Zombie {
     const createLeg = side => {
       const leg = new THREE.Group()
       leg.position.set(side * 0.13, 0.78, 0)
-      const legMesh = new THREE.Mesh(GEOMETRY.leg, this.matLib.axisUniform)
-      legMesh.position.y = -0.36
-      legMesh.castShadow = true
-      leg.add(legMesh)
-      const boot = new THREE.Mesh(GEOMETRY.boot, this.matLib.metalDark)
-      boot.position.set(0, -0.7, -0.08)
-      leg.add(boot)
+      leg.add(
+        createMergedMesh(
+          [
+            { geometry: GEOMETRY.leg, position: [0, -0.36, 0] },
+            { geometry: GEOMETRY.boot, position: [0, -0.7, -0.08] },
+          ],
+          this.matLib.axisUniform,
+        ),
+      )
       this.group.add(leg)
       return leg
     }
     this.leftLeg = createLeg(-1)
     this.rightLeg = createLeg(1)
 
-    const torso = new THREE.Mesh(GEOMETRY.torso, this.matLib.rust)
-    torso.position.y = 0.38
-    torso.castShadow = true
-    torso.receiveShadow = true
-    this.body.add(torso)
-    const shoulder = new THREE.Mesh(GEOMETRY.shoulder, this.matLib.rust)
-    shoulder.position.y = 0.68
-    this.body.add(shoulder)
-    const collar = new THREE.Mesh(GEOMETRY.collar, this.matLib.axisUniform)
-    collar.position.set(0, 0.75, -0.015)
-    this.body.add(collar)
-    const belt = new THREE.Mesh(GEOMETRY.belt, this.matLib.metalDark)
-    belt.position.set(0, 0.17, -0.015)
-    this.body.add(belt)
-    const buckle = new THREE.Mesh(GEOMETRY.buckle, this.matLib.brass)
-    buckle.position.set(0, 0.17, -0.19)
-    this.body.add(buckle)
-    for (const wound of [
-      { x: -0.16, y: 0.44, sx: 0.8 },
-      { x: 0.12, y: 0.28, sx: -0.6 },
-    ]) {
-      const patch = new THREE.Mesh(GEOMETRY.wound, WOUND_MATERIAL)
-      patch.position.set(wound.x, wound.y, -0.165)
-      patch.rotation.z = wound.sx
-      this.body.add(patch)
-    }
+    const bodyMesh = createMergedMesh(
+      [
+        { geometry: GEOMETRY.torso, position: [0, 0.38, 0] },
+        { geometry: GEOMETRY.shoulder, position: [0, 0.68, 0] },
+        { geometry: GEOMETRY.collar, position: [0, 0.75, -0.015] },
+        { geometry: GEOMETRY.belt, position: [0, 0.17, -0.015] },
+        { geometry: GEOMETRY.buckle, position: [0, 0.17, -0.19] },
+        {
+          geometry: GEOMETRY.wound,
+          position: [-0.16, 0.44, -0.165],
+          rotation: [0, 0, 0.8],
+        },
+        {
+          geometry: GEOMETRY.wound,
+          position: [0.12, 0.28, -0.165],
+          rotation: [0, 0, -0.6],
+        },
+      ],
+      this.matLib.rust,
+    )
+    bodyMesh.castShadow = true
+    bodyMesh.receiveShadow = true
+    this.body.add(bodyMesh)
 
     this.head = new THREE.Group()
     this.head.position.set(0, 0.75, 0)
     this.body.add(this.head)
-    const neck = new THREE.Mesh(GEOMETRY.neck, this.matLib.skin)
-    this.head.add(neck)
-    const head = new THREE.Mesh(GEOMETRY.head, this.matLib.skin)
-    head.position.y = 0.15
-    head.castShadow = true
-    this.head.add(head)
-    const jaw = new THREE.Mesh(GEOMETRY.jaw, this.matLib.skin)
-    jaw.position.set(0, 0.02, -0.105)
-    this.head.add(jaw)
-    const mouth = new THREE.Mesh(GEOMETRY.mouth, MOUTH_MATERIAL)
-    mouth.position.set(0, 0.075, -0.215)
-    this.head.add(mouth)
-    for (const side of [-1, 1]) {
-      const eye = new THREE.Mesh(GEOMETRY.eye, EYE_MATERIAL)
-      eye.position.set(side * 0.08, 0.19, -0.13)
-      this.head.add(eye)
-    }
+    this.head.add(
+      createMergedMesh(
+        [
+          { geometry: GEOMETRY.neck },
+          { geometry: GEOMETRY.head, position: [0, 0.15, 0] },
+          { geometry: GEOMETRY.jaw, position: [0, 0.02, -0.105] },
+          { geometry: GEOMETRY.mouth, position: [0, 0.075, -0.215] },
+        ],
+        this.matLib.skin,
+      ),
+    )
+    this.head.add(
+      createMergedMesh(
+        [
+          { geometry: GEOMETRY.eye, position: [-0.08, 0.19, -0.13] },
+          { geometry: GEOMETRY.eye, position: [0.08, 0.19, -0.13] },
+        ],
+        EYE_MATERIAL,
+      ),
+    )
 
     const createArm = side => {
       const arm = new THREE.Group()
       arm.position.set(side * 0.32, 0.65, 0)
-      const sleeve = new THREE.Mesh(GEOMETRY.arm, this.matLib.rust)
-      sleeve.position.y = -0.3
-      arm.add(sleeve)
-      const hand = new THREE.Mesh(GEOMETRY.hand, this.matLib.skin)
-      hand.position.set(0, -0.62, -0.02)
-      arm.add(hand)
+      arm.add(
+        createMergedMesh(
+          [
+            { geometry: GEOMETRY.arm, position: [0, -0.3, 0] },
+            { geometry: GEOMETRY.hand, position: [0, -0.62, -0.02] },
+          ],
+          this.matLib.rust,
+        ),
+      )
       this.body.add(arm)
       return arm
     }
     this.leftArm = createArm(-1)
     this.rightArm = createArm(1)
 
+    this._animSkip = 0
+    this._animCulled = false
     this.matLib.addOutline(this.group, 1.04)
   }
 
@@ -276,6 +285,31 @@ export class Zombie {
       this.group.position.y = this.position.y + 0.04 + (1 - progress) * 0.05
       return
     }
+
+    const cam = this.camera.position
+    const distSq =
+      (this.position.x - cam.x) ** 2 +
+      (this.position.y - cam.y) ** 2 +
+      (this.position.z - cam.z) ** 2
+    if (distSq > ANIM_FAR_DIST_SQ) {
+      if (!this._animCulled) {
+        this._animCulled = true
+        this.leftLeg.rotation.set(0, 0, 0)
+        this.rightLeg.rotation.set(0, 0, 0)
+        this.leftArm.rotation.set(1.08, 0, -0.12)
+        this.rightArm.rotation.set(1.08, 0, 0.12)
+        this.body.position.y = 0.78
+        this.body.rotation.z = 0
+      }
+      return
+    }
+    this._animCulled = false
+    if (distSq > ANIM_MID_DIST_SQ) {
+      this._animSkip ^= 1
+      if (this._animSkip) return
+      dt *= 2
+    }
+
     const speed = Math.hypot(this.velocity.x, this.velocity.z)
     const blend = THREE.MathUtils.clamp(speed / this.enemyConfig.speed, 0, 1)
     this.moveBlend += (blend - this.moveBlend) * (1 - Math.exp(-9 * dt))

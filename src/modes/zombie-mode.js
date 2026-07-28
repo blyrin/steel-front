@@ -120,6 +120,7 @@ export function createZombieMode({ state, deploy, config, spawnPoints, services 
   function spawnOneZombie(position) {
     const zombie = new Zombie(position, {
       scene: services.scene,
+      camera: services.camera,
       matLib: services.matLib,
       audio: services.audio,
       gameState: state,

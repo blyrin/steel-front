@@ -65,8 +65,6 @@ export const CFG = {
         radius: 0.46,
         attackRange: 2.0,
         targetSearchRadius: 42,
-        // 丧尸响应附近同类追击目标的范围。
-        reinforcementRadius: 24,
         // 丧尸主动重新选择目标的间隔。
         perceptionInterval: 0.16,
         // 丧尸丢失人类后的追踪记忆时间。
@@ -349,12 +347,9 @@ export const CFG = {
     aiSmokeChancePerSecond: 0.75,
     aiPredictionTime: 0.42,
     aiFriendlyFireRadius: 7,
-    // AI 投掷时使用的目标行为和数量门槛。
-    aiTargetAdvanceSpeed: 1.2,
-    aiTargetFireMemory: 0.9,
+    // AI 投掷时使用的威胁与距离门槛。
     aiThreatPressureThreshold: 0.65,
     aiFragSingleTargetMaxDistance: 18,
-    aiSmokeMinThreatCount: 2,
     aiSmokeMinDistance: 5,
     aiSmokeMaxDistance: 30,
     aiSmokeHealthThreshold: 62,
@@ -549,14 +544,6 @@ export const CFG = {
     engageFireSkillDelay: 1.35,
     // Bot 到达掩体的判定距离。
     seekCoverArrivalDistance: 1.5,
-    // Bot 到达掩体后转入侧翼状态的概率。
-    seekCoverFlankChance: 0.3,
-    // Bot 侧翼状态的持续时间。
-    flankDuration: 6,
-    // Bot 侧翼移动速度。
-    flankSpeed: 4.6,
-    // Bot 侧翼移动时沿目标方向的偏移。
-    flankForwardBias: -0.3,
     // Bot 射击后短时间内的压制累积衰减速度。
     suppressionRecovery: 0.8,
     // Bot 进入脱困处理前允许被卡住的时间。

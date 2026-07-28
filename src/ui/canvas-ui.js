@@ -63,6 +63,9 @@ export function createCanvasUi({ state, deploy, config, camera }) {
   let getMode = () => null
   let dirty = true
   let lastDraw = 0
+  let fps = 0
+  let fpsFrames = 0
+  let fpsLast = 0
   let activeSlider = null
   let activeTouch = new Map()
   let handlers = {}
@@ -293,6 +296,7 @@ export function createCanvasUi({ state, deploy, config, camera }) {
     drawEquipmentState(player, equipmentX + 8, height - 28, 204)
 
     drawMinimap(width - 128, 8, 120)
+    text(`${fps} FPS`, 2, 8, 8, '#ffffff')
     if (!player.aiming && !deathText) drawCrosshair(player)
     if (now < hitMarkerUntil) drawHitMarker()
     if (now < damageUntil) drawDamageBorder()
@@ -668,6 +672,15 @@ export function createCanvasUi({ state, deploy, config, camera }) {
   }
 
   function render(now = performance.now()) {
+    if (!fpsLast) fpsLast = now
+    fpsFrames++
+    const fpsElapsed = now - fpsLast
+    if (fpsElapsed >= 500) {
+      fps = Math.round((fpsFrames * 1000) / fpsElapsed)
+      fpsFrames = 0
+      fpsLast = now
+      dirty = true
+    }
     if (!dirty && now - lastDraw < 33) return
     lastDraw = now
     dirty = false
