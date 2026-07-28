@@ -199,16 +199,18 @@ export function createGame() {
   }
 
   const simulationStep = 1 / CFG.match.tickRate
+  const minFrameTime = 1 / CFG.match.maxFps
   let simulationAccumulator = 0
   let interfaceAccumulator = 0
+  let renderAccumulator = 0
   let lastTime = performance.now()
   function animate() {
     requestAnimationFrame(animate)
     const now = performance.now()
-    const frameDelta = Math.min(CFG.match.maxFrameDelta, (now - lastTime) / 1000)
+    const elapsed = Math.min(CFG.match.maxFrameDelta, (now - lastTime) / 1000)
     lastTime = now
     if (!state.loading && state.running && !state.paused) {
-      simulationAccumulator += frameDelta
+      simulationAccumulator += elapsed
       while (
         simulationAccumulator >= simulationStep &&
         state.running &&
@@ -223,7 +225,7 @@ export function createGame() {
         finishModeIfNeeded()
         simulationAccumulator -= simulationStep
       }
-      interfaceAccumulator += frameDelta
+      interfaceAccumulator += elapsed
       if (interfaceAccumulator >= 0.1) {
         interfaceAccumulator %= 0.1
         hud.updateScores()
@@ -231,6 +233,9 @@ export function createGame() {
       }
       hud.setScoreboardVisible(input.isKeyDown('Tab'))
     }
+    renderAccumulator += elapsed
+    if (renderAccumulator < minFrameTime) return
+    renderAccumulator %= minFrameTime
     audio.updateListener()
     runtime.renderer.render(runtime.scene, runtime.camera)
     ui.render(now)

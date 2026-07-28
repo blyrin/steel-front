@@ -3,6 +3,8 @@ export const CFG = {
   match: {
     // 固定模拟频率。
     tickRate: 60,
+    // 渲染帧率上限。
+    maxFps: 120,
     // 单次渲染帧最多累积的模拟时间，避免切后台后瞬移。
     maxFrameDelta: 0.05,
     // AI Worker 背压时单次 tick 最多合并的模拟时间。
