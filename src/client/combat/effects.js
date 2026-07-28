@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { getObstacleNormal, sweepSphereObstacle } from '#simulation'
+import { stepThrownProjectile } from '#simulation'
 
 export function createEffectsSystem({ scene, state, particles, audio, config }) {
   const effectsConfig = config.effects
@@ -402,64 +402,20 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     }
   }
 
-  function stickParticle(particle, normal) {
-    if (normal) particle.mesh.position.addScaledVector(normal, 0.02)
-    particle.vel.set(0, 0, 0)
-    particle.stuck = true
-    return true
-  }
-
   function simulateThrownBody(dt, particle, radius, options = {}) {
-    const bounce = options.bounce ?? config.grenade.bounce
-    const stick = !!options.stick
-    particle.vel.y -= config.grenade.gravity * dt
-    const previous = particle.mesh.position.clone()
-    const next = previous.clone().addScaledVector(particle.vel, dt)
-    let obstacleHit = null
-    let obstacleHitTime = Infinity
-    for (const obstacle of state.obstacles) {
-      if (obstacle.type === 'ground' || obstacle.type === 'crater') continue
-      const hitTime = sweepSphereObstacle(previous, next, radius, obstacle)
-      if (hitTime == null || hitTime >= obstacleHitTime) continue
-      obstacleHit = obstacle
-      obstacleHitTime = hitTime
+    const body = {
+      x: particle.mesh.position.x, y: particle.mesh.position.y, z: particle.mesh.position.z,
+      vx: particle.vel.x, vy: particle.vel.y, vz: particle.vel.z,
     }
-
-    const previousGround = state.groundHeightAt(previous.x, previous.z) + radius
-    const nextGround = state.groundHeightAt(next.x, next.z) + radius
-    let groundHitTime = Infinity
-    if (previous.y <= previousGround + 0.002 && particle.vel.y <= 0) groundHitTime = 0
-    else if (next.y <= nextGround) {
-      const distance = previous.y - previousGround - (next.y - nextGround)
-      groundHitTime =
-        distance > 1e-6
-          ? THREE.MathUtils.clamp((previous.y - previousGround) / distance, 0, 1)
-          : 0
-    }
-
-    if (groundHitTime < Infinity && groundHitTime <= obstacleHitTime) {
-      particle.mesh.position.copy(previous).lerp(next, groundHitTime)
-      particle.mesh.position.y =
-        state.groundHeightAt(particle.mesh.position.x, particle.mesh.position.z) + radius
-      if (stick) return stickParticle(particle)
-      particle.vel.y = Math.abs(particle.vel.y) * bounce
-      particle.vel.x *= 0.68
-      particle.vel.z *= 0.68
-      return false
-    }
-
-    if (obstacleHit) {
-      particle.mesh.position.copy(previous).lerp(next, obstacleHitTime)
-      const normalData = getObstacleNormal(particle.mesh.position, obstacleHit, particle.vel)
-      const normal = new THREE.Vector3(normalData.x, normalData.y, normalData.z)
-      if (stick) return stickParticle(particle, normal)
-      if (particle.vel.dot(normal) < 0) particle.vel.reflect(normal).multiplyScalar(0.62)
-      particle.mesh.position.addScaledVector(normal, 0.004)
-      return false
-    }
-
-    particle.mesh.position.copy(next)
-    return false
+    const result = stepThrownProjectile(body, dt, {
+      gravity: config.grenade.gravity, bounce: options.bounce ?? config.grenade.bounce,
+      sticky: !!options.stick, radius, obstacles: state.obstacles,
+      groundHeightAt: (x, z) => state.groundHeightAt(x, z),
+    })
+    particle.mesh.position.set(body.x, body.y, body.z)
+    particle.vel.set(body.vx, body.vy, body.vz)
+    if (result.stuck) particle.stuck = true
+    return result.stuck
   }
 
   function spawnThrownGrenade(origin, velocity, grenade, onDetonate) {
@@ -565,38 +521,25 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
       maxLife: 4,
       vel: velocity.clone(),
       update: (dt, time, particle) => {
-        const previous = particle.mesh.position.clone()
-        const next = previous.clone().addScaledVector(particle.vel, dt)
-        let hitTime = Infinity
-        for (const obstacle of state.obstacles) {
-          if (obstacle.type === 'ground' || obstacle.type === 'crater') continue
-          const t = sweepSphereObstacle(previous, next, radius, obstacle)
-          if (t != null && t < hitTime) hitTime = t
-        }
+        const obstacles = [...state.obstacles]
         for (const actor of state.actors) {
           if (!actor.alive) continue
-          for (const hitbox of actor.getHitboxes()) {
-            const t = sweepSphereObstacle(previous, next, radius, hitbox)
-            if (t != null && t < hitTime) hitTime = t
-          }
+          obstacles.push(...actor.getHitboxes())
         }
-        const previousGround = state.groundHeightAt(previous.x, previous.z) + radius
-        const nextGround = state.groundHeightAt(next.x, next.z) + radius
-        if (next.y <= nextGround) {
-          const distance = previous.y - previousGround - (next.y - nextGround)
-          const groundHitTime =
-            distance > 1e-6
-              ? THREE.MathUtils.clamp((previous.y - previousGround) / distance, 0, 1)
-              : 0
-          if (groundHitTime < hitTime) hitTime = groundHitTime
+        const body = {
+          x: particle.mesh.position.x, y: particle.mesh.position.y, z: particle.mesh.position.z,
+          vx: particle.vel.x, vy: particle.vel.y, vz: particle.vel.z,
         }
-        if (hitTime < Infinity) {
-          particle.mesh.position.copy(previous).lerp(next, hitTime)
+        const result = stepThrownProjectile(body, dt, {
+          gravity: 0, bounce: 0, sticky: false, radius, obstacles,
+          groundHeightAt: (x, z) => state.groundHeightAt(x, z),
+        })
+        particle.mesh.position.set(body.x, body.y, body.z)
+        if (result.hit) {
           hitPosition = particle.mesh.position.clone()
           particle.life = 0
           return
         }
-        particle.mesh.position.copy(next)
         orientRocket(particle.mesh, particle.vel.clone().normalize())
       },
       onComplete: () => onHit((hitPosition || mesh.position).clone()),

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { createBoxHitbox } from '#simulation'
+import { calculateWeaponSpread, createActorHitboxes, updateActorHitboxes } from '#simulation'
 import { createMergedMesh } from './merge-parts.js'
 
 const ANIM_MID_DIST_SQ = 28 * 28
@@ -51,21 +51,7 @@ export class Bot {
     this.kills = 0
     this.deaths = 0
     this.radius = botConfig.radius
-    this.hitboxes = [
-      createBoxHitbox(
-        botConfig.hitboxBodyWidth,
-        botConfig.hitboxBodyDepth,
-        0,
-        botConfig.hitboxBodyMaxY
-      ),
-      createBoxHitbox(
-        botConfig.hitboxHeadWidth,
-        botConfig.hitboxHeadDepth,
-        botConfig.hitboxHeadMinY,
-        botConfig.hitboxHeadMaxY,
-        true
-      ),
-    ]
+    this.hitboxes = createActorHitboxes('soldier', this.config)
     this.name = this.generateName()
     this._simulationTurnDifference = 0
     this.buildModel()
@@ -467,25 +453,7 @@ export class Bot {
   }
 
   getHitboxes() {
-    const rotation = this.yaw
-    const cos = Math.cos(rotation)
-    const sin = Math.sin(rotation)
-    const botConfig = this.config.bot
-    for (const hitbox of this.hitboxes) {
-      hitbox.x = this.position.x
-      hitbox.z = this.position.z
-      hitbox.rot = rotation
-      hitbox.cos = cos
-      hitbox.sin = sin
-      if (hitbox.headshot) {
-        hitbox.minY = this.position.y + botConfig.hitboxHeadMinY
-        hitbox.maxY = this.position.y + botConfig.hitboxHeadMaxY
-      } else {
-        hitbox.minY = this.position.y
-        hitbox.maxY = this.position.y + botConfig.hitboxBodyMaxY
-      }
-    }
-    return this.hitboxes
+    return updateActorHitboxes(this, this.hitboxes, 'soldier', this.config)
   }
 
   applySimulationState(data, resolveTarget) {
@@ -813,16 +781,16 @@ export class Bot {
   }
 
   getSpread() {
-    const weaponConfig = this.config.weapon
-    let spread = this.weaponData.baseSpread
-    const speed = Math.hypot(this.velocity.x, this.velocity.z)
-    if (this.targetVisible) spread *= weaponConfig.aimingSpreadMultiplier
-    if (speed > weaponConfig.playerMovingThreshold) {
-      spread *= weaponConfig.movingSpreadMultiplier
-    }
-    if (this.reloading) spread *= weaponConfig.reloadingSpreadMultiplier
-    spread += this.spreadBloom
-    return Math.min(spread, weaponConfig.maxSpread)
+    return calculateWeaponSpread({
+      baseSpread: this.weaponData.baseSpread,
+      speed: Math.hypot(this.velocity.x, this.velocity.z),
+      aiming: this.targetVisible,
+      crouching: false,
+      sprinting: false,
+      grounded: true,
+      reloading: this.reloading,
+      bloom: this.spreadBloom,
+    }, this.config.weapon)
   }
 
   fire() {

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { createBoxHitbox } from '#simulation'
+import { createActorHitboxes, updateActorHitboxes } from '#simulation'
 import { createMergedMesh } from './merge-parts.js'
 
 const ANIM_MID_DIST_SQ = 28 * 28
@@ -48,10 +48,7 @@ export class Zombie {
     this.animationTime = Math.random() * Math.PI * 2
     this.legPhase = Math.random() * Math.PI * 2
     this.moveBlend = 0
-    this.hitboxes = [
-      createBoxHitbox(0.8, 0.58, 0, 1.5),
-      createBoxHitbox(0.5, 0.5, 1.48, 1.95, true),
-    ]
+    this.hitboxes = createActorHitboxes('zombie', this.config)
     this.buildModel()
     this.scene.add(this.group)
   }
@@ -155,18 +152,7 @@ export class Zombie {
   }
 
   getHitboxes() {
-    const cos = Math.cos(this.yaw)
-    const sin = Math.sin(this.yaw)
-    for (const hitbox of this.hitboxes) {
-      hitbox.x = this.position.x
-      hitbox.z = this.position.z
-      hitbox.minY = this.position.y + (hitbox.headshot ? 1.48 : 0)
-      hitbox.maxY = this.position.y + (hitbox.headshot ? 1.95 : 1.5)
-      hitbox.rot = this.yaw
-      hitbox.cos = cos
-      hitbox.sin = sin
-    }
-    return this.hitboxes
+    return updateActorHitboxes(this, this.hitboxes, 'zombie', this.config)
   }
 
   applySimulationState(data) {

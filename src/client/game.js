@@ -1,344 +1,624 @@
-import { AUDIO_FILES, CFG, LOAD_STEPS } from './config.js'
+import * as THREE from 'three'
 import {
-  createGameState,
-  createDeployState,
-  saveSettings,
-  saveRecords,
-  recordMatchResult,
-} from './state.js'
-import { createSceneRuntime } from './scene.js'
+  applyMapDefinition,
+  calculateWeaponSpread,
+  createActionEngine,
+  createPlayerWeaponActions,
+  INPUT_ACTION,
+  stepPlayerMotion,
+} from '#simulation'
+import { CLIENT_INPUT_RATE } from '../../shared/multiplayer/protocol.js'
+import { AUDIO_FILES, CFG } from './config.js'
 import { AudioSystem } from './audio/audio-system.js'
+import { createEffectsSystem } from './combat/effects.js'
+import { applyRemoteActorSnapshot, createRemoteActorView, interpolateRemoteActor } from './entities/remote-actor-view.js'
+import { WeaponView } from './entities/weapon-view.js'
+import { createInputSystem } from './input.js'
+import { createSceneRuntime } from './scene.js'
+import { recordMatchResult, saveRecords, saveSettings } from './state.js'
+import { createDeploymentSystem } from './ui/deployment.js'
+import { getKillNotice } from './ui/hud.js'
 import { createMap } from './world/maps/registry.js'
 import { createObjectiveSystem } from './world/objectives.js'
-import { createEffectsSystem } from './combat/effects.js'
-import {
-  MODE_DEFINITIONS,
-  applyMapDefinition,
-  createCombatSystem,
-  createMapDefinition,
-  createMode,
-  createScoringSystem,
-  createSimulation,
-} from '#simulation'
-import { createCanvasUi } from './ui/canvas-ui.js'
-import { createHud } from './ui/hud.js'
-import { createMapSystem } from './ui/maps.js'
-import { createDeploymentSystem } from './ui/deployment.js'
-import { createInputSystem } from './input.js'
-import { createModeMenu } from './ui/mode-menu.js'
-import { Player } from './entities/player.js'
-import { Bot } from './entities/bot.js'
-import { Zombie } from './entities/zombie.js'
-import * as THREE from 'three'
 
-export function createGame() {
-  const state = createGameState()
-  const deploy = createDeployState()
-  const particles = []
+export function createGame({ session, ui, state, deploy, getPlayerId }) {
   let runtime = null
-  let mode = null
-  let objectives = null
+  let audio = null
   let effects = null
+  let input = null
   let deployment = null
-  let combat = null
-  let scoring = null
-  const actorViews = new Map()
+  let latest = null
+  let player = null
+  let mode = null
+  let active = false
+  let latency = 0
+  let inputSeq = 0
+  let lastInputAt = 0
+  let lastFrameAt = performance.now()
+  let activeSlot = 1
+  let crouching = false
+  let predictionInput = {
+    moveX: 0, moveZ: 0, yaw: 0, pitch: 0, jump: false,
+    crouch: false, sprint: false, aim: false,
+  }
+  let bobPhase = 0
+  let lookDelta = { x: 0, y: 0 }
+  let deathCameraStart = null
+  let deathCameraTime = 0
+  const particles = []
+  const views = new Map()
+  const charges = new Map()
+  const actions = createActionEngine()
+  const actionDefs = createPlayerWeaponActions(CFG.weapon)
+  const vector = value => new THREE.Vector3(value.x, value.y, value.z)
 
-  function createEntity(definition, actorMode) {
-    if (definition.kind === 'player') {
-      return new Player({
-        camera: runtime.camera,
-        sun: runtime.sun,
-        matLib: runtime.matLib,
-        audio,
-        state,
-        deploy,
-        input,
-        config: CFG,
-        hud,
-        effects,
-        combat,
-        scoring,
-        deployment,
-        mode: actorMode,
-      })
+  function modeHud() {
+    if (!latest) return null
+    if (latest.modeId === 'zombie') {
+      const data = latest.modeState
+      const phase = data.phase === 'assault' ? `${data.waveDefeated} / ${data.waveTotal}` : data.phase === 'intermission'
+        ? `下一波 ${Math.max(0, Math.ceil((data.nextWaveAt - latest.timeMs) / 1000))} 秒` : '等待部署'
+      return { kind: 'zombie', alliesLabel: '守军击杀', axisLabel: '堡垒', alliesScore: latest.score.allies,
+        axisScore: Math.ceil(data.fortressHealth), targetText: `第 ${data.wave} 波 · ${phase}` }
     }
-
-    const position = new THREE.Vector3(
-      definition.position.x,
-      definition.position.y,
-      definition.position.z
-    )
-    let actor
-    if (definition.kind === 'soldier') {
-      actor = new Bot(definition.team, position, {
-        scene: runtime.scene,
-        camera: runtime.camera,
-        matLib: runtime.matLib,
-        audio,
-        gameState: state,
-        config: CFG,
-        effects,
-        ai: simulation,
-        combat,
-        scoring,
-        mode: actorMode,
-        getRandomSpawn: team => actorMode.getRandomSpawn(team),
-      })
-    } else {
-      actor = new Zombie(position, {
-        scene: runtime.scene,
-        camera: runtime.camera,
-        matLib: runtime.matLib,
-        audio,
-        gameState: state,
-        effects,
-        ai: simulation,
-        scoring,
-        config: CFG,
-        enemyConfig: CFG.modes.zombie.enemy,
-      })
-    }
-    actorViews.set(actor.id, actor)
-    return actor
+    return { kind: 'classic', alliesLabel: '盟军', axisLabel: '轴心', alliesScore: latest.score.allies,
+      axisScore: latest.score.axis, targetText: `达到 ${CFG.modes.classic.killTarget} 杀` }
   }
 
-  const ui = createCanvasUi({ state, deploy, config: CFG })
-  const audio = new AudioSystem(AUDIO_FILES, CFG)
-  const simulation = createSimulation({
-    state,
-    config: CFG,
-    getMode: () => mode,
-    getCombat: () => combat,
-    getEffects: () => effects,
-    createEntity,
-  })
-  ui.bindRuntime(() => mode)
-  const hud = createHud({ ui, state, audio, config: CFG, getMode: () => mode })
-  const maps = createMapSystem({ ui })
-  let input
-
-  const modeMenu = createModeMenu({
-    ui,
-    definitions: MODE_DEFINITIONS,
-    onSelect: modeId => hud.renderRecords(modeId),
-  })
-
-  async function enterMobilePresentation() {
-    // 陀螺仪权限必须尽量在用户手势内先申请
-    await input.enableGyro()
-    const root = document.documentElement
-    try {
-      if (!document.fullscreenElement && root.requestFullscreen) {
-        await root.requestFullscreen({ navigationUI: 'hide' })
-      }
-    } catch {
-      // 部分浏览器/系统会拒绝全屏，保留竖屏提示降级
+  function createPlayerView(actor) {
+    const value = {
+      id: actor.id, name: actor.name, team: actor.team, actorKind: 'player', position: new THREE.Vector3(),
+      velocity: new THREE.Vector3(), health: 0, maxHealth: CFG.player.maxHealth, alive: false,
+      networkPosition: new THREE.Vector3(), networkVelocity: new THREE.Vector3(),
+      networkUpdatedAt: 0, networkReady: false, currentHeight: CFG.player.standHeight, grounded: true,
+      kills: 0, deaths: 0, headshots: 0, meleeKills: 0, grenadeKills: 0,
+      yaw: 0, pitch: 0, aiming: false, sprinting: false, crouching: false, activeSlot: 1,
+      currentSpread: 0, getSpread: () => 0,
+      viewRecoilPitch: 0, viewRecoilYaw: 0, viewRecoilRoll: 0, shakeTrauma: 0, shakeTime: 0,
+      lookSwayPitch: 0, lookSwayYaw: 0, lookSwayRoll: 0, moveLean: 0,
+      spreadBloom: 0, reloading: false,
+      currentFov: runtime.camera.fov,
+      addShake(amount) { value.shakeTrauma = Math.min(CFG.player.shakeTraumaMax, value.shakeTrauma + amount) },
+      applyLoadout(loadout) {
+        value.weaponId = loadout.weapon
+        value.secondaryId = loadout.secondary
+        value.weaponData = CFG.weapons[loadout.weapon]
+        value.secondaryData = CFG.secondaries[loadout.secondary]
+        value.grenadeData = CFG.grenades[loadout.grenade]
+        value.itemData = CFG.items[loadout.item]
+        if (value.activeSlot === 2) value.weapon.configureSecondary(value.secondaryData, { rpgLoaded: value.rpgLoaded })
+        else value.weapon.configure(value.weaponData)
+      },
     }
-    try {
-      if (screen.orientation?.lock) await screen.orientation.lock('landscape')
-    } catch {
-      // iOS 等环境可能不支持 orientation.lock
-    }
+    value.weapon = new WeaponView({ config: CFG.weapon, camera: runtime.camera, matLib: runtime.matLib, audio })
+    value.applyLoadout(state.settings.loadout)
+    return value
   }
 
-  function togglePause() {
-    if (deploy.phase !== 'none') return
-    state.paused = !state.paused
-    ui.setPaused(state.paused)
-    audio.setAmbienceMuted(state.paused)
-    if (state.paused) {
-      input.reset()
-      hud.setScoreboardVisible(false)
-      if (document.pointerLockElement) document.exitPointerLock()
-    } else if (!input.isTouchMode()) {
-      runtime.renderer.canvas.requestPointerLock()
-    }
-    input.updateTouchUi()
-  }
-
-  input = createInputSystem({ state, deploy, onPause: togglePause, ui, config: CFG })
-
-  function ensureWorld() {
+  function ensureWorld(mapDefinition, ownActor) {
     if (runtime) return
     runtime = createSceneRuntime(CFG)
     runtime.camera.position.y = CFG.match.initialCameraHeight
     ui.setCamera(runtime.camera)
+    audio = new AudioSystem(AUDIO_FILES, CFG)
     audio.setCamera(runtime.camera)
-    objectives = createObjectiveSystem({
-      scene: runtime.scene,
-      matLib: runtime.matLib,
-    })
-    effects = createEffectsSystem({ scene: runtime.scene, state, particles, audio, config: CFG })
-    deployment = createDeploymentSystem({
-      ui,
-      state,
-      deploy,
-      getSpawnPoints: team => mode.getSpawnPoints(team),
-      camera: runtime.camera,
-      renderer: runtime.renderer,
-      audio,
-      input,
-      hud,
-      config: CFG,
-      saveSettings,
-    })
-    combat = createCombatSystem({
-      state,
-      effects,
-      audio,
-      hud,
-      config: CFG,
-      getMode: () => mode,
-    })
-    scoring = createScoringSystem({
-      state,
-      hud,
-      onElimination: event => mode.onElimination(event),
-      saveRecords,
-    })
-  }
-
-  function createModeMap(modeId) {
-    const definition = createMapDefinition(modeId, CFG)
-    applyMapDefinition(state, definition)
-    return createMap(modeId, {
-      scene: runtime.scene,
-      matLib: runtime.matLib,
-      state,
-      particles,
-      definition,
-      objectives,
-    })
-  }
-
-  function initGame() {
-    ensureWorld()
-    const modeId = modeMenu.getSelectedModeId()
-    const map = createModeMap(modeId)
-    mode = createMode(modeId, {
-      state,
-      deploy,
-      config: CFG,
-      spawnPoints: map.definition.spawnPoints,
-    })
-    map.buildMap()
-    mode.setupMatch()
-    simulation.start()
-    state.match.startTime = state.simulationTimeMs
-    state.running = true
-    ui.showGame()
-    state.player.weapon.setVisible(false)
-    state.player.alive = false
-    hud.updateScores()
-    deployment.showScreen()
-  }
-
-  function finishMode(outcome) {
-    recordMatchResult(
-      state.records,
-      state.match.modeId,
-      outcome.playerWon,
-      (state.simulationTimeMs - state.match.startTime) / 1000
-    )
-    hud.showEndScreen(outcome)
-  }
-
-  function handleSimulationEvent(event) {
-    switch (event.type) {
-      case 'set-ambience':
-        audio.setAmbience(event.id)
-        return
-      case 'center-message':
-        hud.showCenterMessage(event.text, event.duration, event.big)
-        return
-      case 'zombie-wave':
-        audio.zombieWave()
-        return
-      case 'zombie-groan':
-        audio.zombieGroan(event.position)
-        return
-      case 'fortress-hit':
-        audio.fortressHit(event.position)
-        return
-      case 'remove-actor': {
-        const actor = actorViews.get(event.actorId)
-        actor.destroy()
-        actorViews.delete(event.actorId)
-      }
-    }
-  }
-
-  async function runBootLoad() {
-    const setProgress = (progress, text) => {
-      ui.setBoot(progress, text)
-    }
-    const boot = CFG.boot
-    setProgress(boot.initialProgress, LOAD_STEPS[0])
-    setProgress(boot.worldProgress, LOAD_STEPS[1])
-    await new Promise(resolve => setTimeout(resolve, boot.initialDelay))
-    setProgress(boot.coverProgress, LOAD_STEPS[2])
-    await new Promise(resolve => setTimeout(resolve, boot.coverDelay))
-    setProgress(boot.botProgress, LOAD_STEPS[3])
-    await new Promise(resolve => setTimeout(resolve, boot.coverDelay))
-    setProgress(boot.aiProgress, LOAD_STEPS[4])
-    setProgress(boot.audioProgress, LOAD_STEPS[5])
-    await audio.preload(fraction => {
-      setProgress(
-        boot.audioProgress + fraction * boot.audioProgressRange,
-        `加载战斗音效... ${Math.round(fraction * 100)}%`
-      )
-    })
-    setProgress(100, LOAD_STEPS[6])
-    await new Promise(resolve => setTimeout(resolve, boot.readyDelay))
-    setTimeout(() => ui.showMenu(), boot.menuFadeDelay)
-  }
-
-  const simulationStep = 1 / CFG.match.tickRate
-  const minFrameTime = 1 / CFG.match.maxFps
-  let simulationAccumulator = 0
-  let interfaceAccumulator = 0
-  let renderAccumulator = 0
-  let lastTime = performance.now()
-  function animate() {
-    requestAnimationFrame(animate)
-    const now = performance.now()
-    const elapsed = Math.min(CFG.match.maxFrameDelta, (now - lastTime) / 1000)
-    lastTime = now
-    if (!state.loading && state.running && !state.paused) {
-      simulationAccumulator += elapsed
-      while (simulationAccumulator >= simulationStep && state.running && !state.paused) {
-        const step = simulation.update(simulationStep)
-        for (const event of step.events) handleSimulationEvent(event)
-        if (step.outcome) finishMode(step.outcome)
-        simulationAccumulator -= simulationStep
-      }
-      interfaceAccumulator += elapsed
-      if (interfaceAccumulator >= 0.1) {
-        interfaceAccumulator %= 0.1
-        hud.updateScores()
-        if (deploy.phase === 'none') maps.updateMinimap()
-      }
-      hud.setScoreboardVisible(input.isKeyDown('Tab'))
-    }
-    renderAccumulator += elapsed
-    if (renderAccumulator < minFrameTime) return
-    renderAccumulator %= minFrameTime
-    if (runtime) {
-      audio.updateListener()
-      runtime.renderer.render(runtime.scene, runtime.camera)
-    }
-    ui.render(now)
-  }
-
-  function applyMasterVolume() {
     audio.setMasterVolume(state.settings.masterVolume)
+    audio.init().then(() => audio.setAmbience(mapDefinition.id === 'zombie' ? 'zombie_ambience' : 'ambience'))
+    const objectives = createObjectiveSystem({ scene: runtime.scene, matLib: runtime.matLib })
+    effects = createEffectsSystem({ scene: runtime.scene, state, particles, audio, config: CFG })
+    applyMapDefinition(state, mapDefinition)
+    createMap(mapDefinition.id, {
+      scene: runtime.scene, matLib: runtime.matLib, state, particles,
+      definition: mapDefinition, objectives,
+    }).buildMap()
+    player = createPlayerView(ownActor)
+    state.player = player
+    mode = { getHudState: modeHud, getSpawnPoints: team => state.mapDefinition.spawnPoints[team] }
+    ui.bindRuntime(() => mode)
+    input = createInputSystem({ state, deploy, onPause: togglePause, ui, config: CFG })
+    deployment = createDeploymentSystem({
+      ui, state, deploy, getSpawnPoints: team => mode.getSpawnPoints(team), camera: runtime.camera,
+      renderer: runtime.renderer, audio, input, hud: { updateAmmo: () => ui.invalidate(), updateHealth: () => ui.invalidate() },
+      config: CFG, saveSettings,
+      onDeploy(spawnId, loadout) { session.send({ type: 'deploy', spawnId, loadout: { ...loadout } }) },
+    })
+    runtime.renderer.canvas.addEventListener('click', () => {
+      if (active && !state.paused && deploy.phase === 'none' && !input.isTouchMode()) runtime.renderer.canvas.requestPointerLock()
+    })
+    window.addEventListener('resize', () => { runtime.resize(); ui.resize(); input.syncUi() })
+  }
+
+  function boot(mapDefinition, snapshot) {
+    const ownActor = snapshot.actors.find(actor => actor.id === getPlayerId())
+    ensureWorld(mapDefinition, ownActor)
+    active = true
+    state.running = true
+    state.loading = false
+    state.match.modeId = snapshot.modeId
+    state.match.score = snapshot.score
+    ui.showGame()
+    applySnapshot(snapshot)
+    if (!ownActor.alive) deployment.showScreen()
+    input.syncUi()
+  }
+
+  function syncPlayer(actor) {
+    const wasAlive = player.alive
+    const firstSnapshot = !player.networkReady
+    const previousSlot = player.activeSlot
+    const previousWeapon = player.weaponId
+    const previousSecondary = player.secondaryId
+    player.networkPosition.set(actor.x, actor.y, actor.z)
+    player.networkVelocity.set(actor.vx, actor.vy, actor.vz)
+    player.networkUpdatedAt = performance.now()
+    if (!player.networkReady || (!wasAlive && actor.alive) ||
+      player.position.distanceToSquared(player.networkPosition) > 64) player.position.copy(player.networkPosition)
+    player.networkReady = true
+    if (firstSnapshot) player.velocity.copy(player.networkVelocity)
+    player.health = actor.health
+    player.maxHealth = actor.maxHealth
+    player.alive = actor.alive
+    player.kills = actor.kills
+    player.deaths = actor.deaths
+    player.headshots = actor.headshots
+    player.meleeKills = actor.meleeKills
+    player.grenadeKills = actor.grenadeKills
+    player.killStreak = actor.killStreak
+    player.bestKillStreak = actor.bestKillStreak
+    if (firstSnapshot) {
+      player.yaw = actor.yaw
+      player.pitch = actor.pitch
+    }
+    player.ammo = actor.ammo
+    player.reserveAmmo = actor.reserveAmmo
+    player.secondaryCount = actor.secondaryCount
+    player.grenadeCount = actor.grenadeCount
+    player.itemUses = actor.itemUses
+    player.rpgLoaded = actor.rpgLoaded
+    player.spreadBloom = actor.spreadBloom
+    player.reloading = actor.reloading
+    player.aiming = actor.aiming
+    player.sprinting = actor.sprinting
+    player.crouching = actor.crouching
+    player.currentHeight = actor.currentHeight
+    player.grounded = actor.grounded
+    player.activeSlot = actor.activeSlot
+    player.weaponData = CFG.weapons[actor.weapon]
+    player.secondaryData = CFG.secondaries[actor.secondary]
+    player.weaponId = actor.weapon
+    player.secondaryId = actor.secondary
+    player.grenadeData = CFG.grenades[actor.grenade]
+    player.itemData = CFG.items[actor.item]
+    if (previousSlot !== actor.activeSlot || previousWeapon !== actor.weapon || previousSecondary !== actor.secondary) {
+      if (actor.activeSlot === 2) player.weapon.configureSecondary(player.secondaryData, { rpgLoaded: actor.rpgLoaded })
+      else player.weapon.configure(player.weaponData)
+    }
+    if (actor.activeSlot === 2 && player.secondaryData.kind === 'rpg')
+      player.weapon.setRpgRocketVisible(actor.rpgLoaded)
+  }
+
+  function applySnapshot(snapshot) {
+    latest = snapshot
+    state.simulationTimeMs = snapshot.timeMs
+    state.match.score = snapshot.score
+    const ownId = getPlayerId()
+    const ids = new Set(snapshot.actors.filter(actor => actor.id !== ownId).map(actor => actor.id))
+    for (const [id, view] of views) {
+      if (ids.has(id)) continue
+      view.destroy()
+      views.delete(id)
+    }
+    for (const actor of snapshot.actors) {
+      if (actor.id === ownId) { syncPlayer(actor); continue }
+      let view = views.get(actor.id)
+      if (!view) {
+        view = createRemoteActorView(actor, { scene: runtime.scene, camera: runtime.camera, matLib: runtime.matLib, config: CFG })
+        views.set(actor.id, view)
+      }
+      applyRemoteActorSnapshot(view, actor)
+    }
+    state.actors = [...views.values()]
+    ui.invalidate()
+    input.updateTouchUi()
+  }
+
+  function actorName(id) { return latest?.actors.find(actor => actor.id === id)?.name || '未知' }
+
+  function handleEvents(events) {
+    for (const event of events) {
+      if (event.type === 'shot') {
+        const direction = vector(event.direction)
+        const end = vector(event.end)
+        let origin
+        if (event.actorId === player.id) {
+          origin = player.weapon.muzzlePos.getWorldPosition(new THREE.Vector3())
+        } else {
+          const view = views.get(event.actorId)
+          origin = view?.rifleMuzzle?.getWorldPosition(new THREE.Vector3()) ?? vector(event.origin)
+        }
+        effects.addTracer(origin.addScaledVector(direction, CFG.combat.tracerOriginOffset), end)
+        if (event.hit === 'actor') effects.spawnBlood(end)
+        else if (event.hit === 'obstacle') {
+          effects.spawnSpark(end, direction)
+          audio.ricochet(end)
+        }
+        if (event.actorId !== player.id && event.hit !== 'actor' && player.alive) {
+          const shotOrigin = vector(event.origin)
+          const distance = shotOrigin.distanceTo(player.position)
+          if (distance < CFG.combat.bulletWhizDistance) {
+            const alignment = player.position.clone().sub(shotOrigin).normalize().dot(direction)
+            if (alignment > CFG.combat.bulletWhizAlignmentMin && alignment < CFG.combat.bulletWhizAlignmentMax)
+              audio.bulletWhiz(shotOrigin.addScaledVector(direction, distance))
+          }
+        }
+      } else if (event.type === 'weapon_fired') {
+        const direction = vector(event.direction)
+        if (event.actorId === player.id) {
+          actions.play(actionDefs.bolt, { locksOpen: event.empty, pumpPlayed: false, kickPlayed: false, emptyEjectPlayed: false })
+          const muzzle = player.weapon.muzzlePos.getWorldPosition(new THREE.Vector3())
+          effects.spawnMuzzleFlash(muzzle, direction, true)
+          effects.spawnSmokePuff(muzzle)
+          const eject = player.weapon.group.localToWorld(new THREE.Vector3(0.06, 0.02, -0.08))
+          const right = new THREE.Vector3(1, 0, 0).applyQuaternion(runtime.camera.quaternion)
+          const up = new THREE.Vector3(0, 1, 0).applyQuaternion(runtime.camera.quaternion)
+          effects.spawnShell(eject, right, up)
+          if (event.weaponId === 'shotgun') audio.shotgunShot()
+          else if (event.weaponId === 'thompson') audio.thompsonShot()
+          else if (event.weaponId === 'bar') audio.barShot()
+          else audio.garandShot()
+          player.viewRecoilPitch += event.recoil.pitch
+          player.viewRecoilYaw += event.recoil.yaw
+          player.viewRecoilRoll += event.recoil.roll
+          player.weapon.applyRecoil(player.aiming, event.recoil)
+          player.addShake((player.aiming ? CFG.weapon.aimingFireShake : CFG.weapon.hipFireShake) * player.weaponData.recoilMultiplier)
+        } else {
+          const actor = latest?.actors.find(item => item.id === event.actorId)
+          const view = views.get(event.actorId)
+          const muzzle = view?.rifleMuzzle?.getWorldPosition(new THREE.Vector3()) ?? (actor ? vector(actor) : null)
+          if (muzzle) {
+            effects.spawnMuzzleFlash(muzzle, direction)
+            audio.botShot(muzzle, event.weaponId)
+          }
+        }
+      } else if (event.type === 'reload_started' && event.actorId === player.id) {
+        actions.play(actionDefs.reload, { empty: event.empty, reloadDuration: player.weaponData.reloadDuration, emptyReloadDuration: player.weaponData.emptyReloadDuration })
+      } else if (event.type === 'rpg_reload_started' && event.actorId === player.id) {
+        actions.play(actionDefs.rpgReload)
+      } else if (event.type === 'weapon_switch' && event.actorId === player.id) {
+        actions.play(actionDefs.weaponSwitch, { toSlot: event.slot })
+      } else if (event.type === 'melee' && event.actorId === player.id) {
+        actions.play(actionDefs.melee)
+        audio.stabSwing()
+        player.viewRecoilPitch -= 0.008
+        player.viewRecoilYaw *= 0.5
+        player.viewRecoilRoll *= 0.4
+        player.addShake(0.1)
+      } else if (event.type === 'melee_hit' && event.actorId === player.id) {
+        const point = vector(event.point)
+        if (event.hit === 'actor') {
+          audio.stabHitFlesh(point)
+          effects.spawnBlood(point)
+          player.viewRecoilPitch += 0.032
+          player.weapon.kickZ += 0.036
+          player.weapon.kickPitch += 0.022
+        } else if (event.hit === 'obstacle') {
+          audio.stabHitMetal(point)
+          player.viewRecoilPitch += 0.02
+          player.weapon.kickZ += 0.045
+          player.weapon.kickPitch += 0.018
+        }
+      } else if (event.type === 'projectile_added') {
+        const projectile = event.projectile
+        const origin = vector(projectile)
+        const velocity = new THREE.Vector3(projectile.vx, projectile.vy, projectile.vz)
+        if (projectile.rocket) {
+          const own = projectile.ownerId === player.id
+          const muzzle = own ? player.weapon.muzzlePos.getWorldPosition(new THREE.Vector3()) : null
+          effects.spawnRocket(origin, velocity, CFG.secondaries[projectile.kind], muzzle, () => {})
+          if (own) {
+            audio.rpgShot()
+            player.viewRecoilPitch += 0.05
+            player.viewRecoilYaw += (Math.random() - 0.5) * 0.02
+            player.viewRecoilRoll += (Math.random() - 0.5) * 0.03
+            player.weapon.kickZ += 0.08
+            player.weapon.kickY += 0.02
+            player.weapon.setRpgRocketVisible(false)
+            player.addShake(0.28)
+            effects.spawnMuzzleFlash(muzzle, velocity.clone().normalize(), true)
+            effects.spawnSmokePuff(muzzle)
+          }
+        } else if (projectile.sticky) {
+          const charge = effects.spawnThrownC4(origin, velocity, CFG.secondaries[projectile.kind])
+          charges.set(projectile.id, charge)
+          if (projectile.ownerId === player.id) {
+            player.viewRecoilPitch += 0.01
+            player.weapon.kickZ += 0.03
+          }
+        } else {
+          effects.spawnThrownGrenade(origin, velocity, CFG.grenades[projectile.kind], () => {})
+        }
+      } else if (event.type === 'projectile_removed') {
+        const charge = charges.get(event.projectileId)
+        if (charge) { effects.removeCharge(charge); charges.delete(event.projectileId) }
+      } else if (event.type === 'explosion') {
+        const charge = charges.get(event.projectileId)
+        if (charge) { effects.removeCharge(charge); charges.delete(event.projectileId) }
+        const position = new THREE.Vector3(event.x, event.y, event.z)
+        effects.spawnExplosion(position, event.radius)
+        audio.grenadeExplosion(position)
+      } else if (event.type === 'smoke') {
+        effects.spawnSmokeCloud(new THREE.Vector3(event.x, event.y, event.z), event.radius, event.duration)
+        audio.smokeGrenade(new THREE.Vector3(event.x, event.y, event.z))
+      } else if (event.type === 'damage') {
+        if (event.attackerId === player.id) ui.showHitMarker()
+        if (event.targetId === player.id) {
+          audio.hitFlesh()
+          ui.showDamage()
+          player.viewRecoilPitch += CFG.player.damageRecoilPitchBase + event.amount * CFG.player.damageRecoilPitchScale
+          player.viewRecoilYaw += (Math.random() - 0.5) * CFG.player.damageRecoilYaw
+          player.viewRecoilRoll += (Math.random() - 0.5) * CFG.player.damageRecoilRoll
+          const source = latest?.actors.find(actor => actor.id === event.attackerId)
+          if (source) ui.showDirectionDamage({ x: source.x, y: source.y, z: source.z })
+        }
+      } else if (event.type === 'elimination') {
+        const mine = event.attackerId === player.id
+        if (session.kind === 'local') {
+          const records = state.records[latest.modeId]
+          if (event.victimId === player.id) records.deaths++
+          if (mine) {
+            records.kills++
+            if (event.headshot) records.headshots++
+            if (event.attackType === 'melee') records.meleeKills++
+            if (event.attackType === 'grenade') records.grenadeKills++
+            records.bestKillStreak = Math.max(records.bestKillStreak, event.killStreak)
+          }
+          saveRecords(state.records)
+        }
+        if (event.attackerId)
+          ui.addFeed({ type: mine ? 'player' : 'enemy', killer: actorName(event.attackerId), victim: actorName(event.victimId) }, CFG.hud.killFeedItemDuration)
+        if (mine) {
+          const notice = getKillNotice(event.killStreak, event.headshot)
+          ui.showKillNotice(notice.title, `已击杀 ${actorName(event.victimId)}`, CFG.hud.killNotifyCleanupDelay)
+          audio.killConfirm(notice.kind)
+        }
+        if (event.victimId === player.id)
+          ui.showDeath(event.attackerId ? `被 ${actorName(event.attackerId)} 击杀` : '重新部署')
+        if (event.victimId === player.id) {
+          crouching = false
+          activeSlot = 1
+          actions.cancelAll()
+          input.reset()
+          player.weapon.resetActions()
+          player.weapon.setVisible(false)
+          player.addShake(CFG.player.deathShake)
+          audio.pain(CFG.player.deathPainChance)
+          audio.bodyFall()
+          deploy.phase = 'death'
+          deploy.deathTimer = CFG.player.deathTimer
+          deathCameraStart = runtime.camera.position.clone()
+          deathCameraTime = 0
+        } else {
+          const victim = latest?.actors.find(actor => actor.id === event.victimId)
+          if (victim) {
+            const position = vector(victim)
+            if (victim.kind === 'zombie') audio.zombieDeath(position)
+            else audio.bodyFall(position)
+          }
+        }
+      } else if (event.type === 'deploy_available' && event.actorId === player.id) {
+        ui.hideDeath(); deployment.showScreen()
+      } else if (event.type === 'item_used' && event.actorId === player.id) {
+        ui.showAction(CFG.items[event.itemId].kind === 'heal' ? '已使用急救包' : '已补充携行弹药', CFG.hud.actionMessageDuration)
+      } else if (event.type === 'resupplied' && event.actorId === player.id) {
+        ui.showAction('补给完成', CFG.hud.actionMessageDuration)
+      } else if (event.type === 'supply_result' && event.actorId === player.id) {
+        const text = event.result === 'cooldown' ? `补给冷却中 ${event.remaining} 秒` : event.result === 'health_full' ? '生命值已满' : '补给已满'
+        ui.showAction(text, CFG.hud.actionMessageDuration)
+      } else if (event.type === 'zombie_attack') {
+        const source = latest?.actors.find(actor => actor.id === event.actorId)
+        const target = latest?.actors.find(actor => actor.id === event.targetId)
+        if (source && target) audio.zombieAttack(vector(source), vector(target))
+      } else if (event.type === 'zombie_groan') audio.zombieGroan(vector(event.position))
+      else if (event.type === 'center_message') ui.showCenter(event.text, event.duration ?? CFG.hud.centerMessageDuration, event.big)
+      else if (event.type === 'wave_started') audio.zombieWave()
+      else if (event.type === 'fortress_hit') audio.fortressHit(state.objectives?.fortress?.position)
+    }
+  }
+
+  function togglePause() {
+    if (!active || deploy.phase !== 'none') return
+    state.paused = !state.paused
+    ui.setPaused(state.paused)
+    audio.setAmbienceMuted(state.paused)
+    if (state.paused) { input.reset(); ui.setScoreboardVisible(false); if (document.pointerLockElement) document.exitPointerLock() }
+    else if (!input.isTouchMode()) runtime.renderer.canvas.requestPointerLock()
+    input.updateTouchUi()
+  }
+
+  function sendInput(now) {
+    if (!latest || state.paused || deploy.phase !== 'none' || now - lastInputAt < 1000 / CLIENT_INPUT_RATE) return
+    lastInputAt = now
+    const look = input.consumeLookDelta()
+    lookDelta.x += look.x
+    lookDelta.y += look.y
+    const sensitivity = CFG.player.lookSensitivity * state.settings.mouseSensitivity * (player.aiming ? CFG.player.aimingLookMultiplier : 1)
+    player.yaw -= look.x * sensitivity
+    player.pitch = THREE.MathUtils.clamp(player.pitch - look.y * sensitivity, -1.45, 1.45)
+    if (input.consumePressed('KeyC')) crouching = !crouching
+    if (input.consumePressed('Digit1')) activeSlot = 1
+    if (input.consumePressed('Digit2')) activeSlot = 2
+    if (input.consumePressed('WeaponNext') || input.consumePressed('WeaponPrev')) activeSlot = activeSlot === 1 ? 2 : 1
+    const move = input.getMoveAxis()
+    const sprint = input.isKeyDown('ShiftLeft') || input.isKeyDown('ShiftRight') || input.isStickSprint()
+    const aimHeld = input.isMouseDown('right')
+    if (sprint && crouching && !aimHeld) crouching = false
+    const canAim = activeSlot === 1 || player.secondaryData.kind === 'rpg'
+    player.aiming = canAim && aimHeld && !actions.isBusy('hands')
+    player.sprinting = sprint && !crouching && !player.aiming
+    const jump = input.consumePressed('Space')
+    const actionsMask =
+      (jump ? INPUT_ACTION.JUMP : 0) |
+      (input.consumePressed('KeyR') ? INPUT_ACTION.RELOAD : 0) |
+      (input.consumePressed('KeyF') ? INPUT_ACTION.MELEE : 0) |
+      (input.consumePressed('KeyG') ? INPUT_ACTION.GRENADE : 0) |
+      (input.consumePressed('KeyH') ? INPUT_ACTION.ITEM : 0) |
+      (input.consumePressed('KeyE') ? INPUT_ACTION.SUPPLY : 0) |
+      (input.consumePressed('MouseRight') ? INPUT_ACTION.SECONDARY : 0)
+    predictionInput = {
+      moveX: move.x, moveZ: move.z, yaw: player.yaw, pitch: player.pitch,
+      jump, crouch: crouching, sprint: player.sprinting, aim: player.aiming,
+      fire: input.isMouseDown('left'), slot: activeSlot, actions: actionsMask,
+    }
+    session.sendInput({ seq: ++inputSeq, ...predictionInput })
+  }
+
+  function frame(now) {
+    const dt = Math.min(CFG.match.maxFrameDelta, (now - lastFrameAt) / 1000)
+    lastFrameAt = now
+    if (!runtime || !active) return
+    sendInput(now)
+    ui.setScoreboardVisible(!state.paused && input.isKeyDown('Tab'))
+    if (player.alive && player.networkReady) {
+      const motion = stepPlayerMotion({
+        x: player.position.x, y: player.position.y, z: player.position.z,
+        vx: player.velocity.x, vy: player.velocity.y, vz: player.velocity.z,
+        currentHeight: player.currentHeight, grounded: player.grounded, radius: CFG.player.radius,
+      }, predictionInput, dt, CFG.player, {
+        obstacles: state.obstacles, mapSize: state.mapSize,
+        groundHeightAt: (x, z) => state.groundHeightAt(x, z),
+      })
+      player.position.set(motion.x, motion.y, motion.z)
+      player.velocity.set(motion.vx, motion.vy, motion.vz)
+      player.currentHeight = motion.currentHeight
+      player.grounded = motion.grounded
+      player.crouching = motion.crouching
+      player.sprinting = motion.sprinting
+      const elapsed = Math.min(0.15, (now - player.networkUpdatedAt + latency * 0.5) / 1000)
+      const alpha = 1 - Math.exp(-6 * dt)
+      player.position.x += (player.networkPosition.x + player.networkVelocity.x * elapsed - player.position.x) * alpha
+      player.position.y += (player.networkPosition.y + player.networkVelocity.y * elapsed - player.position.y) * alpha
+      player.position.z += (player.networkPosition.z + player.networkVelocity.z * elapsed - player.position.z) * alpha
+    }
+    if (deploy.phase === 'death') {
+      deathCameraTime += dt
+      const progress = Math.min(1, deathCameraTime / CFG.player.deathCameraDuration)
+      runtime.camera.position.copy(deathCameraStart)
+      runtime.camera.position.y -= progress * CFG.player.deathCameraDrop
+      runtime.camera.rotation.z = progress * CFG.player.deathCameraRoll
+      runtime.camera.rotation.x = progress * CFG.player.deathCameraPitch
+    } else if (deploy.phase === 'to_deploy') deployment.updateToScreen(dt)
+    else if (deploy.phase === 'deploy_screen') deployment.updateScreenCamera()
+    else if (deploy.phase === 'deploying') deployment.update(dt)
+    else if (player.alive) {
+      const moving = Math.hypot(player.velocity.x, player.velocity.z) > 0.1
+      let headBobY = 0
+      let bobPitch = 0
+      let bobRoll = 0
+      if (moving) {
+        const previousPhase = bobPhase
+        const rate = player.sprinting ? 12.5 : player.crouching ? 5.2 : 7.8
+        const amplitude = player.sprinting ? 0.018 : player.crouching ? 0.006 : 0.011
+        bobPhase += dt * rate
+        headBobY = Math.sin(bobPhase) * amplitude
+        bobPitch = Math.cos(bobPhase * 2) * (player.sprinting ? 0.0055 : 0.0032)
+        bobRoll = Math.sin(bobPhase) * (player.sprinting ? 0.008 : 0.0045)
+        if (Math.sign(Math.sin(previousPhase)) !== Math.sign(Math.sin(bobPhase))) audio.step()
+      } else {
+        bobPhase *= Math.exp(-8 * dt)
+        headBobY = Math.sin(bobPhase) * 0.002
+      }
+      player.viewRecoilPitch *= Math.pow(CFG.weapon.viewRecoilPitchDecay, dt)
+      player.viewRecoilYaw *= Math.pow(CFG.weapon.viewRecoilYawDecay, dt)
+      player.viewRecoilRoll *= Math.pow(CFG.weapon.viewRecoilRollDecay, dt)
+      const aimMultiplier = player.aiming ? 0.35 : 1
+      const lookEase = 1 - Math.exp(-10 * dt)
+      player.lookSwayPitch += (THREE.MathUtils.clamp(lookDelta.y * 0.00009 * aimMultiplier, -0.012, 0.012) - player.lookSwayPitch) * lookEase
+      player.lookSwayYaw += (THREE.MathUtils.clamp(lookDelta.x * 0.00008 * aimMultiplier, -0.01, 0.01) - player.lookSwayYaw) * lookEase
+      player.lookSwayRoll += (THREE.MathUtils.clamp(-lookDelta.x * 0.00014 * aimMultiplier, -0.02, 0.02) - player.lookSwayRoll) * lookEase
+      const moveAxis = input.getMoveAxis()
+      const targetLean = THREE.MathUtils.clamp(moveAxis.x * (player.sprinting ? 0.02 : 0.014) * aimMultiplier, -0.025, 0.025)
+      player.moveLean += (targetLean - player.moveLean) * (1 - Math.exp(-7 * dt))
+      player.shakeTime += dt
+      player.shakeTrauma = Math.max(0, player.shakeTrauma - dt * CFG.player.shakeRecovery)
+      runtime.camera.position.copy(player.position)
+      runtime.camera.position.y += headBobY
+      runtime.camera.rotation.order = 'YXZ'
+      let rotationX = player.pitch + player.viewRecoilPitch + bobPitch + player.lookSwayPitch
+      let rotationY = player.yaw + player.viewRecoilYaw + player.lookSwayYaw
+      let rotationZ = player.viewRecoilRoll + bobRoll + player.lookSwayRoll + player.moveLean
+      if (player.shakeTrauma > 0.001) {
+        const strength = player.shakeTrauma * player.shakeTrauma
+        const time = player.shakeTime
+        runtime.camera.position.x += (Math.sin(time * 41.3) * 0.55 + Math.sin(time * 73.1) * 0.45) * strength * 0.07
+        runtime.camera.position.y += (Math.cos(time * 37.7) * 0.55 + Math.sin(time * 67.9) * 0.45) * strength * 0.065
+        runtime.camera.position.z += Math.sin(time * 29.5) * strength * 0.03
+        rotationX += (Math.sin(time * 47.2) * 0.6 + Math.cos(time * 61.8) * 0.4) * strength * 0.014
+        rotationY += (Math.cos(time * 39.6) * 0.6 + Math.sin(time * 55.4) * 0.4) * strength * 0.012
+        rotationZ += Math.sin(time * 51) * strength * 0.018
+      }
+      runtime.camera.rotation.set(rotationX, rotationY, rotationZ)
+      const targetFov = player.aiming ? CFG.player.aimingFov : player.sprinting && moving ? CFG.player.sprintingFov : CFG.player.fov
+      player.currentFov += (targetFov - player.currentFov) * (1 - Math.exp(-7 * dt))
+      if (Math.abs(runtime.camera.fov - player.currentFov) > 0.15) {
+        runtime.camera.fov = player.currentFov
+        runtime.camera.updateProjectionMatrix()
+      }
+      runtime.sun.target.position.set(player.position.x, 0, player.position.z)
+      runtime.sun.position.set(player.position.x + 90, 95, player.position.z + 55)
+      runtime.sun.target.updateMatrixWorld()
+    }
+    for (const view of views.values()) {
+      interpolateRemoteActor(view, dt, now)
+      view.updateModelAnimation(dt)
+    }
+    const speed = Math.hypot(player.velocity.x, player.velocity.z)
+    player.currentSpread = calculateWeaponSpread({
+      baseSpread: player.weaponData.baseSpread, speed, aiming: player.aiming,
+      crouching: player.crouching, sprinting: player.sprinting, grounded: player.grounded,
+      reloading: player.reloading, bloom: player.spreadBloom,
+    }, CFG.weapon)
+    player.getSpread = () => player.currentSpread
+    player.weapon.setVisible(player.alive && deploy.phase === 'none')
+    for (const event of actions.update(dt)) {
+      if (event.type !== 'marker') continue
+      if (event.action === 'melee' && event.name === 'prep') {
+        player.viewRecoilPitch += 0.03
+        player.viewRecoilRoll *= 0.3
+        player.addShake(0.22)
+      } else if (event.action === 'rpgReload' && event.name === 'insert') {
+        audio.reloadStage('insert')
+        player.weapon.setRpgRocketVisible(true)
+      }
+    }
+    player.weapon.update(dt, speed > 0.1, player.sprinting, player.aiming, { x: 0, y: 0 }, bobPhase, input.getMoveAxis(), {
+      bolt: actions.get('bolt'), reload: actions.get('reload'), melee: actions.get('melee'),
+      weaponSwitch: actions.get('weaponSwitch'), rpgReload: actions.get('rpgReload'),
+    })
+    actions.flush()
+    effects.update(dt)
+    lookDelta.x = 0
+    lookDelta.y = 0
+    audio.updateListener()
+    runtime.renderer.render(runtime.scene, runtime.camera)
+  }
+
+  function animate() {
+    const loop = now => { requestAnimationFrame(loop); frame(now); ui.render(now) }
+    requestAnimationFrame(loop)
+  }
+
+  function selectLoadout(kind, id) {
+    if (deploy.phase !== 'deploy_screen') return
+    state.settings.loadout[kind] = id
+    player.applyLoadout(state.settings.loadout)
+    saveSettings(state.settings)
+    deployment.updateScreenCamera()
   }
 
   function applySetting(setting, value) {
     if (setting === 'volume') {
       state.settings.masterVolume = value / 100
-      applyMasterVolume()
+      audio.setMasterVolume(state.settings.masterVolume)
     } else {
       state.settings.mouseSensitivity = value / 100
     }
@@ -346,46 +626,60 @@ export function createGame() {
     ui.invalidate()
   }
 
-  applyMasterVolume()
+  function redeploy() {
+    if (!state.paused || deploy.phase !== 'none' || !player.alive) return
+    state.paused = false
+    ui.setPaused(false)
+    audio.setAmbienceMuted(false)
+    input.reset()
+    ui.setScoreboardVisible(false)
+    if (document.pointerLockElement) document.exitPointerLock()
+    session.send({ type: 'redeploy' })
+  }
 
-  ui.setHandlers({
-    onStart: async () => {
-      if (input.isTouchMode()) await enterMobilePresentation()
-      await audio.init()
-      applyMasterVolume()
-      state.loading = false
-      initGame()
-      input.syncUi()
-    },
-    onMode: id => modeMenu.select(id),
-    onSetting: applySetting,
-    onResume: togglePause,
-    onRedeploy: () => {
-      if (!state.paused || deploy.phase !== 'none' || !state.player?.alive) return
-      state.paused = false
-      ui.setPaused(false)
-      audio.setAmbienceMuted(false)
-      input.reset()
-      hud.setScoreboardVisible(false)
-      if (document.pointerLockElement) document.exitPointerLock()
-      input.updateTouchUi()
-      state.player.die()
-    },
-    onQuit: () => location.reload(),
-    onRestart: () => location.reload(),
-    onLoadout: (kind, id) => deployment.selectLoadout(kind, id),
-    onSpawn: index => deployment.startAnimation(index),
-  })
-  window.addEventListener('resize', () => {
-    runtime?.resize()
-    ui.resize()
-    input.syncUi()
-  })
+  function end(snapshot) {
+    const recordLocalMatch = session.kind === 'local' && state.running
+    applySnapshot(snapshot)
+    state.running = false
+    const won = snapshot.outcome?.winner === player.team
+    if (recordLocalMatch)
+      recordMatchResult(state.records, snapshot.modeId, won, snapshot.timeMs / 1000)
+    if (document.pointerLockElement) document.exitPointerLock()
+    const hud = modeHud()
+    const records = state.records[snapshot.modeId]
+    const stats = [
+      `${hud.alliesLabel}: ${hud.alliesScore}    ${hud.axisLabel}: ${hud.axisScore}`,
+      `结算: ${snapshot.outcome?.reason || '战斗结束'}`,
+      ...(snapshot.outcome?.details || []),
+      `个人击杀: ${player.kills}    阵亡: ${player.deaths}`,
+      `本局 K/D: ${(player.kills / Math.max(1, player.deaths)).toFixed(2)}    爆头: ${player.headshots}`,
+      `近战击杀: ${player.meleeKills}    投掷物击杀: ${player.grenadeKills}`,
+      `战斗时长: ${Math.floor(snapshot.timeMs / 1000)} 秒`,
+    ]
+    if (session.kind === 'local')
+      stats.push(`累计 K/D: ${(records.kills / Math.max(1, records.deaths)).toFixed(2)}    胜率: ${records.matches ? Math.round(records.wins / records.matches * 100) : 0}%`)
+    else stats.push(`网络延迟: ${Math.round(latency)} ms`)
+    ui.showEnd({ won, title: snapshot.outcome?.title || (won ? '胜利' : '战败'), stats })
+  }
+
+  function leave() {
+    session.send({ type: 'leave_room' })
+    location.reload()
+  }
+
+  async function preparePresentation() {
+    if (!input?.isTouchMode()) return
+    await input.enableGyro()
+    const root = document.documentElement
+    if (!document.fullscreenElement && root.requestFullscreen)
+      await root.requestFullscreen({ navigationUI: 'hide' })
+    if (screen.orientation?.lock) await screen.orientation.lock('landscape')
+  }
 
   return {
-    start() {
-      runBootLoad()
-      animate()
-    },
+    get active() { return active }, boot, snapshot: applySnapshot, events: handleEvents, animate, end,
+    setLatency(value) { latency = value }, togglePause, leave, selectLoadout, applySetting, redeploy,
+    preparePresentation,
+    deploy(index) { deployment.startAnimation(index) },
   }
 }

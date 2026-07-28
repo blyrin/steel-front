@@ -1,6 +1,3 @@
-import { createClassicMode } from './classic-mode.js'
-import { createZombieMode } from './zombie-mode.js'
-
 export const MODE_DEFINITIONS = [
   {
     id: 'classic',
@@ -15,12 +12,3 @@ export const MODE_DEFINITIONS = [
     mapId: 'zombie',
   },
 ]
-
-const MODE_FACTORIES = {
-  classic: createClassicMode,
-  zombie: createZombieMode,
-}
-
-export function createMode(id, services) {
-  return MODE_FACTORIES[id](services)
-}

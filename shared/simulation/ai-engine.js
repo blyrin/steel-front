@@ -10,7 +10,7 @@ export function createAiEngine() {
   let ammoStations = []
   let groundRegions = []
   let fortress = null
-  let player = null
+  let players = []
   let simulationTime = 0
   let events = []
   let navigation = null
@@ -625,8 +625,7 @@ export function createAiEngine() {
   }
 
   function getTarget(id) {
-    if (id === 'player') return player
-    return actors.get(id) ?? null
+    return players.find(item => item.id === id) ?? actors.get(id) ?? null
   }
 
   function forwardDot(actor, target) {
@@ -688,11 +687,11 @@ export function createAiEngine() {
       if (distance > viewDistance) continue
       candidates.push({ target, distance, score: targetScore(actor, target, distance) })
     }
-    if (player.alive && player.team !== actor.team) {
-      const distance = distance2D(actor, player)
-      if (distance <= viewDistance) {
-        candidates.push({ target: player, distance, score: targetScore(actor, player, distance) })
-      }
+    for (const candidate of players) {
+      if (!candidate.alive || candidate.team === actor.team) continue
+      const distance = distance2D(actor, candidate)
+      if (distance <= viewDistance)
+        candidates.push({ target: candidate, distance, score: targetScore(actor, candidate, distance) })
     }
     candidates.sort((a, b) => b.score - a.score)
 
@@ -721,13 +720,14 @@ export function createAiEngine() {
       }
     }
 
-    const shot = player.lastShot
-    if (player.alive && player.team !== actor.team && shot) {
+    for (const candidate of players) {
+      const shot = candidate.lastShot
+      if (!candidate.alive || candidate.team === actor.team || !shot) continue
       const age = (simulationTime * 1000 - shot.at) / 1000
       const distance = Math.hypot(shot.x - actor.x, shot.z - actor.z)
       if (age <= botConfig.playerShotMemory && distance <= botConfig.playerShotHearingDistance) {
         return {
-          target: player,
+          target: candidate,
           visible: false,
           x: shot.x,
           y: actor.y,
@@ -770,14 +770,15 @@ export function createAiEngine() {
         nearestDistance = score
       }
     }
-    if (player.alive && player.team !== actor.team) {
-      const dx = player.x - actor.x
-      const dz = player.z - actor.z
+    for (const candidate of players) {
+      if (!candidate.alive || candidate.team === actor.team) continue
+      const dx = candidate.x - actor.x
+      const dz = candidate.z - actor.z
       const distanceSq = dx * dx + dz * dz
       if (distanceSq <= searchRadiusSq) {
         const score = Math.sqrt(distanceSq) - 1.8
         if (score < nearestDistance) {
-          nearest = player
+          nearest = candidate
           nearestDistance = score
         }
       }
@@ -801,8 +802,9 @@ export function createAiEngine() {
       }
     }
 
-    const shot = player.lastShot
-    if (player.alive && shot) {
+    for (const candidate of players) {
+      const shot = candidate.lastShot
+      if (!candidate.alive || !shot) continue
       const age = (simulationTime * 1000 - shot.at) / 1000
       const distance = Math.hypot(shot.x - actor.x, shot.z - actor.z)
       if (
@@ -810,7 +812,7 @@ export function createAiEngine() {
         distance <= enemyConfig.playerShotHearingDistance
       ) {
         return {
-          target: player,
+          target: candidate,
           visible: false,
           x: shot.x,
           y: actor.y,
@@ -865,9 +867,10 @@ export function createAiEngine() {
       separationX += (dx / distance) * strength
       separationZ += (dz / distance) * strength
     }
-    if (actor.kind === 'soldier' && player.alive && player.team === actor.team) {
-      const dx = actor.x - player.x
-      const dz = actor.z - player.z
+    for (const candidate of players) {
+      if (actor.kind !== 'soldier' || !candidate.alive || candidate.team !== actor.team) continue
+      const dx = actor.x - candidate.x
+      const dz = actor.z - candidate.z
       const distanceSq = dx * dx + dz * dz
       if (distanceSq > 1e-8 && distanceSq < minDistanceSq) {
         const distance = Math.sqrt(distanceSq)
@@ -1139,9 +1142,10 @@ export function createAiEngine() {
       const dz = candidate.z - actor.z
       if (dx * dx + dz * dz <= radiusSq) count++
     }
-    if (player.alive && player.team !== actor.team) {
-      const dx = player.x - actor.x
-      const dz = player.z - actor.z
+    for (const candidate of players) {
+      if (!candidate.alive || candidate.team === actor.team) continue
+      const dx = candidate.x - actor.x
+      const dz = candidate.z - actor.z
       if (dx * dx + dz * dz <= radiusSq) count++
     }
     return count
@@ -1297,12 +1301,8 @@ export function createAiEngine() {
       if (!ally.alive || ally === actor || ally.team !== actor.team) continue
       if (Math.hypot(ally.x - point.x, ally.z - point.z) < radius) return true
     }
-    if (
-      player.alive &&
-      player.team === actor.team &&
-      Math.hypot(player.x - point.x, player.z - point.z) < radius
-    )
-      return true
+    for (const candidate of players)
+      if (candidate.alive && candidate.team === actor.team && Math.hypot(candidate.x - point.x, candidate.z - point.z) < radius) return true
     return false
   }
 
@@ -1751,7 +1751,8 @@ export function createAiEngine() {
       if (!candidate.alive || candidate.team === actor.team) continue
       consider(candidate)
     }
-    if (player.alive && player.team !== actor.team) consider(player)
+    for (const candidate of players)
+      if (candidate.alive && candidate.team !== actor.team) consider(candidate)
     return nearest
   }
 
@@ -1925,7 +1926,7 @@ export function createAiEngine() {
 
   function processTick(message) {
     simulationTime = message.now / 1000
-    player = message.player
+    players = (message.players ?? [message.player]).filter(Boolean)
     fortress = message.fortress
     events = []
     const smokeClouds = message.smokeClouds
@@ -1996,7 +1997,7 @@ export function createAiEngine() {
     ammoStations = message.ammoStations
     groundRegions = message.groundRegions
     fortress = message.fortress
-    player = message.player
+    players = (message.players ?? [message.player]).filter(Boolean)
     coverReservations = new Map()
     refreshSolidObstacles()
     buildNavigation()

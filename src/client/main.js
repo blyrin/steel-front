@@ -1,3 +1,3 @@
-import { createGame } from './game.js'
+import { createPortal } from './portal.js'
 
-createGame().start()
+createPortal().start()

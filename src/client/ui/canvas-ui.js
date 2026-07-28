@@ -45,6 +45,11 @@ export function createCanvasUi({ state, deploy, config }) {
   canvas.id = 'uiCanvas'
   canvas.setAttribute('aria-label', '游戏界面')
   document.body.appendChild(canvas)
+  const keyboardInput = document.createElement('input')
+  keyboardInput.tabIndex = -1
+  keyboardInput.autocomplete = 'off'
+  keyboardInput.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none'
+  document.body.appendChild(keyboardInput)
   const ctx = canvas.getContext('2d', { alpha: true })
   ctx.imageSmoothingEnabled = false
 
@@ -59,6 +64,8 @@ export function createCanvasUi({ state, deploy, config }) {
   let selectedMode = 'classic'
   let modeDefinitions = []
   let records = []
+  let portal = null
+  let activePortalField = null
   let deployment = null
   let endData = null
   let getMode = () => null
@@ -162,6 +169,59 @@ export function createCanvasUi({ state, deploy, config }) {
     ctx.fillStyle = COLORS.gold
     ctx.fillRect(cx - w / 2 + 1, height * 0.56 + 1, (w - 2) * (state.uiBootProgress || 0), 8)
     text(state.uiBootStatus || '正在装配武器...', cx, height * 0.62, 9, '#465056', 'center')
+  }
+
+  function drawPortal() {
+    backdrop('#c7cec1')
+    const margin = Math.max(22, width * 0.06)
+    text('STEEL FRONT', margin, 45, 25, COLORS.ink, 'left', 800)
+    text('钢铁前线作战终端', margin, 69, 8, '#58666a')
+    const panelW = Math.min(820, width - margin * 2)
+    const panelH = Math.min(height - 116, 420)
+    const x = (width - panelW) / 2
+    const y = 88
+    box(x, y, panelW, panelH, COLORS.panel)
+    ctx.fillStyle = COLORS.gold
+    ctx.fillRect(x, y, 3, panelH)
+    text(portal.title, x + 24, y + 30, 19, COLORS.gold, 'left', 700)
+    if (portal.subtitle) text(portal.subtitle, x + 24, y + 54, 8, COLORS.muted)
+    if (portal.profile) text(portal.profile, x + panelW - 24, y + 31, 9, COLORS.ally, 'right', 700)
+
+    let cursorY = y + 76
+    for (const field of portal.fields || []) {
+      text(field.label, x + 24, cursorY, 8, COLORS.muted)
+      const rect = { x: x + 24, y: cursorY + 12, w: Math.min(390, panelW - 48), h: 31 }
+      box(rect.x, rect.y, rect.w, rect.h, activePortalField === field.id ? '#3b494c' : COLORS.panel2)
+      ctx.fillStyle = activePortalField === field.id ? COLORS.gold : COLORS.line
+      ctx.fillRect(rect.x, rect.y, 2, rect.h)
+      const value = field.password ? '●'.repeat(field.value.length) : field.value
+      text(value || field.placeholder || '', rect.x + 11, rect.y + rect.h / 2, 9, value ? COLORS.text : COLORS.muted)
+      hits.push({ ...rect, action: `portal-field:${field.id}` })
+      cursorY += 59
+    }
+
+    const rows = portal.rows || []
+    if (rows.length) {
+      const rowX = x + 24
+      const rowW = panelW - 48
+      rows.slice(0, 9).forEach((row, index) => {
+        const rowY = cursorY + index * 28
+        box(rowX, rowY, rowW, 24, index % 2 ? '#242f33' : COLORS.panel2)
+        text(row.label, rowX + 10, rowY + 12, 8, row.muted ? COLORS.muted : COLORS.text)
+        if (row.action) button({ x: rowX + rowW - 72, y: rowY + 3, w: 64, h: 18 }, row.actionLabel || '选择', `portal:${row.action}`, false, '#354448', 7)
+      })
+      cursorY += Math.min(rows.length, 9) * 28 + 8
+    }
+
+    let bx = x + 24
+    let by = Math.min(y + panelH - 46, cursorY)
+    for (const entry of portal.actions || []) {
+      const w = Math.max(92, Math.min(180, 24 + entry.label.length * 14))
+      if (bx + w > x + panelW - 24) { bx = x + 24; by += 34 }
+      button({ x: bx, y: by, w, h: 28 }, entry.label, `portal:${entry.id}`, entry.primary, entry.danger ? '#5c3433' : COLORS.panel2, 8, entry.danger ? COLORS.axis : COLORS.ally)
+      bx += w + 8
+    }
+    text(portal.status || '', margin, height - 17, 8, portal.error ? '#a62f2b' : '#465056')
   }
 
   function drawMenu() {
@@ -493,8 +553,10 @@ export function createCanvasUi({ state, deploy, config }) {
     const panelH = height - y - (compact ? 18 : 62)
     box(x, y, panelW, panelH, 'rgba(18,24,27,.96)')
     text('战 况', width / 2, y + (compact ? 18 : 25), compact ? 13 : 16, COLORS.gold, 'center', 700)
-    const allies = [{ name: '你', kills: state.player.kills, deaths: state.player.deaths, me: true }, ...state.actors.filter(a => a.team === 'allies')]
+    const me = { name: '你', kills: state.player.kills, deaths: state.player.deaths, alive: state.player.alive, me: true }
+    const allies = state.actors.filter(a => a.team === 'allies')
     const axis = state.actors.filter(a => a.team !== 'allies')
+    ;(state.player.team === 'allies' ? allies : axis).unshift(me)
     const teamY = y + (compact ? 40 : 62)
     drawTeamRows(allies, x + 22, teamY, panelW / 2 - 34, COLORS.ally, compact)
     drawTeamRows(axis, x + panelW / 2 + 12, teamY, panelW / 2 - 34, COLORS.axis, compact)
@@ -689,6 +751,7 @@ export function createCanvasUi({ state, deploy, config }) {
     hits.length = 0
     ctx.clearRect(0, 0, width, height)
     if (screen === 'boot') drawBoot()
+    else if (screen === 'portal') drawPortal()
     else if (screen === 'menu') drawMenu()
     else if (gameVisible) {
       drawHud(now)
@@ -767,7 +830,14 @@ export function createCanvasUi({ state, deploy, config }) {
     else if (hit.action.startsWith('loadout:')) {
       const [, kind, id] = hit.action.split(':')
       handlers.onLoadout?.(kind, id)
-    }
+    } else if (hit.action.startsWith('portal-field:')) {
+      activePortalField = hit.action.slice(13)
+      const field = portal.fields.find(item => item.id === activePortalField)
+      keyboardInput.type = field.password ? 'password' : 'text'
+      keyboardInput.maxLength = field.maxLength || 128
+      keyboardInput.value = field.value
+      keyboardInput.focus({ preventScroll: true })
+    } else if (hit.action.startsWith('portal:')) handlers.onPortalAction?.(hit.action.slice(7))
     dirty = true
   })
   canvas.addEventListener('pointercancel', event => {
@@ -777,6 +847,30 @@ export function createCanvasUi({ state, deploy, config }) {
   })
 
   window.addEventListener('resize', resize)
+  keyboardInput.addEventListener('input', () => {
+    if (screen === 'portal' && activePortalField) handlers.onPortalInput?.(activePortalField, keyboardInput.value)
+  })
+  keyboardInput.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    handlers.onPortalSubmit?.()
+  })
+  window.addEventListener('keydown', event => {
+    if (screen !== 'portal' || !activePortalField) return
+    if (document.activeElement === keyboardInput) return
+    const field = portal?.fields?.find(item => item.id === activePortalField)
+    if (!field) return
+    if (event.key === 'Enter') handlers.onPortalSubmit?.()
+    else if (event.key === 'Backspace') handlers.onPortalInput?.(field.id, field.value.slice(0, -1))
+    else if (event.key === 'Tab') {
+      const fields = portal.fields
+      activePortalField = fields[(fields.indexOf(field) + 1) % fields.length]?.id || null
+    } else if (event.key.length === 1 && field.value.length < (field.maxLength || 128))
+      handlers.onPortalInput?.(field.id, field.value + event.key)
+    else return
+    event.preventDefault()
+    dirty = true
+  }, true)
   resize()
 
   return {
@@ -791,6 +885,13 @@ export function createCanvasUi({ state, deploy, config }) {
       dirty = true
     },
     showMenu() { screen = 'menu'; gameVisible = false; dirty = true },
+    showPortal(value) {
+      portal = value
+      screen = 'portal'
+      gameVisible = false
+      if (!value.fields?.some(field => field.id === activePortalField)) activePortalField = value.focus || null
+      dirty = true
+    },
     showGame() { screen = 'game'; gameVisible = true; endData = null; dirty = true },
     setModes(definitions, selected) { modeDefinitions = definitions; selectedMode = selected; dirty = true },
     setSelectedMode(id) { selectedMode = id; dirty = true },
@@ -818,5 +919,6 @@ export function createCanvasUi({ state, deploy, config }) {
     invalidate() { dirty = true },
     render,
     resize,
+    destroy() { canvas.remove(); keyboardInput.remove() },
   }
 }

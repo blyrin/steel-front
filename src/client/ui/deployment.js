@@ -33,6 +33,7 @@ export function createDeploymentSystem({
   hud,
   config,
   saveSettings,
+  onDeploy,
 }) {
   const project = new THREE.Vector3()
   const startPos = new THREE.Vector3()
@@ -222,6 +223,7 @@ export function createDeploymentSystem({
     player.position.set(spawn.x, state.groundHeightAt(spawn.x, spawn.z) + config.player.standHeight, spawn.z)
     player.velocity.set(0, 0, 0)
     player.weapon.setVisible(true)
+    onDeploy?.(spawn.id, state.settings.loadout)
     if (input.isTouchMode?.()) input.updateTouchUi?.()
     else renderer.canvas.requestPointerLock()
   }

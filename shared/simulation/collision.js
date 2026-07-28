@@ -201,7 +201,7 @@ function rayFrustum(origin, direction, obstacle, maxDist) {
   const bottomRadius = obstacle.bottomRadius
   const topRadius = obstacle.topRadius
   if (height <= 1e-6 || bottomRadius <= 0 || topRadius < 0) return -1
-  if (direction.lengthSq() < 1e-12) return -1
+  if (direction.x * direction.x + direction.y * direction.y + direction.z * direction.z < 1e-12) return -1
 
   const ox = origin.x - obstacle.x
   const oy = origin.y - minY
@@ -331,7 +331,11 @@ function expandObstacle(obstacle, radius) {
 }
 
 export function sweepSphereObstacle(start, end, radius, obstacle) {
-  const direction = end.clone().sub(start)
+  const direction = {
+    x: end.x - start.x,
+    y: end.y - start.y,
+    z: end.z - start.z,
+  }
   if (direction.x * direction.x + direction.y * direction.y + direction.z * direction.z < 1e-12)
     return null
   const expanded = expandObstacle(obstacle, radius)

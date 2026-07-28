@@ -156,6 +156,14 @@ export function createPlayerWeaponActions(weaponConfig) {
   }
 }
 
+export function actionDuration(definition, params = {}) {
+  return resolveDuration(definition, params)
+}
+
+export function actionMarker(definition, name) {
+  return resolveMarkers(definition, {}).find(marker => marker.name === name).at
+}
+
 function resolveDuration(def, params) {
   return typeof def.duration === 'function' ? def.duration(params) : def.duration
 }
