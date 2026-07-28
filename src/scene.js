@@ -298,7 +298,6 @@ export function createSceneRuntime(config) {
   rawRenderer.outputColorSpace = THREE.SRGBColorSpace
   sceneCanvas.style.width = '100%'
   sceneCanvas.style.height = '100%'
-  sceneCanvas.style.imageRendering = 'pixelated'
   document.body.appendChild(sceneCanvas)
 
   const maxAniso = rawRenderer.capabilities.getMaxAnisotropy()

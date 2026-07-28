@@ -44,7 +44,6 @@ export function createCanvasUi({ state, deploy, config, camera }) {
   const canvas = document.createElement('canvas')
   canvas.id = 'uiCanvas'
   canvas.setAttribute('aria-label', '游戏界面')
-  canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:20;image-rendering:pixelated;touch-action:none;'
   document.body.appendChild(canvas)
   const ctx = canvas.getContext('2d', { alpha: true })
   ctx.imageSmoothingEnabled = false
@@ -463,8 +462,20 @@ export function createCanvasUi({ state, deploy, config, camera }) {
       ctx.fillRect(x + size / 2 + actor.position.x * scale - 2, y + size / 2 + actor.position.z * scale - 2, 4, 4)
     }
     if (state.player?.alive) {
+      const px = x + size / 2 + state.player.position.x * scale
+      const py = y + size / 2 + state.player.position.z * scale
+      ctx.save()
+      ctx.translate(px, py)
+      ctx.rotate(-state.player.yaw)
       ctx.fillStyle = COLORS.gold
-      ctx.fillRect(x + size / 2 + state.player.position.x * scale - 2, y + size / 2 + state.player.position.z * scale - 2, 5, 5)
+      ctx.beginPath()
+      ctx.moveTo(0, -6)
+      ctx.lineTo(-4, 5)
+      ctx.lineTo(0, 2)
+      ctx.lineTo(4, 5)
+      ctx.closePath()
+      ctx.fill()
+      ctx.restore()
     }
   }
 
