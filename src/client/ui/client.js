@@ -6,18 +6,18 @@ import { createDeployState, createGameState } from '../game/state.js'
 import { LocalSession, NetworkSession } from '../session/session.js'
 
 const COLORS = {
-  ink: '#12181b',
-  paper: '#d7ddd8',
-  panel: '#1d262a',
-  panel2: '#2a3539',
-  line: '#66757a',
-  text: '#f0f3eb',
-  muted: '#9faeaa',
-  ally: '#66c2ce',
-  axis: '#e06f63',
-  gold: '#e7c568',
-  green: '#72a77a',
-  danger: '#e6504c',
+  ink: '#080c0d',
+  paper: '#c9c3ae',
+  panel: '#151b1c',
+  panel2: '#222a2a',
+  line: '#626b66',
+  text: '#f3efe2',
+  muted: '#aaa999',
+  ally: '#79b9bb',
+  axis: '#d46b5f',
+  gold: '#d8b45f',
+  green: '#789b72',
+  danger: '#dc4e45',
 }
 
 const PIXEL_SCALE = 1.5
@@ -69,7 +69,10 @@ function createCanvasUi({ state, deploy, config }) {
   let modeDefinitions = []
   let records = []
   let portal = null
+  let portalTransitionKey = ''
+  let portalEnteredAt = performance.now()
   let activePortalField = null
+  let hoveredAction = null
   let deployment = null
   let endData = null
   let getMode = () => null
@@ -140,14 +143,22 @@ function createCanvasUi({ state, deploy, config }) {
   }
 
   function button(rect, label, action, selected = false, color = COLORS.panel2, fontSize = 10, accent = COLORS.ally) {
-    box(rect.x, rect.y, rect.w, rect.h, selected ? COLORS.gold : color)
-    if (!selected) {
-      ctx.fillStyle = accent
-      ctx.fillRect(rect.x, rect.y, 2, rect.h)
+    const hovered = hoveredAction === action
+    ctx.fillStyle = selected ? COLORS.gold : color
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+    if (hovered && !selected) {
+      ctx.fillStyle = 'rgba(255,255,255,.08)'
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
     }
+    ctx.fillStyle = selected ? '#f0d783' : accent
+    ctx.globalAlpha = selected ? 0.78 + Math.sin(performance.now() * 0.006) * 0.22 : 1
+    ctx.fillRect(rect.x, rect.y, selected ? rect.w : hovered ? 5 : 3, selected ? 2 : rect.h)
+    ctx.globalAlpha = 1
+    ctx.strokeStyle = selected || hovered ? 'rgba(255,239,178,.38)' : 'rgba(255,255,255,.08)'
+    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1)
     while (fontSize > 6) {
       font(fontSize, 700)
-      if (ctx.measureText(label).width <= rect.w - 10) break
+      if (ctx.measureText(label).width <= rect.w - 16) break
       fontSize--
     }
     text(label, rect.x + rect.w / 2, rect.y + rect.h / 2, fontSize, selected ? COLORS.ink : COLORS.text, 'center', 700)
@@ -157,10 +168,20 @@ function createCanvasUi({ state, deploy, config }) {
   function backdrop(color = COLORS.paper) {
     ctx.fillStyle = color
     ctx.fillRect(0, 0, width, height)
-    ctx.fillStyle = 'rgba(18,24,27,.08)'
+    ctx.fillStyle = 'rgba(8,12,13,.1)'
     for (let y = 8; y < height; y += 20) {
       for (let x = 8; x < width; x += 20) ctx.fillRect(x, y, 1, 1)
     }
+  }
+
+  function battlefieldBackdrop() {
+    const background = ctx.createLinearGradient(0, 0, 0, height)
+    background.addColorStop(0, '#333b39')
+    background.addColorStop(1, '#111716')
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, width, height)
+    ctx.fillStyle = 'rgba(235,224,192,.04)'
+    for (let y = 5; y < height; y += 7) ctx.fillRect(0, y, width, 1)
   }
 
   function drawBoot() {
@@ -175,72 +196,106 @@ function createCanvasUi({ state, deploy, config }) {
     text(state.uiBootStatus || '正在装配武器...', cx, height * 0.62, 9, '#465056', 'center')
   }
 
-  function drawPortal() {
-    backdrop('#c7cec1')
-    const margin = Math.max(22, width * 0.06)
-    text('STEEL FRONT', margin, 45, 25, COLORS.ink, 'left', 800)
-    text('钢铁前线作战终端', margin, 69, 8, '#58666a')
-    const panelW = Math.min(820, width - margin * 2)
-    const panelH = Math.min(height - 116, 420)
-    const x = (width - panelW) / 2
-    const y = 88
-    box(x, y, panelW, panelH, COLORS.panel)
-    ctx.fillStyle = COLORS.gold
-    ctx.fillRect(x, y, 3, panelH)
-    text(portal.title, x + 24, y + 30, 19, COLORS.gold, 'left', 700)
-    if (portal.subtitle) text(portal.subtitle, x + 24, y + 54, 8, COLORS.muted)
-    if (portal.profile) text(portal.profile, x + panelW - 24, y + 31, 9, COLORS.ally, 'right', 700)
+  function drawPortal(now) {
+    battlefieldBackdrop()
+    const transition = clamp((now - portalEnteredAt) / 240, 0, 1)
+    const eased = 1 - (1 - transition) ** 3
+    ctx.save()
+    ctx.globalAlpha = eased
+    ctx.translate(0, (1 - eased) * 10)
+    const compact = width < 700
+    const margin = compact ? 16 : Math.max(28, width * 0.045)
+    text('钢 铁 前 线', margin, compact ? 29 : 35, compact ? 18 : 22, COLORS.text, 'left', 800)
+    text('STEEL FRONT  /  FIELD OPERATIONS', margin, compact ? 50 : 59, 7, COLORS.gold, 'left', 700)
+    if (!compact) text('作战终端  01', width - margin, 36, 8, COLORS.muted, 'right', 700)
 
-    let cursorY = y + 76
+    const x = margin
+    const y = compact ? 68 : 78
+    const panelW = width - margin * 2
+    const panelH = height - y - (compact ? 42 : 34)
+    box(x, y, panelW, panelH, 'rgba(13,18,18,.92)')
+    ctx.strokeStyle = 'rgba(222,205,157,.24)'
+    ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1)
+    const pad = compact ? 15 : 24
+    const titleY = y + (compact ? 25 : 30)
+    text(portal.title, x + pad, titleY, compact ? 16 : 20, COLORS.text, 'left', 800)
+    if (portal.account) {
+      if (portal.account.logout) {
+        const logoutRect = { x: x + panelW - pad - 54, y: titleY - 12, w: 54, h: 24 }
+        button(logoutRect, '退出', 'portal:logout', false, 'rgba(255,255,255,.04)', 7, COLORS.axis)
+        text(portal.account.label, logoutRect.x - 10, titleY, compact ? 7 : 8, COLORS.ally, 'right', 700)
+      } else {
+        const rect = { x: x + panelW - pad - 62, y: titleY - 12, w: 62, h: 24 }
+        button(rect, '登录', 'portal:login', false, 'rgba(255,255,255,.04)', 7, COLORS.gold)
+      }
+    } else if (portal.profile) {
+      text(portal.profile, x + panelW - pad, titleY, compact ? 7 : 9, COLORS.ally, 'right', 700)
+    }
+    ctx.fillStyle = 'rgba(216,180,95,.35)'
+    ctx.fillRect(x + pad, y + 65, panelW - pad * 2, 1)
+
+    const split = !compact && panelW >= 760
+    const contentX = x + pad
+    const contentY = y + 80
+    const actionW = split ? Math.min(250, panelW * 0.3) : panelW - pad * 2
+    const contentW = split ? panelW - pad * 3 - actionW : panelW - pad * 2
+    const actionX = split ? x + panelW - pad - actionW : contentX
+    let cursorY = contentY
+
     for (const field of portal.fields || []) {
-      text(field.label, x + 24, cursorY, 8, COLORS.muted)
-      const rect = { x: x + 24, y: cursorY + 12, w: Math.min(390, panelW - 48), h: 31 }
-      box(rect.x, rect.y, rect.w, rect.h, activePortalField === field.id ? '#3b494c' : COLORS.panel2)
-      ctx.fillStyle = activePortalField === field.id ? COLORS.gold : COLORS.line
-      ctx.fillRect(rect.x, rect.y, 2, rect.h)
+      text(field.label, contentX, cursorY, 8, COLORS.gold, 'left', 700)
+      const rect = { x: contentX, y: cursorY + 12, w: contentW, h: compact ? 36 : 38 }
+      box(rect.x, rect.y, rect.w, rect.h, activePortalField === field.id ? '#303a38' : '#202726')
+      ctx.strokeStyle = activePortalField === field.id ? COLORS.gold : 'rgba(255,255,255,.1)'
+      ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1)
       const value = field.password ? '●'.repeat(field.value.length) : field.value
-      text(value || field.placeholder || '', rect.x + 11, rect.y + rect.h / 2, 9, value ? COLORS.text : COLORS.muted)
+      text(value || field.placeholder || '', rect.x + 12, rect.y + rect.h / 2, 9, value ? COLORS.text : '#777b72')
       hits.push({ ...rect, action: `portal-field:${field.id}` })
-      cursorY += 59
+      cursorY += compact ? 60 : 64
     }
 
     const rows = portal.rows || []
-    if (rows.length) {
-      const rowX = x + 24
-      const rowW = panelW - 48
-      rows.slice(0, 9).forEach((row, index) => {
-        const rowY = cursorY + index * 28
-        box(rowX, rowY, rowW, 24, index % 2 ? '#242f33' : COLORS.panel2)
-        text(row.label, rowX + 10, rowY + 12, 8, row.muted ? COLORS.muted : COLORS.text)
-        if (row.action) {
-          button({
-            x: rowX + rowW - 72,
-            y: rowY + 3,
-            w: 64,
-            h: 18,
-          }, row.actionLabel || '选择', `portal:${row.action}`, false, '#354448', 7)
-        }
+    const actionCount = (portal.actions || []).length
+    const mobileActionRows = compact ? Math.ceil(actionCount / 2) : 0
+    const rowsBottom = split ? y + panelH - pad : y + panelH - pad - mobileActionRows * 38 - (actionCount ? 12 : 0)
+    const visibleRows = Math.max(0, Math.floor((rowsBottom - cursorY) / 34))
+    rows.slice(0, visibleRows).forEach((row, index) => {
+      const rowY = cursorY + index * 34
+      box(contentX, rowY, contentW, 29, index % 2 ? 'rgba(255,255,255,.035)' : '#202726')
+      ctx.fillStyle = row.muted ? COLORS.line : (index === 0 ? COLORS.gold : COLORS.ally)
+      ctx.fillRect(contentX, rowY, 2, 29)
+      const reserve = row.action ? 76 : 12
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(contentX + 10, rowY, contentW - reserve - 6, 29)
+      ctx.clip()
+      text(row.label, contentX + 11, rowY + 15, compact ? 7 : 8, row.muted ? COLORS.muted : COLORS.text)
+      ctx.restore()
+      if (row.action) button({ x: contentX + contentW - 70, y: rowY + 5, w: 62, h: 19 }, row.actionLabel || '选择', `portal:${row.action}`, row.selected, '#303a38', 7)
+    })
+    if (rows.length > visibleRows) text(`另有 ${rows.length - visibleRows} 项未显示`, contentX, rowsBottom - 5, 7, COLORS.muted)
+
+    const actions = portal.actions || []
+    if (split) {
+      actions.forEach((entry, index) => {
+        const rect = { x: actionX, y: contentY + index * 42, w: actionW, h: 34 }
+        button(rect, entry.label, `portal:${entry.id}`, entry.primary, entry.danger ? '#4b2927' : '#252d2c', 9, entry.danger ? COLORS.axis : COLORS.ally)
       })
-      cursorY += Math.min(rows.length, 9) * 28 + 8
+    } else if (actions.length) {
+      const gap = 7
+      const itemW = (actionW - gap) / 2
+      const startY = y + panelH - pad - mobileActionRows * 38
+      actions.forEach((entry, index) => {
+        const rect = { x: actionX + (index % 2) * (itemW + gap), y: startY + Math.floor(index / 2) * 38, w: itemW, h: 31 }
+        button(rect, entry.label, `portal:${entry.id}`, entry.primary, entry.danger ? '#4b2927' : '#252d2c', 8, entry.danger ? COLORS.axis : COLORS.ally)
+      })
     }
 
-    let bx = x + 24
-    let by = Math.min(y + panelH - 46, cursorY)
-    for (const entry of portal.actions || []) {
-      const w = Math.max(92, Math.min(180, 24 + entry.label.length * 14))
-      if (bx + w > x + panelW - 24) {
-        bx = x + 24
-        by += 34
-      }
-      button({
-        x: bx,
-        y: by,
-        w,
-        h: 28,
-      }, entry.label, `portal:${entry.id}`, entry.primary, entry.danger ? '#5c3433' : COLORS.panel2, 8, entry.danger ? COLORS.axis : COLORS.ally)
-      bx += w + 8
+    if (portal.status) {
+      box(margin, height - 29, Math.min(width - margin * 2, 420), 20, portal.error ? 'rgba(86,28,25,.9)' : 'rgba(13,18,18,.82)')
+      text(portal.status, margin + 9, height - 19, 7, portal.error ? '#ffaaa0' : COLORS.muted)
     }
-    text(portal.status || '', margin, height - 17, 8, portal.error ? '#a62f2b' : '#465056')
+    ctx.restore()
   }
 
   function drawMenu() {
@@ -643,6 +698,9 @@ function createCanvasUi({ state, deploy, config }) {
     deployment.markers.forEach((marker, index) => {
       const markerX = (marker.x / innerWidth) * width
       const markerY = (marker.y / innerHeight) * height
+      const pulse = 2 + Math.sin(performance.now() * 0.005 + index) * 2
+      ctx.strokeStyle = marker.contested ? 'rgba(224,111,99,.5)' : 'rgba(102,194,206,.5)'
+      ctx.strokeRect(markerX - 38 - pulse, markerY - 24 - pulse, 76 + pulse * 2, 48 + pulse * 2)
       const rect = { x: markerX - 35, y: markerY - 21, w: 70, h: 42 }
       box(rect.x, rect.y, rect.w, rect.h, marker.contested ? '#713d39' : '#38584e')
       text(`${marker.id} ${marker.name}`, rect.x + rect.w / 2, rect.y + 15, 8, COLORS.text, 'center', 700)
@@ -776,7 +834,7 @@ function createCanvasUi({ state, deploy, config }) {
     if (screen === 'boot') {
       drawBoot()
     } else if (screen === 'portal') {
-      drawPortal()
+      drawPortal(now)
     } else if (screen === 'menu') {
       drawMenu()
     } else if (gameVisible) {
@@ -831,6 +889,19 @@ function createCanvasUi({ state, deploy, config }) {
   canvas.addEventListener('pointermove', event => {
     if (activeSlider) updateSlider(activeSlider, event)
     if (activeTouch.has(event.pointerId)) touchHandlers.move?.(event)
+    if (!touchMode && !activeSlider && !activeTouch.has(event.pointerId)) {
+      const action = findHit(event)?.action || null
+      if (action !== hoveredAction) {
+        hoveredAction = action
+        canvas.style.cursor = action ? 'pointer' : 'default'
+        dirty = true
+      }
+    }
+  })
+  canvas.addEventListener('pointerleave', () => {
+    hoveredAction = null
+    canvas.style.cursor = 'default'
+    dirty = true
   })
 
   canvas.addEventListener('pointerup', event => {
@@ -889,8 +960,13 @@ function createCanvasUi({ state, deploy, config }) {
     handlers.onPortalSubmit?.()
   })
   window.addEventListener('keydown', event => {
-    if (screen !== 'portal' || !activePortalField) return
-    if (document.activeElement === keyboardInput) return
+    if (screen !== 'portal') return
+    if (event.key === 'Escape') {
+      handlers.onPortalBack?.()
+      event.preventDefault()
+      return
+    }
+    if (!activePortalField || document.activeElement === keyboardInput) return
     const field = portal?.fields?.find(item => item.id === activePortalField)
     if (!field) return
     if (event.key === 'Enter') {
@@ -927,6 +1003,12 @@ function createCanvasUi({ state, deploy, config }) {
       dirty = true
     },
     showPortal(value) {
+      const transitionKey = value.title
+      if (screen !== 'portal' || transitionKey !== portalTransitionKey) {
+        portalTransitionKey = transitionKey
+        portalEnteredAt = performance.now()
+        hoveredAction = null
+      }
       portal = value
       screen = 'portal'
       gameVisible = false
@@ -1098,53 +1180,47 @@ export function createClient() {
   function render() {
     const common = { status, error: statusError }
     if (screen === 'choice') {
-      ui.showPortal({
-        ...common, title: '选择作战方式', subtitle: '单人模式与联机模式共用完整战场表现',
-        actions: [{ id: 'offline', label: '单人作战', primary: true }, { id: 'online', label: '联机作战' }],
+      const modeRows = MODE_DEFINITIONS.map(mode => {
+        const records = state.records[mode.id]
+        return {
+          label: `${mode.name}　${records.matches} 场　${records.wins} 胜　${records.kills} 击杀`,
+          action: `select-mode:${mode.id}`,
+          actionLabel: mode.id === selectedMode ? '已选择' : '选择',
+          selected: mode.id === selectedMode,
+        }
       })
-    } else if (screen === 'offline') {
+      const roomRows = user ? rooms.map(item => ({
+        label: `${item.name}　${item.modeId === 'classic' ? '经典' : '丧尸'}　${item.players}/${item.capacity}`,
+        action: `join:${item.id}`,
+        actionLabel: '加入',
+      })) : []
       ui.showPortal({
-        ...common, title: '单人作战', subtitle: '本地权威模拟',
-        rows: MODE_DEFINITIONS.map(mode => {
-          const records = state.records[mode.id]
-          return { label: `${mode.name}  场次 ${records.matches}  胜 ${records.wins}  击杀 ${records.kills}  阵亡 ${records.deaths}` }
-        }),
-        actions: MODE_DEFINITIONS.map(mode => ({
-          id: `offline:${mode.id}`, label: mode.name, primary: mode.id === 'classic',
-        })).concat([{ id: 'choice', label: '返回' }]),
+        ...common,
+        title: '作战部署',
+        account: user
+          ? { label: user.displayName, logout: true }
+          : { label: '登录' },
+        rows: modeRows.concat(roomRows),
+        actions: [
+          { id: 'offline-start', label: '单人作战', primary: true },
+          { id: `quick:${selectedMode}`, label: '快速匹配' },
+          ...(user ? [{ id: 'create', label: '创建房间' }, { id: 'invite', label: '邀请码' },
+            { id: 'stats', label: '战绩排行' }] : []),
+        ],
       })
     } else if (screen === 'auth') {
       ui.showPortal({
-        ...common, title: register ? '创建账号' : '账号登录', subtitle: '输入内容仅在本地用于提交认证', focus: 'username',
+        ...common, title: register ? '创建账号' : '账号登录', focus: 'username',
         fields: [field('username', '用户名', '3-20 位字母、数字或下划线', false, 20),
           ...(register ? [field('displayName', '战场昵称', '最多 16 个字符', false, 16)] : []),
           field('password', '密码', register ? '至少 10 位' : '账号密码', true)],
         actions: [{ id: 'auth-submit', label: register ? '注册并登录' : '登录', primary: true },
           { id: 'auth-toggle', label: register ? '已有账号' : '创建账号' }, { id: 'choice', label: '返回' }],
       })
-    } else if (screen === 'lobby') {
-      ui.showPortal({
-        ...common, title: '联机大厅', subtitle: '快速匹配、公开房与私密邀请码房', profile: `${user.displayName}  @${user.username}`,
-        rows: rooms.map(item => ({
-          label: `${item.name}  ·  ${item.modeId === 'classic' ? '经典' : '丧尸'}  ${item.players}/${item.capacity}`,
-          action: `join:${item.id}`,
-          actionLabel: '加入',
-        })),
-        actions: MODE_DEFINITIONS.map(mode => ({
-          id: `quick:${mode.id}`,
-          label: `${mode.name}快速匹配`,
-          primary: mode.id === 'classic',
-        })).concat([
-          { id: 'create', label: '创建房间' }, { id: 'invite', label: '邀请码加入' },
-          { id: 'profile', label: '在线战绩' }, { id: 'leaderboard', label: '排行榜' },
-          { id: 'logout', label: '退出登录', danger: true },
-        ]),
-      })
     } else if (screen === 'create') {
       ui.showPortal({
         ...common,
         title: '创建房间',
-        subtitle: `${selectedMode === 'classic' ? '经典对战' : '丧尸合作'} · ${visibility === 'public' ? '公开房' : '私密房'}`,
         fields: [field('roomName', '房间名称', `${user.displayName}的房间`, false, 20)],
         actions: [{ id: 'mode', label: selectedMode === 'classic' ? '模式：经典' : '模式：丧尸' },
           { id: 'visibility', label: visibility === 'public' ? '公开房' : '私密房' },
@@ -1159,12 +1235,11 @@ export function createClient() {
       showRoomCanvas(common)
     } else if (screen === 'stats') {
       ui.showPortal({
-        ...common, title: leaderboardMode ? `公开排行榜 · ${leaderboardMode === 'classic' ? '经典' : '丧尸'}` : '在线战绩',
+        ...common,
+        title: `战绩排行　${leaderboardMode === 'classic' ? '经典' : '丧尸'}`,
         rows: profileRows.map(label => ({ label })),
-        actions: leaderboardMode ? [{ id: 'leaderboard-mode', label: '切换模式' }, { id: 'lobby', label: '返回大厅' }] : [{
-          id: 'lobby',
-          label: '返回大厅',
-        }],
+        actions: [{ id: 'leaderboard-mode', label: leaderboardMode === 'classic' ? '丧尸' : '经典' },
+          { id: 'lobby', label: '返回' }],
       })
     }
   }
@@ -1174,8 +1249,7 @@ export function createClient() {
     ui.showPortal({
       ...common,
       title: room.name,
-      subtitle: `${room.modeId === 'classic' ? '经典对战' : '丧尸合作'} · ${room.status}${room.invite ? ` · 邀请码 ${room.invite}` : ''}`,
-      profile: user.displayName,
+      profile: `${user.displayName}　${room.modeId === 'classic' ? '经典' : '丧尸'}　${room.status}${room.invite ? `　${room.invite}` : ''}`,
       rows: room.members.map(member => ({
         label: `${member.displayName}  ·  ${member.team === 'allies' ? '盟军' : '轴心'}${member.connected ? '' : ' · 掉线'}`,
         action: room.hostId === user.id && member.userId !== user.id && room.status === 'waiting' ? `kick:${member.userId}` : null,
@@ -1192,17 +1266,17 @@ export function createClient() {
     try {
       user = (await api('/api/auth/session')).user
       if (user) {
-        enterLobby()
-      } else {
-        screen = 'auth'
-        render()
+        activeSession = networkSession
+        networkSession.connect()
       }
+      screen = 'choice'
+      render()
     } catch (error) { setStatus(error.message, true) }
   }
 
   function enterLobby() {
     activeSession = networkSession
-    screen = 'lobby'
+    screen = 'choice'
     room = null
     networkSession.connect()
     render()
@@ -1227,35 +1301,32 @@ export function createClient() {
     } catch (error) { setStatus(error.message, true) }
   }
 
-  async function showProfile() {
+  async function showStats() {
     try {
-      const result = await api('/api/multiplayer/profile')
-      leaderboardMode = null
-      profileRows = result.stats.map(row => `${row.mode === 'classic' ? '经典' : '丧尸'} / ${row.scope === 'ranked' ? '排位' : '全部'}  场次 ${row.matches}  胜 ${row.wins}  击杀 ${row.kills}  阵亡 ${row.deaths}  最高波次 ${row.highest_wave}`)
-      if (!profileRows.length) profileRows = ['暂无在线战绩']
-      screen = 'stats'
-      render()
-    } catch (error) { setStatus(error.message, true) }
-  }
-
-  async function showLeaderboard() {
-    try {
-      const result = await api(`/api/multiplayer/leaderboard?mode=${leaderboardMode}`)
-      profileRows = result.entries.map((row, index) => `${index + 1}. ${row.display_name}  胜 ${row.wins}  击杀 ${row.kills}  阵亡 ${row.deaths}  最高波次 ${row.highest_wave}`)
-      if (!profileRows.length) profileRows = ['暂无排行数据']
+      const [profile, leaderboard] = await Promise.all([
+        api('/api/multiplayer/profile'),
+        api(`/api/multiplayer/leaderboard?mode=${leaderboardMode}`),
+      ])
+      const ownRows = profile.stats
+        .filter(row => row.mode === leaderboardMode)
+        .map(row => `我的　${row.scope === 'ranked' ? '排位' : '全部'}　${row.matches} 场　${row.wins} 胜　${row.kills} 击杀　${row.deaths} 阵亡　波次 ${row.highest_wave}`)
+      const rankRows = leaderboard.entries.map((row, index) => `${index + 1}.　${row.display_name}　${row.wins} 胜　${row.kills} 击杀　${row.deaths} 阵亡　波次 ${row.highest_wave}`)
+      profileRows = ownRows.concat(rankRows)
+      if (!profileRows.length) profileRows = ['暂无数据']
       screen = 'stats'
       render()
     } catch (error) { setStatus(error.message, true) }
   }
 
   async function action(id) {
-    if (id === 'offline') {
-      screen = 'offline'
+    if (id.startsWith('select-mode:')) {
+      selectedMode = id.slice(12)
       render()
-    } else if (id.startsWith('offline:')) {
-      await startLocal(id.slice(8))
-    } else if (id === 'online') {
-      await checkSession()
+    } else if (id === 'offline-start') {
+      await startLocal(selectedMode)
+    } else if (id === 'login') {
+      screen = 'auth'
+      render()
     } else if (id === 'choice') {
       screen = 'choice'
       render()
@@ -1267,7 +1338,12 @@ export function createClient() {
     } else if (id === 'lobby') {
       enterLobby()
     } else if (id.startsWith('quick:')) {
-      networkSession.send({ type: 'quick_match', modeId: id.slice(6) })
+      if (!user) {
+        screen = 'auth'
+        render()
+      } else {
+        networkSession.send({ type: 'quick_match', modeId: id.slice(6) })
+      }
     } else if (id.startsWith('join:')) {
       networkSession.send({ type: 'join_room', roomId: id.slice(5) })
     } else if (id.startsWith('kick:')) {
@@ -1297,20 +1373,19 @@ export function createClient() {
       networkSession.send({ type: 'start_match' })
     } else if (id === 'leave-room') {
       networkSession.send({ type: 'leave_room' })
-    } else if (id === 'profile') {
-      await showProfile()
-    } else if (id === 'leaderboard') {
-      leaderboardMode = 'classic'
-      await showLeaderboard()
+    } else if (id === 'stats') {
+      leaderboardMode = selectedMode
+      await showStats()
     } else if (id === 'leaderboard-mode') {
       leaderboardMode = leaderboardMode === 'classic' ? 'zombie' : 'classic'
-      await showLeaderboard()
+      await showStats()
     } else if (id === 'logout') {
       networkSession.close()
       activeSession = null
       await api('/api/auth/logout', { method: 'POST' })
       user = null
-      screen = 'auth'
+      rooms = []
+      screen = 'choice'
       render()
     }
   }
@@ -1319,7 +1394,7 @@ export function createClient() {
     if (message.type === 'hello' || message.type === 'lobby_snapshot') {
       rooms = message.rooms ?? rooms
       user = message.user || user
-      if (screen === 'lobby') render()
+      if (screen === 'choice') render()
     } else if (message.type === 'joined') {
       room = message.room
       playerId = message.playerId
@@ -1341,13 +1416,19 @@ export function createClient() {
       game.end(message.snapshot)
     } else if (message.type === 'kicked') {
       room = null
-      screen = 'lobby';
+      screen = 'choice'
       setStatus('你已被房主移出')
     } else if (message.type === 'error') setStatus(message.message, true)
   }
 
   ui.setHandlers({
     onPortalAction: action,
+    onPortalBack() {
+      if (screen === 'choice') return
+      if (screen === 'room') action('leave-room')
+      else if (['create', 'invite', 'stats'].includes(screen)) action('lobby')
+      else action('choice')
+    },
     onPortalSubmit: () => screen === 'auth' ? submitAuth() : null,
     onPortalInput(id, value) {
       fields[id] = value;
@@ -1361,7 +1442,7 @@ export function createClient() {
 
   return {
     start() {
-      render();
+      checkSession()
       game.animate()
     }
   }
