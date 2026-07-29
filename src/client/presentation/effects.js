@@ -61,14 +61,14 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     const tracer = new THREE.Line(
       new THREE.BufferGeometry().setAttribute(
         'position',
-        new THREE.BufferAttribute(new Float32Array(6), 3)
+        new THREE.BufferAttribute(new Float32Array(6), 3),
       ),
       new THREE.LineBasicMaterial({
         color: 0xfff06a,
         transparent: true,
         opacity: 0.72,
         depthWrite: false,
-      })
+      }),
     )
     tracer.frustumCulled = true
     tracer.matrixAutoUpdate = false
@@ -116,7 +116,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     const smokeOpacity = effectsConfig.muzzleSmokeOpacity
     const core = take(
       'core',
-      () => createMesh('core', new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true }))
+      () => createMesh('core', new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true })),
     )
     core.position.copy(pos).addScaledVector(direction, coreOffset)
     core.scale.setScalar(coreScale)
@@ -132,8 +132,8 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
             transparent: true,
             side: THREE.DoubleSide,
             depthWrite: false,
-          })
-        )
+          }),
+        ),
     )
     flare.position.copy(pos).addScaledVector(direction, flareOffset)
     flare.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction)
@@ -141,7 +141,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
 
     const side = take(
       'side',
-      () => createMesh('side', new THREE.MeshBasicMaterial({ color: 0xffc45a, transparent: true }))
+      () => createMesh('side', new THREE.MeshBasicMaterial({ color: 0xffc45a, transparent: true })),
     )
     side.position.copy(pos).addScaledVector(direction, sideOffset)
     side.scale.set(sideScale, sideThickness, sideThickness)
@@ -177,13 +177,13 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
         flare.scale.set(
           flareRadius * (0.8 + (1 - progress) * 1.55),
           flareHeight * (0.8 + (1 - progress) * 1.55),
-          flareRadius * (0.8 + (1 - progress) * 1.55)
+          flareRadius * (0.8 + (1 - progress) * 1.55),
         )
         side.material.opacity = progress * 0.75
         side.scale.set(
           sideScale * (1.7 + (1 - progress) * 1.1),
           sideThickness * (0.5 + (1 - progress) * 0.45),
-          sideThickness * (0.5 + (1 - progress) * 0.45)
+          sideThickness * (0.5 + (1 - progress) * 0.45),
         )
         light && (light.intensity = progress * 2.8)
       },
@@ -210,8 +210,8 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
               color: 0xb8d5dd,
               transparent: true,
               depthWrite: false,
-            })
-          )
+            }),
+          ),
       )
       puff.position.copy(pos).addScaledVector(direction, 0.08 + i * 0.04)
       puff.scale.setScalar(0.045)
@@ -223,8 +223,8 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
           new THREE.Vector3(
             (Math.random() - 0.5) * 0.4,
             0.18 + Math.random() * 0.28,
-            (Math.random() - 0.5) * 0.4
-          )
+            (Math.random() - 0.5) * 0.4,
+          ),
         )
       const maxLife = effectsConfig.smokeLife + i * effectsConfig.smokeLifeStep
       addParticle({
@@ -250,8 +250,8 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
       () =>
         createMesh(
           'shell',
-          new THREE.MeshBasicMaterial({ color: 0xf4c84a })
-        )
+          new THREE.MeshBasicMaterial({ color: 0xf4c84a }),
+        ),
     )
     shell.position.copy(pos)
     shell.scale.set(0.0065, 0.028, 0.0065)
@@ -299,8 +299,8 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
       () =>
         createMesh(
           'smoke',
-          new THREE.MeshBasicMaterial({ color: 0xb5d1d9, transparent: true, depthWrite: false })
-        )
+          new THREE.MeshBasicMaterial({ color: 0xb5d1d9, transparent: true, depthWrite: false }),
+        ),
     )
     puff.position.copy(pos)
     puff.scale.setScalar(0.06)
@@ -324,7 +324,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     for (let i = 0; i < effectsConfig.sparkCount; i++) {
       const spark = take(
         'spark',
-        () => createMesh('spark', new THREE.MeshBasicMaterial({ color: 0xffaa30, transparent: true }))
+        () => createMesh('spark', new THREE.MeshBasicMaterial({ color: 0xffaa30, transparent: true })),
       )
       spark.position.copy(pos)
       spark.scale.setScalar(0.015)
@@ -333,7 +333,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
         .clone()
         .multiplyScalar(-1)
         .add(
-          new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2)
+          new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2),
         )
         .multiplyScalar(2)
       addParticle({
@@ -352,7 +352,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     }
     const dust = take(
       'dust',
-      () => createMesh('dust', new THREE.MeshBasicMaterial({ color: 0xd79979, transparent: true }))
+      () => createMesh('dust', new THREE.MeshBasicMaterial({ color: 0xd79979, transparent: true })),
     )
     dust.position.copy(pos)
     dust.scale.setScalar(0.1)
@@ -374,14 +374,14 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     for (let i = 0; i < effectsConfig.bloodCount; i++) {
       const blood = take(
         'blood',
-        () => createMesh('blood', new THREE.MeshBasicMaterial({ color: 0xe83f5b }))
+        () => createMesh('blood', new THREE.MeshBasicMaterial({ color: 0xe83f5b })),
       )
       blood.position.copy(pos)
       blood.scale.setScalar(0.025)
       const velocity = new THREE.Vector3(
         (Math.random() - 0.5) * 3,
         Math.random() * 2,
-        (Math.random() - 0.5) * 3
+        (Math.random() - 0.5) * 3,
       )
       addParticle({
         mesh: blood,
@@ -418,13 +418,13 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     return result.stuck
   }
 
-  function spawnThrownGrenade(origin, velocity, grenade, onDetonate) {
+  function spawnThrownGrenade(origin, velocity, grenade) {
     const radius = 0.09
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(radius, 8, 6),
       new THREE.MeshToonMaterial({
         color: grenade.color,
-      })
+      }),
     )
     mesh.position.copy(origin)
     const particle = {
@@ -438,7 +438,6 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
         particle.mesh.rotation.x += dt * 9
         particle.mesh.rotation.z += dt * 7
       },
-      onComplete: () => onDetonate(mesh.position.clone()),
     }
     addParticle(particle)
     return particle
@@ -448,7 +447,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     const radius = 0.11
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.18, 0.1, 0.14),
-      new THREE.MeshToonMaterial({ color: secondary.color })
+      new THREE.MeshToonMaterial({ color: secondary.color }),
     )
     mesh.position.copy(origin)
     const charge = {
@@ -486,8 +485,11 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
   }
 
   function removeProjectile(projectile) {
-    if (projectile.active != null) projectile.active = false
-    ;(projectile.particle ?? projectile).life = 0
+    if (projectile.active != null) {
+      projectile.active = false
+
+    }
+    (projectile.particle ?? projectile).life = 0
   }
 
   function createRocketMesh(color) {
@@ -509,42 +511,17 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), direction)
   }
 
-  function spawnRocket(origin, velocity, secondary, muzzle, onHit) {
-    const radius = 0.08
+  function spawnRocket(origin, velocity, secondary, muzzle) {
     const mesh = createRocketMesh(secondary.color)
     mesh.position.copy(muzzle || origin)
-    const direction = velocity.clone().normalize()
-    orientRocket(mesh, direction)
-    let hitPosition = null
+    orientRocket(mesh, velocity.clone().normalize())
     const particle = {
       mesh,
       type: 'rocket',
       life: 4,
       maxLife: 4,
       vel: velocity.clone(),
-      update: (dt, time, particle) => {
-        const obstacles = [...state.obstacles]
-        for (const actor of state.actors) {
-          if (!actor.alive) continue
-          obstacles.push(...actor.getHitboxes())
-        }
-        const body = {
-          x: particle.mesh.position.x, y: particle.mesh.position.y, z: particle.mesh.position.z,
-          vx: particle.vel.x, vy: particle.vel.y, vz: particle.vel.z,
-        }
-        const result = stepThrownProjectile(body, dt, {
-          gravity: 0, bounce: 0, sticky: false, radius, obstacles,
-          groundHeightAt: (x, z) => state.groundHeightAt(x, z),
-        })
-        particle.mesh.position.set(body.x, body.y, body.z)
-        if (result.hit) {
-          hitPosition = particle.mesh.position.clone()
-          particle.life = 0
-          return
-        }
-        orientRocket(particle.mesh, particle.vel.clone().normalize())
-      },
-      onComplete: () => onHit((hitPosition || mesh.position).clone()),
+      update: dt => mesh.position.addScaledVector(velocity, dt),
     }
     addParticle(particle)
     return particle
@@ -558,7 +535,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     // 核心白亮闪光 → 约 0.45r
     const core = new THREE.Mesh(
       geometry.core,
-      new THREE.MeshBasicMaterial({ color: 0xfff4b0, transparent: true, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff4b0, transparent: true, depthWrite: false }),
     )
     const coreStart = r * 0.04
     const coreEnd = r * 0.45
@@ -579,7 +556,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     // 外层火球 → 约 1.0r
     const fireball = new THREE.Mesh(
       geometry.side,
-      new THREE.MeshBasicMaterial({ color: 0xff7a28, transparent: true, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xff7a28, transparent: true, depthWrite: false }),
     )
     const fireStart = r * 0.06
     const fireEnd = r
@@ -621,7 +598,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     for (let i = 0; i < 18; i++) {
       const spark = take(
         'spark',
-        () => createMesh('spark', new THREE.MeshBasicMaterial({ color: 0xffaa30, transparent: true }))
+        () => createMesh('spark', new THREE.MeshBasicMaterial({ color: 0xffaa30, transparent: true })),
       )
       const sparkScale = r * (0.002 + Math.random() * 0.002)
       spark.position.copy(origin)
@@ -632,7 +609,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
       const vel = new THREE.Vector3(
         (Math.random() - 0.5) * 2,
         0.2 + Math.random() * 1.4,
-        (Math.random() - 0.5) * 2
+        (Math.random() - 0.5) * 2,
       )
         .normalize()
         .multiplyScalar(speed)
@@ -665,15 +642,15 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
               color: 0x7a6a58,
               transparent: true,
               depthWrite: false,
-            })
-          )
+            }),
+          ),
       )
       const angle = (i / 10) * Math.PI * 2 + Math.random() * 0.45
       const dist = r * (0.12 + Math.random() * 0.28)
       smoke.position.set(
         origin.x + Math.cos(angle) * dist,
         origin.y + r * Math.random() * 0.06,
-        origin.z + Math.sin(angle) * dist
+        origin.z + Math.sin(angle) * dist,
       )
       smoke.material.color.setHex(Math.random() < 0.4 ? 0x6a5a48 : 0x8c8070)
       const baseScale = r * (0.05 + Math.random() * 0.06)
@@ -683,7 +660,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
       const outward = new THREE.Vector3(
         Math.cos(angle) * speed,
         r * (0.12 + Math.random() * 0.18),
-        Math.sin(angle) * speed
+        Math.sin(angle) * speed,
       )
       const maxLife = 0.9 + Math.random() * 0.6
       addParticle({
@@ -708,7 +685,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     for (let i = 0; i < 8; i++) {
       const dust = take(
         'dust',
-        () => createMesh('dust', new THREE.MeshBasicMaterial({ color: 0xc4a078, transparent: true }))
+        () => createMesh('dust', new THREE.MeshBasicMaterial({ color: 0xc4a078, transparent: true })),
       )
       const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.4
       dust.position.set(origin.x, Math.max(0.12, origin.y * 0.25), origin.z)
@@ -719,7 +696,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
       const vel = new THREE.Vector3(
         Math.cos(angle) * speed,
         r * (0.05 + Math.random() * 0.1),
-        Math.sin(angle) * speed
+        Math.sin(angle) * speed,
       )
       addParticle({
         mesh: dust,
@@ -754,7 +731,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
           transparent: true,
           opacity: 0,
           depthWrite: false,
-        })
+        }),
       )
       const angle = Math.random() * Math.PI * 2
       const distance = radius * Math.sqrt(Math.random()) * (0.45 + Math.random() * 0.55)
@@ -768,16 +745,16 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
       smoke.position.set(
         position.x + ox,
         position.y + 0.3 + Math.random() * 2.0,
-        position.z + oz
+        position.z + oz,
       )
-      const scaleX = 0.6 + Math.random() * 1.0
+      const scaleX = 0.6 + Math.random()
       const scaleY = 0.5 + Math.random() * 0.95
-      const scaleZ = 0.6 + Math.random() * 1.0
+      const scaleZ = 0.6 + Math.random()
       smoke.scale.set(scaleX, scaleY, scaleZ)
       smoke.rotation.set(
         (Math.random() - 0.5) * 0.8,
         Math.random() * Math.PI * 2,
-        (Math.random() - 0.5) * 0.8
+        (Math.random() - 0.5) * 0.8,
       )
       const rise = 0.012 + Math.random() * 0.03
       const spin = 0.04 + Math.random() * 0.1

@@ -10,7 +10,7 @@ function bezier2(out, p0, p1, p2, t) {
   out.set(
     u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x,
     u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y,
-    u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z
+    u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z,
   )
 }
 
@@ -22,19 +22,17 @@ function lerpAngle(a, b, t) {
 }
 
 export function createDeploymentSystem({
-  ui,
-  state,
-  deploy,
-  getSpawnPoints,
-  camera,
-  renderer,
-  audio,
-  input,
-  hud,
-  config,
-  saveSettings,
-  onDeploy,
-}) {
+                                         ui,
+                                         state,
+                                         deploy,
+                                         getSpawnPoints,
+                                         camera,
+                                         renderer,
+                                         audio,
+                                         input,
+                                         config,
+                                         onDeploy,
+                                       }) {
   const project = new THREE.Vector3()
   const startPos = new THREE.Vector3()
   const midPos = new THREE.Vector3()
@@ -53,8 +51,9 @@ export function createDeploymentSystem({
     let enemyNear = 0
     for (const actor of state.actors) {
       if (actor.team === state.player.team || !actor.alive) continue
-      if (Math.hypot(actor.position.x - spawn.x, actor.position.z - spawn.z) < config.deployment.contestedRadius)
+      if (Math.hypot(actor.position.x - spawn.x, actor.position.z - spawn.z) < config.deployment.contestedRadius) {
         enemyNear++
+      }
     }
     return enemyNear >= config.deployment.contestedEnemyCount
   }
@@ -68,7 +67,7 @@ export function createDeploymentSystem({
     const margin = config.deployment.cameraMargin
     return Math.max(
       (half * margin) / Math.tan(vFov / 2),
-      (half * margin) / (Math.tan(vFov / 2) * camera.aspect)
+      (half * margin) / (Math.tan(vFov / 2) * camera.aspect),
     ) * scale
   }
 
@@ -133,7 +132,7 @@ export function createDeploymentSystem({
     midPos.set(
       startPos.x * config.deployment.toScreenMidPositionRatio,
       Math.max(startPos.y + config.deployment.toScreenMidHeightOffset, godPos.y * config.deployment.toScreenMidHeightRatio),
-      startPos.z * config.deployment.toScreenMidPositionRatio
+      startPos.z * config.deployment.toScreenMidPositionRatio,
     )
     screenAnimTime = 0
     deploy.phase = 'to_deploy'
@@ -150,18 +149,9 @@ export function createDeploymentSystem({
     camera.rotation.set(
       THREE.MathUtils.lerp(startPitch, -Math.PI / 2, smoothstep(0, config.deployment.toScreenPitchResetStart, progress)),
       lerpAngle(startYaw, 0, smoothstep(0, config.deployment.toScreenPitchResetStart, progress)),
-      THREE.MathUtils.lerp(startRoll, 0, smoothstep(0, config.deployment.toScreenRollResetStart, progress))
+      THREE.MathUtils.lerp(startRoll, 0, smoothstep(0, config.deployment.toScreenRollResetStart, progress)),
     )
     if (progress >= 1) enterDeployUi()
-  }
-
-  function selectLoadout(kind, id) {
-    if (deploy.phase !== 'deploy_screen') return
-    state.settings.loadout[kind] = id
-    state.player.applyLoadout(state.settings.loadout)
-    hud.updateAmmo()
-    saveSettings(state.settings)
-    refreshScreen()
   }
 
   function startAnimation(index) {
@@ -192,7 +182,7 @@ export function createDeploymentSystem({
     camera.rotation.set(
       THREE.MathUtils.lerp(-Math.PI / 2, 0, smoothstep(config.deployment.deployPitchResetStart, config.deployment.deployPitchResetEnd, progress)),
       lerpAngle(0, endYaw, smoothstep(config.deployment.deployYawResetStart, config.deployment.deployYawResetEnd, progress)),
-      0
+      0,
     )
     if (!landed && progress > config.deployment.landingImpactStart) {
       landed = true
@@ -217,15 +207,17 @@ export function createDeploymentSystem({
     camera.position.copy(endPos)
     deploy.phase = 'none'
     player.applyLoadout(state.settings.loadout, false)
-    hud.updateHealth()
-    hud.updateAmmo()
+    ui.invalidate()
     player.alive = true
     player.position.set(spawn.x, state.groundHeightAt(spawn.x, spawn.z) + config.player.standHeight, spawn.z)
     player.velocity.set(0, 0, 0)
     player.weapon.setVisible(true)
     onDeploy?.(spawn.id, state.settings.loadout)
-    if (input.isTouchMode?.()) input.updateTouchUi?.()
-    else renderer.canvas.requestPointerLock()
+    if (input.isTouchMode?.()) {
+      input.updateTouchUi?.()
+    } else {
+      renderer.canvas.requestPointerLock()
+    }
   }
 
   function updateScreenCamera() {
@@ -236,7 +228,6 @@ export function createDeploymentSystem({
   return {
     showScreen,
     startAnimation,
-    selectLoadout,
     update,
     updateToScreen,
     updateScreenCamera,

@@ -1,12 +1,11 @@
-export { hasInputAction, INPUT_ACTION } from './input.js'
-export { createAuthoritativeSimulation } from './authoritative-simulation.js'
+export { hasInputAction, INPUT_ACTION } from './rules.js'
+export { createAuthoritativeSimulation } from './engine.js'
 export { CFG } from './config.js'
-export { MODE_DEFINITIONS } from './modes.js'
-export { classicOutcome, scoringTeam, zombiePackSize, zombieWaveTotal } from './mode-rules.js'
-export { recordActorElimination } from './scoring.js'
-export { createSimulationState } from './state.js'
+export { MODE_DEFINITIONS } from './rules.js'
+export { classicOutcome, scoringTeam, zombiePackSize, zombieWaveTotal } from './rules.js'
+export { recordActorElimination } from './rules.js'
 export { applyMapDefinition, createMapDefinition, groundHeightAt } from './maps.js'
-export { actionDuration, actionMarker, createActionEngine, createPlayerWeaponActions } from './action-engine.js'
+export { actionDuration, actionMarker, createActionEngine, createPlayerWeaponActions } from './actions.js'
 export {
   addWeaponBloom,
   applyWeaponSpread,
@@ -22,7 +21,7 @@ export {
   traceHitscan,
   updateActorHitboxes,
   useCarriedItem,
-} from './actor-rules.js'
+} from './actors.js'
 export {
   createBoxHitbox,
   createCircleHitbox,

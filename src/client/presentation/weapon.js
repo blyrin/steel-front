@@ -129,7 +129,7 @@ export class WeaponView {
     this.sightCenter = new THREE.Vector3(0, 0.048, -0.04)
 
     const triggerGuard = add(
-      new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0035, 6, 12, Math.PI), dark)
+      new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0035, 6, 12, Math.PI), dark),
     )
     triggerGuard.rotation.x = Math.PI / 2
     triggerGuard.rotation.z = Math.PI
@@ -171,12 +171,12 @@ export class WeaponView {
     const barParts = new THREE.Group()
     const bipodMount = add(
       new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.022, 0.078), dark),
-      barParts
+      barParts,
     )
     bipodMount.position.set(0, -0.012, -0.92)
     const bipodPivot = add(
       new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.07, 8), metal),
-      barParts
+      barParts,
     )
     bipodPivot.rotation.z = Math.PI / 2
     bipodPivot.position.set(0, -0.025, -0.94)
@@ -189,7 +189,7 @@ export class WeaponView {
       const direction = bipodBottom.clone().sub(bipodTop)
       const leg = add(
         new THREE.Mesh(new THREE.BoxGeometry(0.01, direction.length(), 0.01), metal),
-        barParts
+        barParts,
       )
       leg.position.copy(bipodTop).add(bipodBottom).multiplyScalar(0.5)
       leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
@@ -212,7 +212,7 @@ export class WeaponView {
     c4Parts.add(c4Band)
     const c4Light = new THREE.Mesh(
       new THREE.SphereGeometry(0.012, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0xff3b30 })
+      new THREE.MeshBasicMaterial({ color: 0xff3b30 }),
     )
     c4Light.position.set(0.05, 0.048, -0.14)
     c4Parts.add(c4Light)
@@ -284,7 +284,7 @@ export class WeaponView {
     this.primaryAimPosition = new THREE.Vector3(
       -this.sightCenter.x,
       -this.sightCenter.y - 0.006,
-      -0.3
+      -0.3,
     )
     // RPG 瞄准只略收枪，不居中遮挡视野。
     this.rpgAimPosition = new THREE.Vector3(0.12, -0.12, -0.3)
@@ -500,7 +500,7 @@ export class WeaponView {
     lookDelta,
     bobPhase = 0,
     moveAxis = { x: 0, z: 0 },
-    actions = {}
+    actions = {},
   ) {
     if (!this.group.visible) return
     this.aiming = aiming
@@ -539,8 +539,9 @@ export class WeaponView {
     this.swayPitch += (targetPitch - this.swayPitch) * swayEase
     const targetLean = THREE.MathUtils.clamp(moveAxis.x * 0.03 * aimMultiplier, -0.02, 0.02)
     let targetDip = 0
-    if (moveAxis.z < 0) targetDip = sprinting ? 0.012 : 0.006
-    else if (moveAxis.z > 0) targetDip = -0.004
+    if (moveAxis.z < 0) {
+      targetDip = sprinting ? 0.012 : 0.006
+    } else if (moveAxis.z > 0) targetDip = -0.004
     targetDip *= aimMultiplier
     this.strafeLean += (targetLean - this.strafeLean) * (1 - Math.exp(-8 * dt))
     this.sprintDip += (targetDip - this.sprintDip) * (1 - Math.exp(-7 * dt))
@@ -578,7 +579,7 @@ export class WeaponView {
     this.group.position.set(
       this.smoothPos.x + bobX + breathX - this.swayX + this.strafeLean * 0.35 + this.kickX,
       this.smoothPos.y + bobY + breathY - this.swayY - this.sprintDip + this.kickY,
-      this.smoothPos.z + bobZ + Math.abs(this.swayX) * 0.15 + this.kickZ
+      this.smoothPos.z + bobZ + Math.abs(this.swayX) * 0.15 + this.kickZ,
     )
     let rotationX = bobPitch + this.swayPitch + this.kickPitch + (aiming ? this.aimPitch : 0)
     let rotationY = (aiming ? 0 : 0.03) - this.swayX * 1.2 + this.kickYaw
@@ -628,7 +629,7 @@ export class WeaponView {
           this.mag.position.set(
             this.magBase.x + 0.04 * eased,
             this.magBase.y + 0.22 * eased,
-            this.magBase.z + 0.035 * eased
+            this.magBase.z + 0.035 * eased,
           )
           this.mag.rotation.set(-0.9 * eased, 0.35 * eased, 1.1 * eased)
           this.setMagazineScale(1 - 0.22 * eased)
@@ -654,7 +655,7 @@ export class WeaponView {
         this.bolt.position.set(
           this.boltBase.x,
           this.boltBase.y,
-          this.boltBase.z + (emptyReload ? 0.06 : 0)
+          this.boltBase.z + (emptyReload ? 0.06 : 0),
         )
       }
       const progress = reloadAction.progress
@@ -677,9 +678,13 @@ export class WeaponView {
         releaseEnd = 0.88
       }
       let pose
-      if (progress < poseInEnd) pose = smooth(progress / poseInEnd)
-      else if (progress < 0.8) pose = 1
-      else pose = 1 - smooth((progress - 0.8) / 0.2)
+      if (progress < poseInEnd) {
+        pose = smooth(progress / poseInEnd)
+      } else if (progress < 0.8) {
+        pose = 1
+      } else {
+        pose = 1 - smooth((progress - 0.8) / 0.2)
+      }
       const { x, y, z } = this.boltBase
       let reloadRotationX = 0.28 * pose
       let reloadRotationY = -0.1 * pose
@@ -688,7 +693,7 @@ export class WeaponView {
       let reloadPositionY = -0.05 * pose
       let reloadPositionZ = 0.05 * pose
       const handlingArc = Math.sin(
-        Math.PI * THREE.MathUtils.clamp((progress - 0.08) / 0.76, 0, 1)
+        Math.PI * THREE.MathUtils.clamp((progress - 0.08) / 0.76, 0, 1),
       )
       if (modelId === 'shotgun') {
         reloadRotationX = 0.2 * pose
@@ -721,8 +726,11 @@ export class WeaponView {
       }
       if ((detachable || !emptyReload) && progress >= 0.19 && !this.reloadFlags.eject) {
         this.reloadFlags.eject = true
-        if (detachable) this.audio.reloadStage('seat')
-        else this.audio.ping()
+        if (detachable) {
+          this.audio.reloadStage('seat')
+        } else {
+          this.audio.ping()
+        }
       }
       if (progress >= insertStart + 0.08 && !this.reloadFlags.insert) {
         this.reloadFlags.insert = true
@@ -738,13 +746,15 @@ export class WeaponView {
       }
 
       if (!detachable && !emptyReload) {
-        if (progress < 0.1) boltPull = 0
-        else if (progress < 0.18) boltPull = easeOut((progress - 0.1) / 0.08)
-        else if (progress < releaseStart) boltPull = 1
+        if (progress < 0.1) {
+          boltPull = 0
+        } else if (progress < 0.18) {
+          boltPull = easeOut((progress - 0.1) / 0.08)
+        } else if (progress < releaseStart) boltPull = 1
       }
-      if (cyclesBolt && progress >= releaseStart && progress < releaseEnd)
+      if (cyclesBolt && progress >= releaseStart && progress < releaseEnd) {
         boltPull = 1 - easeOut((progress - releaseStart) / (releaseEnd - releaseStart))
-      else if (cyclesBolt && progress >= releaseEnd) boltPull = 0
+      } else if (cyclesBolt && progress >= releaseEnd) boltPull = 0
 
       if (detachable) {
         const removeStart = 0.1
@@ -768,7 +778,7 @@ export class WeaponView {
           this.mag.position.set(
             this.magBase.x + 0.04 * time,
             this.magBase.y - drop * time,
-            this.magBase.z + 0.03 * time
+            this.magBase.z + 0.03 * time,
           )
           this.mag.rotation.set(0.18 * time, -0.1 * time, 0.24 * time)
           this.setMagazineScale(1 - 0.08 * time)
@@ -784,7 +794,7 @@ export class WeaponView {
             this.mag.position.set(
               this.magBase.x - 0.045 * remaining,
               this.magBase.y - drop * remaining,
-              this.magBase.z + 0.035 * remaining
+              this.magBase.z + 0.035 * remaining,
             )
             this.mag.rotation.set(0.22 * remaining, 0.12 * remaining, -0.2 * remaining)
           }
@@ -806,7 +816,7 @@ export class WeaponView {
         this.mag.position.set(
           this.magBase.x + 0.04 * time,
           this.magBase.y + 0.22 * time,
-          this.magBase.z + 0.035 * time
+          this.magBase.z + 0.035 * time,
         )
         this.mag.rotation.set(-0.9 * time, 0.35 * time, 1.1 * time)
         this.setMagazineScale(1 - 0.22 * time)
@@ -818,7 +828,7 @@ export class WeaponView {
         this.mag.position.set(
           this.magBase.x - 0.04 * (1 - time),
           this.magBase.y + 0.16 * (1 - time),
-          this.magBase.z + 0.03 * (1 - time)
+          this.magBase.z + 0.03 * (1 - time),
         )
         this.mag.rotation.set(-0.5 * (1 - time), -0.28 * (1 - time), -0.4 * (1 - time))
         this.setMagazineScale(0.86 + 0.14 * time)
@@ -967,10 +977,14 @@ export class WeaponView {
       }
       const progress = rpgReloadAction.progress
       const smooth = value => value * value * (3 - 2 * value)
-      let dip = 0
-      if (progress < 0.2) dip = smooth(progress / 0.2)
-      else if (progress < 0.78) dip = 1
-      else dip = 1 - smooth((progress - 0.78) / 0.22)
+      let dip
+      if (progress < 0.2) {
+        dip = smooth(progress / 0.2)
+      } else if (progress < 0.78) {
+        dip = 1
+      } else {
+        dip = 1 - smooth((progress - 0.78) / 0.22)
+      }
       this.group.position.y -= 0.12 * dip
       this.group.position.z += 0.08 * dip
       rotationX += 0.28 * dip
@@ -987,7 +1001,7 @@ export class WeaponView {
         rocket.position.set(
           this.rpgRocketHome.x - 0.16 * (1 - time),
           this.rpgRocketHome.y - 0.03 * (1 - time),
-          this.rpgRocketHome.z - 0.22 * (1 - time)
+          this.rpgRocketHome.z - 0.22 * (1 - time),
         )
       } else {
         rocket.visible = true

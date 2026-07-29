@@ -1,3 +1,3 @@
-import { createPortal } from './portal.js'
+import { createClient } from './ui/client.js'
 
-createPortal().start()
+createClient().start()

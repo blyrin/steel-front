@@ -1,5 +1,34 @@
 import { CFG } from './config.js'
-import { createSimulationState } from '#simulation'
+
+function createSimulationState({ records, settings }) {
+  return {
+    running: false,
+    paused: false,
+    loading: true,
+    simulationTimeMs: 0,
+    match: { modeId: null, startTime: 0, score: { allies: 0, axis: 0 } },
+    modeState: null,
+    mapId: null,
+    mapDefinition: null,
+    mapSize: 0,
+    groundHeightAt: () => 0,
+    groundRegions: [],
+    objectives: { fortress: null },
+    player: null,
+    actors: [],
+    events: [],
+    spawnQueue: [],
+    removeQueue: [],
+    obstacles: [],
+    coverPoints: [],
+    ammoStations: [],
+    medicalStations: [],
+    smokeClouds: [],
+    lastPlayerShot: null,
+    records,
+    settings,
+  }
+}
 
 const SETTINGS_KEY = 'steel-front-settings'
 const RECORDS_KEY = 'steel-front-records'
@@ -43,8 +72,9 @@ function loadRecords() {
   const raw = localStorage.getItem(RECORDS_KEY)
   if (!raw) return { classic: createDefaultRecords(), zombie: createDefaultRecords() }
   const data = JSON.parse(raw)
-  if (!data || typeof data !== 'object' || Array.isArray(data))
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new TypeError('战绩数据格式无效')
+  }
   if (Object.hasOwn(data, 'classic') || Object.hasOwn(data, 'zombie')) {
     return {
       classic: loadRecordBucket(data.classic),
@@ -106,8 +136,11 @@ export function saveRecords(records) {
 export function recordMatchResult(records, modeId, playerWon, durationSeconds) {
   const modeRecords = records[modeId]
   modeRecords.matches++
-  if (playerWon) modeRecords.wins++
-  else modeRecords.losses++
+  if (playerWon) {
+    modeRecords.wins++
+  } else {
+    modeRecords.losses++
+  }
   modeRecords.totalSeconds += Math.floor(durationSeconds)
   saveRecords(records)
 }

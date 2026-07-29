@@ -22,7 +22,115 @@ const LAMP_POOL_MATERIAL = new THREE.MeshBasicMaterial({
   blending: THREE.AdditiveBlending,
 })
 
-export function createZombieMap({ scene, matLib, definition, objectives }) {
+function createObjectiveSystem({ scene, matLib }) {
+  function addMesh(group, geometry, material, x, y, z, castShadow = true) {
+    const mesh = new THREE.Mesh(geometry, material)
+    mesh.position.set(x, y, z)
+    mesh.castShadow = castShadow
+    mesh.receiveShadow = true
+    group.add(mesh)
+    return mesh
+  }
+
+  function createSupplyStation(group, { x, z, deckHeight, kind }) {
+    const station = new THREE.Group()
+    station.position.set(x, deckHeight, z)
+    const isMedical = kind === 'medical'
+    const accent = (isMedical ? matLib.axisAccent : matLib.allyAccent).clone()
+    accent.color.set(isMedical ? 0xe35b62 : 0xffd447)
+    accent.emissive.set(isMedical ? 0x65151d : 0x6b4d0e)
+    accent.emissiveIntensity = 1.6
+
+    addMesh(station, new THREE.BoxGeometry(2.2, 0.14, 1.35), matLib.metalDark, 0, 0.07, 0)
+    addMesh(
+      station,
+      new THREE.BoxGeometry(1.05, 0.72, 0.86),
+      isMedical ? matLib.rust : matLib.metal,
+      0,
+      0.5,
+      0,
+    )
+    addMesh(station, new THREE.BoxGeometry(1.12, 0.08, 0.92), accent, 0, 0.88, 0)
+
+    if (isMedical) {
+      const panel = addMesh(
+        station,
+        new THREE.BoxGeometry(0.72, 0.72, 0.08),
+        matLib.metalDark,
+        0,
+        1.25,
+        -0.47,
+      )
+      panel.castShadow = false
+      addMesh(station, new THREE.BoxGeometry(0.42, 0.1, 0.05), accent, 0, 1.25, -0.52)
+      addMesh(station, new THREE.BoxGeometry(0.1, 0.42, 0.05), accent, 0, 1.25, -0.52)
+    } else {
+      addMesh(station, new THREE.BoxGeometry(0.55, 0.55, 0.06), accent, 0, 1.2, -0.47)
+      for (const offset of [-0.12, 0, 0.12]) {
+        addMesh(
+          station,
+          new THREE.CylinderGeometry(0.035, 0.035, 0.28, 6),
+          matLib.brass,
+          offset,
+          1.2,
+          -0.52,
+        ).rotation.x = Math.PI / 2
+      }
+    }
+
+    group.add(station)
+    matLib.addOutline(station, 1.03)
+  }
+
+  function createFortress({
+                            x,
+                            z,
+                            maxHealth,
+                            radius,
+                            attackRadius,
+                            bottomRadius,
+                            topRadius,
+                            deckHeight,
+                          }) {
+    const group = new THREE.Group()
+    group.position.set(x, 0, z)
+
+    const fortressMetal = matLib.metal.clone()
+    fortressMetal.color.set(0x65747d)
+    const fortressDeckMetal = fortressMetal.clone()
+    fortressDeckMetal.color.set(0x3d5059)
+
+    addMesh(
+      group,
+      new THREE.CylinderGeometry(topRadius, bottomRadius, deckHeight, 48, 4, false),
+      fortressMetal,
+      0,
+      deckHeight * 0.5,
+      0,
+    )
+    const topSurface = addMesh(
+      group,
+      new THREE.CircleGeometry(topRadius * 0.96, 48),
+      fortressDeckMetal,
+      0,
+      deckHeight + 0.035,
+      0,
+      false,
+    )
+    topSurface.rotation.x = -Math.PI / 2
+    createSupplyStation(group, { x: -3.2, z: 0, deckHeight, kind: 'medical' })
+    createSupplyStation(group, { x: 3.2, z: 0, deckHeight, kind: 'ammo' })
+
+    scene.add(group)
+    matLib.addOutline(group, 1.025)
+    return group
+  }
+
+  return { createFortress }
+}
+
+export function createZombieMap({ scene, matLib, definition }) {
+  const objectives = createObjectiveSystem({ scene, matLib })
   const mapSize = definition.size
 
   function addMesh(mesh, { castShadow = true, receiveShadow = true } = {}) {
@@ -53,7 +161,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
 
     const mud = new THREE.Mesh(
       new THREE.PlaneGeometry(mapSize * 0.82, mapSize * 0.22),
-      matLib.dirt.clone()
+      matLib.dirt.clone(),
     )
     mud.material.color.set(ZOMBIE_COLORS.mud)
     mud.rotation.x = -Math.PI / 2
@@ -63,7 +171,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
 
     const road = new THREE.Mesh(
       new THREE.PlaneGeometry(12, mapSize * 1.7),
-      matLib.road.clone()
+      matLib.road.clone(),
     )
     road.material.color.set(ZOMBIE_COLORS.asphalt)
     road.rotation.x = -Math.PI / 2
@@ -73,7 +181,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     for (let i = 0; i < 32; i++) {
       const patch = new THREE.Mesh(
         new THREE.CircleGeometry(1.2 + Math.random() * 3.5, 8),
-        matLib.dirt.clone()
+        matLib.dirt.clone(),
       )
       patch.material.color.set(Math.random() > 0.5 ? ZOMBIE_COLORS.mud : ZOMBIE_COLORS.concreteDark)
       patch.rotation.x = -Math.PI / 2
@@ -81,7 +189,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
       patch.position.set(
         (Math.random() - 0.5) * mapSize * 0.82,
         0.06,
-        (Math.random() - 0.5) * mapSize * 0.82
+        (Math.random() - 0.5) * mapSize * 0.82,
       )
       addMesh(patch, { castShadow: false })
     }
@@ -90,7 +198,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
   function createCentralPlaza() {
     const concrete = new THREE.Mesh(
       new THREE.CircleGeometry(29, 48),
-      matLib.concrete.clone()
+      matLib.concrete.clone(),
     )
     concrete.material.color.set(ZOMBIE_COLORS.concreteDark)
     concrete.rotation.x = -Math.PI / 2
@@ -99,7 +207,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
 
     const roadRing = new THREE.Mesh(
       new THREE.RingGeometry(19, 26, 48),
-      matLib.road.clone()
+      matLib.road.clone(),
     )
     roadRing.material.color.set(ZOMBIE_COLORS.asphalt)
     roadRing.rotation.x = -Math.PI / 2
@@ -108,7 +216,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
 
     const centerSlab = new THREE.Mesh(
       new THREE.CircleGeometry(18.5, 32),
-      matLib.concrete.clone()
+      matLib.concrete.clone(),
     )
     centerSlab.material.color.set(0x565b58)
     centerSlab.rotation.x = -Math.PI / 2
@@ -119,7 +227,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
       const angle = (i / 12) * Math.PI * 2
       const crack = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.035, 7 + Math.random() * 5),
-        matLib.metalDark
+        matLib.metalDark,
       )
       crack.position.set(Math.cos(angle) * 22, 0.075, Math.sin(angle) * 22)
       crack.rotation.y = angle + (Math.random() - 0.5) * 0.4
@@ -139,12 +247,12 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
       piece.position.set(
         (Math.random() - 0.5) * 3.8 * scale,
         height * 0.5,
-        (Math.random() - 0.5) * 3.8 * scale
+        (Math.random() - 0.5) * 3.8 * scale,
       )
       piece.rotation.set(
         (Math.random() - 0.5) * 0.5,
         Math.random() * Math.PI,
-        (Math.random() - 0.5) * 0.5
+        (Math.random() - 0.5) * 0.5,
       )
       group.add(piece)
     }
@@ -173,14 +281,14 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     for (const windowX of [-width * 0.27, width * 0.27]) {
       const window = new THREE.Mesh(
         new THREE.BoxGeometry(width * 0.18, height * 0.2, 0.06),
-        windowMaterial
+        windowMaterial,
       )
       window.position.set(windowX, height * 0.58, -depth * 0.68)
       group.add(window)
       for (const barX of [-0.18, 0.18]) {
         const bar = new THREE.Mesh(
           new THREE.BoxGeometry(0.045, height * 0.22, 0.08),
-          matLib.rust
+          matLib.rust,
         )
         bar.position.set(windowX + barX * scale, height * 0.58, -depth * 0.72)
         group.add(bar)
@@ -188,14 +296,14 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     }
     const doorway = new THREE.Mesh(
       new THREE.BoxGeometry(width * 0.18, height * 0.45, 0.08),
-      matLib.metalDark
+      matLib.metalDark,
     )
     doorway.position.set(width * 0.05, height * 0.28, -depth * 0.7)
     group.add(doorway)
     for (const side of [-1, 1]) {
       const brokenWall = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, height * (0.42 + Math.random() * 0.25), depth * 0.54),
-        wall
+        wall,
       )
       brokenWall.position.set(side * width * 0.48, height * 0.34, depth * 0.02)
       brokenWall.rotation.z = side * (0.08 + Math.random() * 0.12)
@@ -213,7 +321,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     for (const roofX of [-width * 0.34, width * 0.34]) {
       const beam = new THREE.Mesh(
         new THREE.BoxGeometry(0.22, 0.22, depth + 0.8),
-        matLib.wood
+        matLib.wood,
       )
       beam.position.set(roofX, height + 0.34, 0)
       beam.rotation.z = roof.rotation.z
@@ -221,7 +329,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     }
     const chimney = new THREE.Mesh(
       new THREE.BoxGeometry(0.7 * scale, 1.25 * scale, 0.7 * scale),
-      wall
+      wall,
     )
     chimney.position.set(-width * 0.26, height + 0.55 * scale, depth * 0.16)
     chimney.rotation.z = -0.08
@@ -251,7 +359,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     group.add(signPole)
     const warning = new THREE.Mesh(
       new THREE.ConeGeometry(0.62, 0.72, 3),
-      matLib.allyAccent.clone()
+      matLib.allyAccent.clone(),
     )
     warning.material.color.set(ZOMBIE_COLORS.warning)
     warning.position.set(0, 3.35, -0.04)
@@ -259,7 +367,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     group.add(warning)
     const warningSlash = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 0.72, 0.06),
-      matLib.rust
+      matLib.rust,
     )
     warningSlash.position.set(0, 3.35, -0.11)
     warningSlash.rotation.z = -0.7
@@ -280,14 +388,14 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     group.add(hood)
     const cabin = new THREE.Mesh(
       new THREE.BoxGeometry(1.9, 0.58, 1.8),
-      matLib.metalDark
+      matLib.metalDark,
     )
     cabin.position.set(0, 1.3, 0.35)
     cabin.rotation.x = -0.08
     group.add(cabin)
     const windshield = new THREE.Mesh(
       new THREE.BoxGeometry(1.62, 0.42, 0.06),
-      matLib.glass
+      matLib.glass,
     )
     windshield.position.set(0, 1.38, -0.58)
     windshield.rotation.x = -0.18
@@ -295,13 +403,13 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     for (const side of [-1, 1]) {
       const door = new THREE.Mesh(
         new THREE.BoxGeometry(0.06, 0.5, 1.35),
-        matLib.rust
+        matLib.rust,
       )
       door.position.set(side * 1.16, 0.92, 0.38)
       group.add(door)
       const bumper = new THREE.Mesh(
         new THREE.BoxGeometry(2.45, 0.16, 0.18),
-        matLib.metalDark
+        matLib.metalDark,
       )
       bumper.position.set(0, 0.42, side > 0 ? 2.15 : -2.15)
       group.add(bumper)
@@ -332,7 +440,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     for (const direction of [-1, 1]) {
       const wire = new THREE.Mesh(
         new THREE.BoxGeometry(length * 0.86, 0.045, 0.045),
-        matLib.rust
+        matLib.rust,
       )
       wire.position.y = 1.45 + direction * 0.22
       wire.rotation.z = direction * 0.08
@@ -347,19 +455,19 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     group.rotation.y = rotation
     const pole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.12, 0.18, 4.8, 8),
-      matLib.metalDark
+      matLib.metalDark,
     )
     pole.position.y = 2.4
     group.add(pole)
     const arm = new THREE.Mesh(
       new THREE.BoxGeometry(1.1, 0.12, 0.12),
-      matLib.rust
+      matLib.rust,
     )
     arm.position.set(0.45, 4.55, 0)
     group.add(arm)
     const lamp = new THREE.Mesh(
       new THREE.SphereGeometry(0.2, 8, 6),
-      matLib.allyAccent.clone()
+      matLib.allyAccent.clone(),
     )
     lamp.material.color.set(0xffb86b)
     lamp.material.emissive.set(0xff7a3d)
@@ -384,7 +492,7 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
       const { x, z, rotation } = grave
       const mound = new THREE.Mesh(
         new THREE.SphereGeometry(1.25, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.5),
-        matLib.dirt
+        matLib.dirt,
       )
       mound.position.set(x, 0.08, z)
       mound.scale.z = 0.62
@@ -426,29 +534,32 @@ export function createZombieMap({ scene, matLib, definition, objectives }) {
     }
     const moon = new THREE.Mesh(
       new THREE.SphereGeometry(12, 16, 10),
-      new THREE.MeshBasicMaterial({ color: 0xd9e1c4 })
+      new THREE.MeshBasicMaterial({ color: 0xd9e1c4 }),
     )
     moon.position.set(-120, 100, -180)
     addMesh(moon, { castShadow: false, receiveShadow: false })
   }
 
-  const map = { definition, buildMap }
-
   function buildMap() {
     createGround()
     createCentralPlaza()
     for (const item of definition.features) {
-      if (item.type === 'street-lamp') createStreetLamp(item.x, item.z, item.rotation)
-      else if (item.type === 'ruined-house') createRuinedHouse(item.x, item.z, item.rotation, item.scale)
-      else if (item.type === 'barricade') createBarricade(item.x, item.z, item.rotation, item.width)
-      else if (item.type === 'wreck') createWreck(item.x, item.z, item.rotation)
-      else if (item.type === 'rubble') createRubblePile(item.x, item.z, item.scale)
-      else if (item.type === 'fence') createFenceLine(item.x, item.z, item.length, item.rotation)
+      if (item.type === 'street-lamp') {
+        createStreetLamp(item.x, item.z, item.rotation)
+      } else if (item.type === 'ruined-house') {
+        createRuinedHouse(item.x, item.z, item.rotation, item.scale)
+      } else if (item.type === 'barricade') {
+        createBarricade(item.x, item.z, item.rotation, item.width)
+      } else if (item.type === 'wreck') {
+        createWreck(item.x, item.z, item.rotation)
+      } else if (item.type === 'rubble') {
+        createRubblePile(item.x, item.z, item.scale)
+      } else if (item.type === 'fence') createFenceLine(item.x, item.z, item.length, item.rotation)
     }
     createGraves()
     createLightingAndSky()
     objectives.createFortress(definition.objectives.fortress)
   }
 
-  return map
+  return { definition, buildMap }
 }

@@ -13,8 +13,9 @@ function createCanvasTexture(size, paint, options = {}) {
   texture.minFilter = THREE.NearestMipmapLinearFilter
   texture.anisotropy = options.anisotropy ?? 4
   texture.colorSpace = THREE.SRGBColorSpace
-  if (Array.isArray(options.repeat)) texture.repeat.set(...options.repeat)
-  else if (options.repeat) texture.repeat.set(options.repeat, options.repeat)
+  if (Array.isArray(options.repeat)) {
+    texture.repeat.set(...options.repeat)
+  } else if (options.repeat) texture.repeat.set(options.repeat, options.repeat)
   return texture
 }
 
@@ -276,7 +277,7 @@ export function createSceneRuntime(config) {
     config.player.baseFov,
     innerWidth / innerHeight,
     config.render.cameraNear,
-    config.render.cameraFar
+    config.render.cameraFar,
   )
   scene.add(camera)
 
@@ -313,7 +314,7 @@ export function createSceneRuntime(config) {
   const postGeometry = new THREE.BufferGeometry()
   postGeometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3)
+    new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3),
   )
   postGeometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2))
   postScene.add(
@@ -325,8 +326,8 @@ export function createSceneRuntime(config) {
         fragmentShader: POST_FRAGMENT,
         depthTest: false,
         depthWrite: false,
-      })
-    )
+      }),
+    ),
   )
 
   let renderFrame = 0

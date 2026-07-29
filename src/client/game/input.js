@@ -77,7 +77,7 @@ const GYRO_CAMERA_QUATERNION = new THREE.Quaternion(
   -Math.SQRT1_2,
   0,
   0,
-  Math.SQRT1_2
+  Math.SQRT1_2,
 )
 
 function detectTouchMode() {
@@ -194,8 +194,9 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
     if (
       Math.abs(yaw) < inputConfig.gyroDeadzone &&
       Math.abs(pitch) < inputConfig.gyroDeadzone
-    )
+    ) {
       return
+    }
     gyroPendingX +=
       THREE.MathUtils.clamp(yaw, -inputConfig.gyroMaxStep, inputConfig.gyroMaxStep) *
       inputConfig.gyroLookScale
@@ -212,7 +213,7 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
       THREE.MathUtils.degToRad(event.beta),
       THREE.MathUtils.degToRad(event.alpha),
       THREE.MathUtils.degToRad(-event.gamma),
-      'YXZ'
+      'YXZ',
     )
     gyroCurrent.setFromEuler(gyroEuler)
     gyroCurrent.multiply(GYRO_CAMERA_QUATERNION)
@@ -295,13 +296,10 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
     if (onC4 && aimToggled) setAimToggled(false)
 
     let fireLabel = '开火'
-    let fireAria = '开火'
     if (onC4) {
       fireLabel = '引爆'
-      fireAria = '引爆C4'
     } else if (onRpg) {
       fireLabel = '发射'
-      fireAria = '发射火箭'
     }
     ui.setTouchLabel('fire', fireLabel)
     ui.setTouchLabel('reload', onRpg ? '上弹' : '装弹')
@@ -318,8 +316,11 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
       landscapeOk
     ui.setTouchVisible(show)
     if (!touchMode) return
-    if (!show) clearTouchActions()
-    else updateTouchActionLabels()
+    if (!show) {
+      clearTouchActions()
+    } else {
+      updateTouchActionLabels()
+    }
   }
 
   function getStickRadius() {
@@ -483,7 +484,7 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
       if (!heldKeys.has(event.code)) pressed.add(event.code)
       heldKeys.add(event.code)
     },
-    true
+    true,
   )
 
   document.addEventListener(
@@ -495,7 +496,7 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
       }
       heldKeys.delete(event.code)
     },
-    true
+    true,
   )
 
   window.addEventListener('beforeunload', event => {
@@ -532,10 +533,11 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
     event => {
       event.preventDefault()
       if (!canControl()) return
-      if (event.deltaY > 0) pressed.add('WeaponNext')
-      else if (event.deltaY < 0) pressed.add('WeaponPrev')
+      if (event.deltaY > 0) {
+        pressed.add('WeaponNext')
+      } else if (event.deltaY < 0) pressed.add('WeaponPrev')
     },
-    { passive: false }
+    { passive: false },
   )
   document.addEventListener('dragstart', event => event.preventDefault())
   document.addEventListener('selectstart', event => event.preventDefault())
@@ -549,8 +551,11 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
     if (state.running && !state.paused && state.player?.alive && deploy.phase === 'none') onPause()
   })
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) reset()
-    else resetGyroBaseline()
+    if (document.hidden) {
+      reset()
+    } else {
+      resetGyroBaseline()
+    }
   })
   window.addEventListener('blur', reset)
   window.addEventListener('resize', () => {
@@ -614,9 +619,6 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
     },
     isTouchMode() {
       return touchMode
-    },
-    isLandscapeOk() {
-      return landscapeOk
     },
     enableGyro,
     syncUi() {

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 
-export function createWorldSystem({ scene, matLib, particles, map }) {
+export function createClassicMap({ scene, matLib, particles, map }) {
   const sharedGeometry = {
     sandbag: new THREE.CapsuleGeometry(0.28, 0.35, 4, 8),
     sandbagPlank: new THREE.BoxGeometry(3.1, 0.08, 0.35),
@@ -30,7 +30,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     rz,
     sx,
     sy,
-    sz
+    sz,
   ) {
     instanceTransform.position.set(x, y, z)
     instanceTransform.rotation.set(rx, ry, rz)
@@ -61,14 +61,14 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     return mesh
   }
 
-  function buildClassicMap() {
+  function buildMap() {
     const mapSize = map.size
     const half = mapSize / 2
     const groundGeo = new THREE.PlaneGeometry(
       mapSize * 2,
       mapSize * 2,
       map.terrainSegments,
-      map.terrainSegments
+      map.terrainSegments,
     )
     const positions = groundGeo.attributes.position
     for (let i = 0; i < positions.count; i++) {
@@ -83,8 +83,9 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
           Math.sin(x * 0.11 + y * 0.07) * 0.22 +
           Math.cos(x * 0.19 - y * 0.13) * 0.12
         let roadDip = 0
-        if (Math.abs(x) < 6 || Math.abs(y) < 5) roadDip = -0.08
-        else if (Math.abs(x) < 12 || Math.abs(y) < 10) roadDip = -0.03
+        if (Math.abs(x) < 6 || Math.abs(y) < 5) {
+          roadDip = -0.08
+        } else if (Math.abs(x) < 12 || Math.abs(y) < 10) roadDip = -0.03
         positions.setZ(i, undulation + roadDip + (Math.random() - 0.5) * 0.08)
       } else {
         positions.setZ(i, -1.5 + Math.random() * 0.4)
@@ -107,7 +108,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         patch.rotation,
         patch.radius,
         patch.radius,
-        1
+        1,
       )
     }
     addInstances(sharedGeometry.dirtPatch, matLib.dirt, dirtPatchInstances)
@@ -115,7 +116,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const roadNS = enableShadow(
       new THREE.Mesh(new THREE.PlaneGeometry(11, mapSize), matLib.road),
       false,
-      true
+      true,
     )
     roadNS.rotation.x = -Math.PI / 2
     roadNS.position.y = 0.03
@@ -124,7 +125,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const roadEW = enableShadow(
       new THREE.Mesh(new THREE.PlaneGeometry(mapSize * 0.72, 9), matLib.road),
       false,
-      true
+      true,
     )
     roadEW.rotation.x = -Math.PI / 2
     roadEW.position.y = 0.035
@@ -135,7 +136,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const shoulder = enableShadow(
         new THREE.Mesh(new THREE.PlaneGeometry(2.2, mapSize * 0.95), matLib.dirt),
         false,
-        true
+        true,
       )
       shoulder.rotation.x = -Math.PI / 2
       shoulder.position.set(side * 6.4, 0.025, 0)
@@ -143,42 +144,51 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     }
 
     const craterInstances = { discs: [], rims: [], mounds: [] }
-    for (const crater of map.features.filter(item => item.type === 'crater'))
+    for (const crater of map.features.filter(item => item.type === 'crater')) {
       createCrater(crater, craterInstances)
+    }
     addInstances(sharedGeometry.crater, matLib.crater, craterInstances.discs)
     addInstances(sharedGeometry.craterRim, matLib.dirt, craterInstances.rims)
     addInstances(sharedGeometry.craterMound, matLib.dirt, craterInstances.mounds)
 
-    for (const building of map.features.filter(item => item.type === 'building'))
+    for (const building of map.features.filter(item => item.type === 'building')) {
       createBuilding(building)
+    }
 
     const sandbagInstances = { bags: [], planks: [] }
-    for (const sandbag of map.features.filter(item => item.type === 'sandbag'))
+    for (const sandbag of map.features.filter(item => item.type === 'sandbag')) {
       createSandbags(sandbag, sandbagInstances)
+    }
     addInstances(sharedGeometry.sandbag, matLib.sandbag, sandbagInstances.bags)
     addInstances(sharedGeometry.sandbagPlank, matLib.wood, sandbagInstances.planks)
 
     const crateInstances = { wood: [], metal: [] }
-    for (const crate of map.features.filter(item => item.type === 'crate'))
+    for (const crate of map.features.filter(item => item.type === 'crate')) {
       createCrate(crate, crateInstances)
+    }
     addInstances(sharedGeometry.box, matLib.wood, crateInstances.wood)
     addInstances(sharedGeometry.box, matLib.metalDark, crateInstances.metal)
 
-    for (const tank of map.features.filter(item => item.type === 'tank'))
+    for (const tank of map.features.filter(item => item.type === 'tank')) {
       createWreckTank(tank.x, tank.z, tank.rotation)
-    for (const wire of map.features.filter(item => item.type === 'wire'))
+    }
+    for (const wire of map.features.filter(item => item.type === 'wire')) {
       createBarbedWire(wire.x, wire.z, wire.rotation)
+    }
     const treeInstances = { trunks: [], branches: [], foliage: [], roots: [] }
-    for (const tree of map.features.filter(item => item.type === 'tree'))
+    for (const tree of map.features.filter(item => item.type === 'tree')) {
       createTree(tree, treeInstances)
+    }
     addInstances(sharedGeometry.trunk, matLib.treeTrunk, treeInstances.trunks)
     addInstances(sharedGeometry.branch, matLib.treeBranch, treeInstances.branches)
     addInstances(sharedGeometry.foliage, matLib.treeFoliage, treeInstances.foliage)
     addInstances(sharedGeometry.root, matLib.dirt, treeInstances.roots)
-    for (const debris of map.features.filter(item => item.type === 'debris'))
+    for (const debris of map.features.filter(item => item.type === 'debris')) {
       createDebris(debris)
-    for (const station of map.features.filter(item => item.type === 'ammo-station'))
+    }
+    for (const station of map.features.filter(item => item.type === 'ammo-station')) {
       createAmmoStation(station.x, station.z, station.rotation)
+    }
     createSky()
     createDistantHills()
     createSmokeColumns()
@@ -193,13 +203,13 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const crate = enableShadow(
         new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.72, 1.05), matLib.wood),
         true,
-        true
+        true,
       )
       crate.position.set(side * 0.54, 0.36, 0)
       group.add(crate)
       const band = new THREE.Mesh(
         new THREE.BoxGeometry(1.08, 0.08, 1.08),
-        matLib.metalDark
+        matLib.metalDark,
       )
       band.position.set(side * 0.54, 0.48, 0)
       group.add(band)
@@ -209,7 +219,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     sign.position.set(0, 1.65, 0)
     const diamond = new THREE.Mesh(
       new THREE.BoxGeometry(0.48, 0.48, 0.08),
-      matLib.allyAccent
+      matLib.allyAccent,
     )
     diamond.rotation.z = Math.PI / 4
     diamond.userData.noCollision = true
@@ -217,7 +227,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     for (const offset of [-0.11, 0, 0.11]) {
       const round = new THREE.Mesh(
         new THREE.CylinderGeometry(0.035, 0.035, 0.28, 6),
-        matLib.brass
+        matLib.brass,
       )
       round.rotation.x = Math.PI / 2
       round.position.set(offset, 0, -0.08)
@@ -299,7 +309,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
           0,
           scale * 1.35,
           scale * 0.42,
-          scale
+          scale,
         )
         addInstanceTransform(
           cloudInstances,
@@ -311,7 +321,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
           0,
           scale * 1.35,
           scale * 0.42,
-          scale
+          scale,
         )
       }
     }
@@ -333,7 +343,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         0,
         hill.width,
         hill.height,
-        hill.width
+        hill.width,
       )
     }
     addInstances(sharedGeometry.hill, hillMat, matrices)
@@ -350,7 +360,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       0,
       radius,
       radius,
-      1
+      1,
     )
     addInstanceTransform(
       instances.rims,
@@ -362,7 +372,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       0,
       radius,
       radius,
-      0.45
+      0.45,
     )
 
     for (let i = 0; i < 10; i++) {
@@ -379,7 +389,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         0,
         moundRadius * 1.2,
         moundRadius * 0.45,
-        moundRadius
+        moundRadius,
       )
     }
   }
@@ -395,7 +405,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const floor = enableShadow(
       new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.18, depth - 0.2), matLib.concrete),
       false,
-      true
+      true,
     )
     floor.position.y = 0.09
     group.add(floor)
@@ -403,7 +413,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const backWall = enableShadow(
       new THREE.Mesh(new THREE.BoxGeometry(width, height, wallThickness), wallMat),
       true,
-      true
+      true,
     )
     backWall.position.set(0, height / 2, -depth / 2)
     group.add(backWall)
@@ -413,7 +423,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const wall = enableShadow(
         new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallH, depth), wallMat),
         true,
-        true
+        true,
       )
       wall.position.set((side * width) / 2, wallH / 2, 0)
       group.add(wall)
@@ -423,7 +433,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const lowerFront = enableShadow(
       new THREE.Mesh(new THREE.BoxGeometry(width, height * 0.38, wallThickness), wallMat),
       true,
-      true
+      true,
     )
     lowerFront.position.set(0, height * 0.19, depth / 2)
     group.add(lowerFront)
@@ -432,7 +442,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const segment = enableShadow(
         new THREE.Mesh(new THREE.BoxGeometry(width * 0.28, segmentH, wallThickness), wallMat),
         true,
-        true
+        true,
       )
       segment.position.set(side * width * 0.34, height * 0.38 + segmentH / 2, depth / 2)
       group.add(segment)
@@ -440,7 +450,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const upperFront = enableShadow(
       new THREE.Mesh(new THREE.BoxGeometry(width, height * 0.16, wallThickness), wallMat),
       true,
-      true
+      true,
     )
     upperFront.position.set(0, height * 0.9, depth / 2)
     group.add(upperFront)
@@ -452,7 +462,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const frame = enableShadow(
         new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.12), matLib.wood),
         true,
-        true
+        true,
       )
       frame.position.set(wx, wy, -depth / 2 + wallThickness * 0.6)
       group.add(frame)
@@ -467,7 +477,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const door = enableShadow(
       new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.1, 0.1), matLib.wood),
       true,
-      true
+      true,
     )
     door.position.set(width * 0.15, 1.05, depth / 2 - wallThickness * 0.2)
     door.rotation.y = 0.35 + Math.random() * 0.5
@@ -477,7 +487,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const plinth = enableShadow(
       new THREE.Mesh(new THREE.BoxGeometry(width + 0.2, 0.35, depth + 0.2), accentMat),
       true,
-      true
+      true,
     )
     plinth.position.y = 0.18
     group.add(plinth)
@@ -487,7 +497,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         const roof = enableShadow(
           new THREE.Mesh(new THREE.BoxGeometry(width + 0.5, 0.18, depth + 0.5), matLib.roof),
           true,
-          true
+          true,
         )
         roof.position.set(0, height + 0.12, 0)
         roof.rotation.z = (Math.random() - 0.5) * 0.08
@@ -498,10 +508,10 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
           const slope = enableShadow(
             new THREE.Mesh(
               new THREE.BoxGeometry(width + 0.4, 0.14, depth * 0.62),
-              matLib.roof
+              matLib.roof,
             ),
             true,
-            true
+            true,
           )
           slope.position.set(0, height + 0.7, side * depth * 0.22)
           slope.rotation.x = side * 0.55
@@ -510,7 +520,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         const beam = enableShadow(
           new THREE.Mesh(new THREE.BoxGeometry(width * 0.9, 0.12, 0.12), matLib.wood),
           true,
-          true
+          true,
         )
         beam.position.set(0, height + 1.15, 0)
         group.add(beam)
@@ -521,10 +531,10 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         const beam = enableShadow(
           new THREE.Mesh(
             new THREE.BoxGeometry(0.18, 0.18, 1.5 + Math.random() * 2),
-            matLib.wood
+            matLib.wood,
           ),
           true,
-          true
+          true,
         )
         beam.position.set((Math.random() - 0.5) * width * 0.5, 0.4 + Math.random() * 1.2, (Math.random() - 0.5) * depth * 0.4)
         beam.rotation.set(Math.random() * 0.5, Math.random() * Math.PI, Math.random() * 0.4)
@@ -537,15 +547,15 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const rubble = enableShadow(
         new THREE.Mesh(
           new THREE.BoxGeometry(0.4 + Math.random() * 0.5, 0.2 + Math.random() * 0.3, 0.3 + Math.random() * 0.4),
-          Math.random() > 0.5 ? matLib.brick : matLib.concrete
+          Math.random() > 0.5 ? matLib.brick : matLib.concrete,
         ),
         true,
-        true
+        true,
       )
       rubble.position.set(
         (Math.random() - 0.5) * (width - 0.8),
         0.15,
-        (Math.random() - 0.5) * (depth - 0.6)
+        (Math.random() - 0.5) * (depth - 0.6),
       )
       rubble.rotation.y = Math.random() * Math.PI
       group.add(rubble)
@@ -571,7 +581,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
           Math.PI / 2,
           1,
           0.85 + Math.random() * 0.15,
-          1.05
+          1.05,
         )
       }
     }
@@ -586,7 +596,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       0,
       1,
       1,
-      1
+      1,
     )
   }
 
@@ -604,7 +614,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       0,
       size,
       size,
-      size
+      size,
     )
     for (const side of [-1, 1]) {
       addNestedInstance(
@@ -618,7 +628,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         0,
         size + 0.02,
         0.05,
-        0.05
+        0.05,
       )
     }
     addNestedInstance(
@@ -632,7 +642,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       0,
       0.05,
       0.05,
-      size + 0.02
+      size + 0.02,
     )
 
     if (open) {
@@ -647,7 +657,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         -0.9,
         size * 0.95,
         0.06,
-        size * 0.95
+        size * 0.95,
       )
     }
 
@@ -667,7 +677,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const glacis = enableShadow(
       new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.7, 1.4), matLib.rust),
       true,
-      true
+      true,
     )
     glacis.position.set(0, 1.15, -2.0)
     glacis.rotation.x = -0.45
@@ -676,7 +686,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const turret = enableShadow(
       new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.15, 0.75, 10), matLib.rust),
       true,
-      true
+      true,
     )
     turret.position.set(0.1, 1.75, -0.35)
     turret.rotation.y = 0.35
@@ -685,7 +695,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const turretTop = enableShadow(
       new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.25, 8), matLib.metalDark),
       true,
-      true
+      true,
     )
     turretTop.position.set(0.1, 2.2, -0.35)
     group.add(turretTop)
@@ -693,7 +703,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const barrel = enableShadow(
       new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 2.4, 8), matLib.rust),
       true,
-      true
+      true,
     )
     barrel.rotation.x = Math.PI / 2
     barrel.position.set(0.1, 1.78, -2.1)
@@ -702,7 +712,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const muzzle = enableShadow(
       new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.16, 0.25, 8), matLib.metalDark),
       true,
-      true
+      true,
     )
     muzzle.rotation.x = Math.PI / 2
     muzzle.position.set(0.1, 1.78, -3.25)
@@ -712,7 +722,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const track = enableShadow(
         new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 5.1), matLib.metalDark),
         true,
-        true
+        true,
       )
       track.position.set(side * 1.35, 0.4, 0)
       group.add(track)
@@ -720,7 +730,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         const wheel = enableShadow(
           new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.2, 10), matLib.metalDark),
           true,
-          true
+          true,
         )
         wheel.rotation.z = Math.PI / 2
         wheel.position.set(side * 1.55, 0.32, i)
@@ -729,7 +739,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const skirt = enableShadow(
         new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.55, 4.6), matLib.rust),
         true,
-        true
+        true,
       )
       skirt.position.set(side * 1.65, 0.85, 0)
       group.add(skirt)
@@ -739,10 +749,10 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     const scorch = enableShadow(
       new THREE.Mesh(
         new THREE.CircleGeometry(2.4, 12),
-        matLib.scorch
+        matLib.scorch,
       ),
       false,
-      true
+      true,
     )
     scorch.userData.noCollision = true
     scorch.rotation.x = -Math.PI / 2
@@ -753,7 +763,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const hatch = enableShadow(
         new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.08, 8), matLib.metalDark),
         true,
-        true
+        true,
       )
       hatch.position.set(-0.3, 2.15, -0.1)
       hatch.rotation.x = 1.1
@@ -772,7 +782,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const post = enableShadow(
         new THREE.Mesh(sharedGeometry.wirePost, matLib.wood),
         false,
-        true
+        true,
       )
       post.position.set(i, 0.78, 0)
       post.rotation.z = (Math.random() - 0.5) * 0.08
@@ -806,7 +816,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       (Math.random() - 0.5) * 0.12,
       trunkRadius,
       trunkH,
-      trunkRadius
+      trunkRadius,
     )
 
     if (dead) {
@@ -822,7 +832,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
           (Math.random() - 0.5) * 1.4,
           0.08,
           branchLength,
-          0.08
+          0.08,
         )
       }
     } else {
@@ -838,7 +848,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
           0,
           foliageRadius * (1 + Math.random() * 0.3),
           foliageRadius * (0.75 + Math.random() * 0.3),
-          foliageRadius * (1 + Math.random() * 0.3)
+          foliageRadius * (1 + Math.random() * 0.3),
         )
       }
     }
@@ -855,7 +865,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         0,
         1,
         1,
-        1
+        1,
       )
     }
 
@@ -868,10 +878,10 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const beam = enableShadow(
         new THREE.Mesh(
           new THREE.BoxGeometry(0.2, 0.2, 1.2 + Math.random() * 1.5),
-          matLib.wood
+          matLib.wood,
         ),
         true,
-        true
+        true,
       )
       beam.position.y = 0.12
       beam.rotation.y = Math.random() * Math.PI
@@ -882,10 +892,10 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
         const rock = enableShadow(
           new THREE.Mesh(
             new THREE.DodecahedronGeometry(0.15 + Math.random() * 0.25, 0),
-            matLib.concrete
+            matLib.concrete,
           ),
           true,
-          true
+          true,
         )
         rock.position.set((Math.random() - 0.5) * 0.8, 0.12, (Math.random() - 0.5) * 0.8)
         rock.rotation.set(Math.random(), Math.random(), Math.random())
@@ -895,7 +905,7 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
       const drum = enableShadow(
         new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.7, 10), matLib.rust),
         true,
-        true
+        true,
       )
       drum.position.y = 0.35
       drum.rotation.z = (Math.random() - 0.5) * 1.2
@@ -906,8 +916,9 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
   }
 
   function createSmokeColumns() {
-    for (const smoke of map.features.filter(item => item.type === 'smoke-column'))
+    for (const smoke of map.features.filter(item => item.type === 'smoke-column')) {
       createSmokeColumn(smoke.x, smoke.z)
+    }
   }
 
   function createSmokeColumn(x, z) {
@@ -921,12 +932,12 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
           transparent: true,
           opacity: 0.42 - i * 0.035,
           depthWrite: false,
-        })
+        }),
       )
       puff.position.set(
         x + (Math.random() - 0.5) * 2.5,
         4 + i * 2.2,
-        z + (Math.random() - 0.5) * 2.5
+        z + (Math.random() - 0.5) * 2.5,
       )
       puff.scale.set(1.3 + Math.random() * 0.4, 0.7 + Math.random() * 0.3, 1.3 + Math.random() * 0.4)
       const baseY = puff.position.y
@@ -948,5 +959,5 @@ export function createWorldSystem({ scene, matLib, particles, map }) {
     }
   }
 
-  return { buildClassicMap }
+  return { buildMap }
 }

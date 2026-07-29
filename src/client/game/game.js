@@ -7,19 +7,31 @@ import {
   INPUT_ACTION,
   stepPlayerMotion,
 } from '#simulation'
-import { ACTOR_FRAME } from '../../shared/multiplayer/protocol.js'
-import { AUDIO_FILES, CFG } from './config.js'
-import { AudioSystem } from './audio/audio-system.js'
-import { createEffectsSystem } from './combat/effects.js'
-import { applyRemoteActorSnapshot, createRemoteActorView, interpolateRemoteActor } from './entities/remote-actor-view.js'
-import { WeaponView } from './entities/weapon-view.js'
+import { CFG } from './config.js'
+import { ACTOR_FRAME } from '#shared/protocol'
+import { AUDIO_FILES, AudioSystem } from '../presentation/audio.js'
+import { createEffectsSystem } from '../presentation/effects.js'
+import { applyRemoteActorSnapshot, createRemoteActorView, interpolateRemoteActor } from '../presentation/actors.js'
+import { WeaponView } from '../presentation/weapon.js'
 import { createInputSystem } from './input.js'
-import { createSceneRuntime } from './scene.js'
+import { createSceneRuntime } from '../presentation/scene.js'
 import { saveSettings } from './state.js'
-import { createDeploymentSystem } from './ui/deployment.js'
-import { getKillNotice } from './ui/hud.js'
-import { createMap } from './world/maps/registry.js'
-import { createObjectiveSystem } from './world/objectives.js'
+import { createDeploymentSystem } from '../ui/deployment.js'
+import { createZombieMap } from '../world/zombie.js'
+import { createClassicMap } from '../world/classic.js'
+
+const MULTI_KILL_TITLES = ['', '', '双杀', '三杀', '四杀', '五杀', '势不可挡', '无人能挡']
+
+function getKillNotice(streak, headshot) {
+  let kind = headshot ? 'head' : 'normal'
+  let title = headshot ? '爆头' : '击倒敌人'
+  if (streak >= 2) {
+    title = MULTI_KILL_TITLES[Math.min(streak, MULTI_KILL_TITLES.length - 1)] || `${streak} 连杀`
+    kind = 'multi'
+    if (headshot) title = `爆头 · ${title}`
+  }
+  return { kind, title }
+}
 
 export function createGame({ session, ui, state, deploy, getPlayerId }) {
   let runtime = null
@@ -60,11 +72,15 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       const data = latest.modeState
       const phase = data.phase === 'assault' ? `${data.waveDefeated} / ${data.waveTotal}` : data.phase === 'intermission'
         ? `下一波 ${Math.max(0, Math.ceil((data.nextWaveAt - latest.timeMs) / 1000))} 秒` : '等待部署'
-      return { kind: 'zombie', alliesLabel: '守军击杀', axisLabel: '堡垒', alliesScore: latest.score.allies,
-        axisScore: Math.ceil(data.fortressHealth), targetText: `第 ${data.wave} 波 · ${phase}` }
+      return {
+        kind: 'zombie', alliesLabel: '守军击杀', axisLabel: '堡垒', alliesScore: latest.score.allies,
+        axisScore: Math.ceil(data.fortressHealth), targetText: `第 ${data.wave} 波 · ${phase}`,
+      }
     }
-    return { kind: 'classic', alliesLabel: '盟军', axisLabel: '轴心', alliesScore: latest.score.allies,
-      axisScore: latest.score.axis, targetText: `达到 ${CFG.modes.classic.killTarget} 杀` }
+    return {
+      kind: 'classic', alliesLabel: '盟军', axisLabel: '轴心', alliesScore: latest.score.allies,
+      axisScore: latest.score.axis, targetText: `达到 ${CFG.modes.classic.killTarget} 杀`,
+    }
   }
 
   function createPlayerView(actor) {
@@ -88,8 +104,11 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         value.secondaryData = CFG.secondaries[loadout.secondary]
         value.grenadeData = CFG.grenades[loadout.grenade]
         value.itemData = CFG.items[loadout.item]
-        if (value.activeSlot === 2) value.weapon.configureSecondary(value.secondaryData, { rpgLoaded: value.rpgLoaded })
-        else value.weapon.configure(value.weaponData)
+        if (value.activeSlot === 2) {
+          value.weapon.configureSecondary(value.secondaryData, { rpgLoaded: value.rpgLoaded })
+        } else {
+          value.weapon.configure(value.weaponData)
+        }
       },
     }
     value.weapon = new WeaponView({ config: CFG.weapon, camera: runtime.camera, matLib: runtime.matLib, audio })
@@ -106,13 +125,17 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     audio.setCamera(runtime.camera)
     audio.setMasterVolume(state.settings.masterVolume)
     audio.init().then(() => audio.setAmbience(mapDefinition.id === 'zombie' ? 'zombie_ambience' : 'ambience'))
-    const objectives = createObjectiveSystem({ scene: runtime.scene, matLib: runtime.matLib })
     effects = createEffectsSystem({ scene: runtime.scene, state, particles, audio, config: CFG })
     applyMapDefinition(state, mapDefinition)
-    createMap(mapDefinition.id, {
+    const mapServices = {
       scene: runtime.scene, matLib: runtime.matLib, state, particles,
-      definition: mapDefinition, objectives,
-    }).buildMap()
+      definition: mapDefinition,
+    }
+    if (mapDefinition.id === 'zombie') {
+      createZombieMap(mapServices).buildMap()
+    } else {
+      createClassicMap({ ...mapServices, map: mapDefinition }).buildMap()
+    }
     player = createPlayerView(ownActor)
     state.player = player
     mode = { getHudState: modeHud, getSpawnPoints: team => state.mapDefinition.spawnPoints[team] }
@@ -120,14 +143,17 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     input = createInputSystem({ state, deploy, onPause: togglePause, ui, config: CFG })
     deployment = createDeploymentSystem({
       ui, state, deploy, getSpawnPoints: team => mode.getSpawnPoints(team), camera: runtime.camera,
-      renderer: runtime.renderer, audio, input, hud: { updateAmmo: () => ui.invalidate(), updateHealth: () => ui.invalidate() },
-      config: CFG, saveSettings,
+      renderer: runtime.renderer, audio, input, config: CFG,
       onDeploy(spawnId, loadout) { session.send({ type: 'deploy', spawnId, loadout: { ...loadout } }) },
     })
     runtime.renderer.canvas.addEventListener('click', () => {
-      if (active && !state.paused && deploy.phase === 'none' && !input.isTouchMode()) runtime.renderer.canvas.requestPointerLock()
+      if (active && !state.paused && deploy.phase === 'none' && !input.isTouchMode()) runtime.renderer.canvas.requestPointerLock().catch(console.error)
     })
-    window.addEventListener('resize', () => { runtime.resize(); ui.resize(); input.syncUi() })
+    window.addEventListener('resize', () => {
+      runtime.resize()
+      ui.resize()
+      input.syncUi()
+    })
   }
 
   function boot(mapDefinition, snapshot) {
@@ -155,8 +181,9 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     player.networkUpdatedAt = performance.now()
     const deployed = !wasAlive && actor.alive
     if (!player.networkReady || deployed ||
-      player.position.distanceToSquared(player.networkPosition) > 64)
+      player.position.distanceToSquared(player.networkPosition) > 64) {
       player.position.copy(player.networkPosition)
+    }
     player.networkReady = true
     if (firstSnapshot || deployed) {
       player.velocity.copy(player.networkVelocity)
@@ -200,11 +227,15 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     player.grenadeData = CFG.grenades[actor.grenade]
     player.itemData = CFG.items[actor.item]
     if (previousSlot !== actor.activeSlot || previousWeapon !== actor.weapon || previousSecondary !== actor.secondary) {
-      if (actor.activeSlot === 2) player.weapon.configureSecondary(player.secondaryData, { rpgLoaded: actor.rpgLoaded })
-      else player.weapon.configure(player.weaponData)
+      if (actor.activeSlot === 2) {
+        player.weapon.configureSecondary(player.secondaryData, { rpgLoaded: actor.rpgLoaded })
+      } else {
+        player.weapon.configure(player.weaponData)
+      }
     }
-    if (actor.activeSlot === 2 && player.secondaryData.kind === 'rpg')
+    if (actor.activeSlot === 2 && player.secondaryData.kind === 'rpg') {
       player.weapon.setRpgRocketVisible(actor.rpgLoaded)
+    }
   }
 
   function decodeActor(frame) {
@@ -264,7 +295,10 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       if (event.type === 'actor_removed') {
         actorDefinitions.delete(event.actorId)
         const view = views.get(event.actorId)
-        if (view) { view.destroy(); views.delete(event.actorId) }
+        if (view) {
+          view.destroy()
+          views.delete(event.actorId)
+        }
         continue
       }
       if (event.type === 'shot') {
@@ -278,8 +312,9 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           origin = view?.rifleMuzzle?.getWorldPosition(new THREE.Vector3()) ?? vector(event.origin)
         }
         effects.addTracer(origin.addScaledVector(direction, CFG.combat.tracerOriginOffset), end)
-        if (event.hit === 'actor') effects.spawnBlood(end)
-        else if (event.hit === 'obstacle') {
+        if (event.hit === 'actor') {
+          effects.spawnBlood(end)
+        } else if (event.hit === 'obstacle') {
           effects.spawnSpark(end, direction)
           audio.ricochet(end)
         }
@@ -288,8 +323,9 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           const distance = shotOrigin.distanceTo(player.position)
           if (distance < CFG.combat.bulletWhizDistance) {
             const alignment = player.position.clone().sub(shotOrigin).normalize().dot(direction)
-            if (alignment > CFG.combat.bulletWhizAlignmentMin && alignment < CFG.combat.bulletWhizAlignmentMax)
+            if (alignment > CFG.combat.bulletWhizAlignmentMin && alignment < CFG.combat.bulletWhizAlignmentMax) {
               audio.bulletWhiz(shotOrigin.addScaledVector(direction, distance))
+            }
           }
         }
       } else if (event.type === 'weapon_fired') {
@@ -303,10 +339,15 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           const right = new THREE.Vector3(1, 0, 0).applyQuaternion(runtime.camera.quaternion)
           const up = new THREE.Vector3(0, 1, 0).applyQuaternion(runtime.camera.quaternion)
           effects.spawnShell(eject, right, up)
-          if (event.weaponId === 'shotgun') audio.shotgunShot()
-          else if (event.weaponId === 'thompson') audio.thompsonShot()
-          else if (event.weaponId === 'bar') audio.barShot()
-          else audio.garandShot()
+          if (event.weaponId === 'shotgun') {
+            audio.shotgunShot()
+          } else if (event.weaponId === 'thompson') {
+            audio.thompsonShot()
+          } else if (event.weaponId === 'bar') {
+            audio.barShot()
+          } else {
+            audio.garandShot()
+          }
           player.viewRecoilPitch += event.recoil.pitch
           player.viewRecoilYaw += event.recoil.yaw
           player.viewRecoilRoll += event.recoil.roll
@@ -322,13 +363,18 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           }
         }
       } else if (event.type === 'reload_started' && event.actorId === player.id) {
-        actions.play(actionDefs.reload, { empty: event.empty, reloadDuration: player.weaponData.reloadDuration, emptyReloadDuration: player.weaponData.emptyReloadDuration })
+        actions.play(actionDefs.reload, {
+          empty: event.empty,
+          reloadDuration: player.weaponData.reloadDuration,
+          emptyReloadDuration: player.weaponData.emptyReloadDuration,
+        })
       } else if (event.type === 'rpg_reload_started' && event.actorId === player.id) {
         actions.play(actionDefs.rpgReload)
       } else if (event.type === 'weapon_switch' && event.actorId === player.id) {
         const action = actions.get('weaponSwitch')
-        if (!action || action.params.toSlot !== event.slot)
+        if (!action || action.params.toSlot !== event.slot) {
           actions.play(actionDefs.weaponSwitch, { fromSlot: player.activeSlot, toSlot: event.slot })
+        }
       } else if (event.type === 'melee' && event.actorId === player.id) {
         actions.play(actionDefs.melee)
         audio.stabSwing()
@@ -357,7 +403,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         if (projectile.rocket) {
           const own = projectile.ownerId === player.id
           const muzzle = own ? player.weapon.muzzlePos.getWorldPosition(new THREE.Vector3()) : null
-          projectiles.set(projectile.id, effects.spawnRocket(origin, velocity, CFG.secondaries[projectile.kind], muzzle, () => {}))
+          projectiles.set(projectile.id, effects.spawnRocket(origin, velocity, CFG.secondaries[projectile.kind], muzzle))
           if (own) {
             audio.rpgShot()
             player.viewRecoilPitch += 0.05
@@ -378,20 +424,29 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
             player.weapon.kickZ += 0.03
           }
         } else {
-          projectiles.set(projectile.id, effects.spawnThrownGrenade(origin, velocity, CFG.grenades[projectile.kind], () => {}))
+          projectiles.set(projectile.id, effects.spawnThrownGrenade(origin, velocity, CFG.grenades[projectile.kind]))
         }
       } else if (event.type === 'projectile_removed') {
         const projectile = projectiles.get(event.projectileId)
-        if (projectile) { effects.removeProjectile(projectile); projectiles.delete(event.projectileId) }
+        if (projectile) {
+          effects.removeProjectile(projectile)
+          projectiles.delete(event.projectileId)
+        }
       } else if (event.type === 'explosion') {
         const projectile = projectiles.get(event.projectileId)
-        if (projectile) { effects.removeProjectile(projectile); projectiles.delete(event.projectileId) }
+        if (projectile) {
+          effects.removeProjectile(projectile)
+          projectiles.delete(event.projectileId)
+        }
         const position = new THREE.Vector3(event.x, event.y, event.z)
         effects.spawnExplosion(position, event.radius)
         audio.grenadeExplosion(position)
       } else if (event.type === 'smoke') {
         const projectile = projectiles.get(event.projectileId)
-        if (projectile) { effects.removeProjectile(projectile); projectiles.delete(event.projectileId) }
+        if (projectile) {
+          effects.removeProjectile(projectile)
+          projectiles.delete(event.projectileId)
+        }
         effects.spawnSmokeCloud(new THREE.Vector3(event.x, event.y, event.z), event.radius, event.duration)
         audio.smokeGrenade(new THREE.Vector3(event.x, event.y, event.z))
       } else if (event.type === 'damage') {
@@ -407,15 +462,21 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         }
       } else if (event.type === 'elimination') {
         const mine = event.attackerId === player.id
-        if (event.attackerId)
-          ui.addFeed({ type: mine ? 'player' : 'enemy', killer: actorName(event.attackerId), victim: actorName(event.victimId) }, CFG.hud.killFeedItemDuration)
+        if (event.attackerId) {
+          ui.addFeed({
+            type: mine ? 'player' : 'enemy',
+            killer: actorName(event.attackerId),
+            victim: actorName(event.victimId),
+          }, CFG.hud.killFeedItemDuration)
+        }
         if (mine) {
           const notice = getKillNotice(event.killStreak, event.headshot)
           ui.showKillNotice(notice.title, `已击杀 ${actorName(event.victimId)}`, CFG.hud.killNotifyCleanupDelay)
           audio.killConfirm(notice.kind)
         }
-        if (event.victimId === player.id)
+        if (event.victimId === player.id) {
           ui.showDeath(event.attackerId ? `被 ${actorName(event.attackerId)} 击杀` : '重新部署')
+        }
         if (event.victimId === player.id) {
           player.alive = false
           player.health = 0
@@ -440,12 +501,16 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           const victim = snapshotActor(event.victimId)
           if (victim) {
             const position = vector(victim)
-            if (victim.kind === 'zombie') audio.zombieDeath(position)
-            else audio.bodyFall(position)
+            if (victim.kind === 'zombie') {
+              audio.zombieDeath(position)
+            } else {
+              audio.bodyFall(position)
+            }
           }
         }
       } else if (event.type === 'deploy_available' && event.actorId === player.id) {
-        ui.hideDeath(); deployment.showScreen()
+        ui.hideDeath()
+        deployment.showScreen()
       } else if (event.type === 'item_used' && event.actorId === player.id) {
         ui.showAction(CFG.items[event.itemId].kind === 'heal' ? '已使用急救包' : '已补充携行弹药', CFG.hud.actionMessageDuration)
       } else if (event.type === 'resupplied' && event.actorId === player.id) {
@@ -457,15 +522,18 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         const source = snapshotActor(event.actorId)
         const target = snapshotActor(event.targetId)
         if (source && target) audio.zombieAttack(vector(source), vector(target))
-      } else if (event.type === 'zombie_groan') audio.zombieGroan(vector(event.position))
-      else if (event.type === 'center_message') ui.showCenter(event.text, event.duration ?? CFG.hud.centerMessageDuration, event.big)
-      else if (event.type === 'wave_started') audio.zombieWave()
-      else if (event.type === 'fortress_hit') audio.fortressHit(state.objectives?.fortress?.position)
+      } else if (event.type === 'zombie_groan') {
+        audio.zombieGroan(vector(event.position))
+      } else if (event.type === 'center_message') {
+        ui.showCenter(event.text, event.duration ?? CFG.hud.centerMessageDuration, event.big)
+      } else if (event.type === 'wave_started') {
+        audio.zombieWave()
+      } else if (event.type === 'fortress_hit') audio.fortressHit(state.objectives?.fortress?.position)
     }
   }
 
   function togglePause() {
-    if (!active || deploy.phase !== 'none') return
+    if (!active || deploy.phase !== 'none' || !session.canPause()) return
     state.paused = !state.paused
     if (state.paused) {
       predictionInput = {
@@ -477,8 +545,11 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     session.setPaused(state.paused)
     ui.setPaused(state.paused)
     audio.setAmbienceMuted(state.paused)
-    if (state.paused) { input.reset(); ui.setScoreboardVisible(false); if (document.pointerLockElement) document.exitPointerLock() }
-    else if (!input.isTouchMode()) runtime.renderer.canvas.requestPointerLock()
+    if (state.paused) {
+      input.reset()
+      ui.setScoreboardVisible(false)
+      if (document.pointerLockElement) document.exitPointerLock()
+    } else if (!input.isTouchMode()) runtime.renderer.canvas.requestPointerLock().catch(console.error)
     input.updateTouchUi()
   }
 
@@ -570,13 +641,16 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       runtime.camera.position.y -= progress * CFG.player.deathCameraDrop
       runtime.camera.rotation.z = progress * CFG.player.deathCameraRoll
       runtime.camera.rotation.x = progress * CFG.player.deathCameraPitch
-    } else if (deploy.phase === 'to_deploy') deployment.updateToScreen(updateDt)
-    else if (deploy.phase === 'deploy_screen') deployment.updateScreenCamera()
-    else if (deploy.phase === 'deploying') deployment.update(updateDt)
-    else if (player.alive) {
+    } else if (deploy.phase === 'to_deploy') {
+      deployment.updateToScreen(updateDt)
+    } else if (deploy.phase === 'deploy_screen') {
+      deployment.updateScreenCamera()
+    } else if (deploy.phase === 'deploying') {
+      deployment.update(updateDt)
+    } else if (player.alive) {
       const moveAxis = input.getMoveAxis()
       const moving = Math.hypot(moveAxis.x, moveAxis.z) > 0 && player.grounded
-      let headBobY = 0
+      let headBobY
       let bobPitch = 0
       let bobRoll = 0
       if (moving) {
@@ -684,7 +758,10 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   }
 
   function animate() {
-    const loop = now => { requestAnimationFrame(loop); frame(now) }
+    const loop = now => {
+      requestAnimationFrame(loop)
+      frame(now)
+    }
     requestAnimationFrame(loop)
   }
 
@@ -747,8 +824,9 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     if (!input?.isTouchMode()) return
     await input.enableGyro()
     const root = document.documentElement
-    if (!document.fullscreenElement && root.requestFullscreen)
+    if (!document.fullscreenElement && root.requestFullscreen) {
       await root.requestFullscreen({ navigationUI: 'hide' })
+    }
     if (screen.orientation?.lock) await screen.orientation.lock('landscape')
   }
 

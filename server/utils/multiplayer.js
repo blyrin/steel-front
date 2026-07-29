@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { pack } from 'msgpackr'
 import { CFG, createAuthoritativeSimulation } from '#simulation'
-import { MULTIPLAYER_PROTOCOL, RECONNECT_MS, SERVER_TICK_RATE, SNAPSHOT_RATE, roomCapacity } from '../../shared/multiplayer/protocol.js'
+import { MULTIPLAYER_PROTOCOL, RECONNECT_MS, SERVER_TICK_RATE, SNAPSHOT_RATE, roomCapacity } from '#shared/protocol'
 import { recordMatch } from './stats.js'
 
 const INVITE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'

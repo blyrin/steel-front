@@ -1,10 +1,16 @@
 import { CFG } from './config.js'
 import { createMapDefinition, groundHeightAt } from './maps.js'
-import { createAiEngine } from './ai-engine.js'
-import { classicOutcome, scoringTeam, zombiePackSize, zombieWaveTotal } from './mode-rules.js'
-import { recordActorElimination } from './scoring.js'
-import { hasInputAction, INPUT_ACTION } from './input.js'
-import { actionDuration, actionMarker, createPlayerWeaponActions } from './action-engine.js'
+import { createAiEngine } from './ai.js'
+import {
+  classicOutcome,
+  hasInputAction,
+  INPUT_ACTION,
+  recordActorElimination,
+  scoringTeam,
+  zombiePackSize,
+  zombieWaveTotal,
+} from './rules.js'
+import { actionDuration, actionMarker, createPlayerWeaponActions } from './actions.js'
 import {
   addWeaponBloom,
   applyWeaponSpread,
@@ -20,7 +26,7 @@ import {
   traceHitscan,
   updateActorHitboxes,
   useCarriedItem,
-} from './actor-rules.js'
+} from './actors.js'
 
 const DEFAULT_INPUT = Object.freeze({
   seq: 0, moveX: 0, moveZ: 0, yaw: 0, pitch: 0, crouch: false,
@@ -587,7 +593,8 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     const projectile = {
       id: randomId('projectile'), ownerId: actor.id, team: actor.team, kind,
       x: actor.x + direction.x * 0.5, y: actor.y + direction.y * 0.5, z: actor.z + direction.z * 0.5,
-      vx: direction.x * data.throwSpeed, vy: direction.y * data.throwSpeed + data.throwSpeed * CFG.grenade.throwLift,
+      vx: direction.x * data.throwSpeed,
+      vy: direction.y * data.throwSpeed + (data.rocket ? 0 : data.throwSpeed * CFG.grenade.throwLift),
       vz: direction.z * data.throwSpeed, radius: data.radius, damage: data.damage, explodeAt: timeMs + data.fuse * 1000,
       collisionRadius: data.rocket ? 0.08 : data.sticky ? 0.11 : 0.09,
       rocket: !!data.rocket, sticky: !!data.sticky,

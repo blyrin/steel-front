@@ -5,7 +5,7 @@ import {
   MAX_MESSAGE_BYTES,
   MESSAGE_RATE_LIMIT,
   MULTIPLAYER_PROTOCOL,
-} from '../../shared/multiplayer/protocol.js'
+} from '#shared/protocol'
 import { getSessionFromRequest } from '../utils/auth.js'
 import { multiplayer } from '../utils/multiplayer.js'
 

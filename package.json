@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#simulation": "./shared/simulation/index.js"
+    "#shared/*": "./src/shared/*.js",
+    "#simulation": "./src/shared/simulation/index.js"
   },
   "scripts": {
     "start": "node .output/server/index.mjs",

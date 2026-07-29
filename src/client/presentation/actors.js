@@ -1,6 +1,36 @@
 import * as THREE from 'three'
-import { calculateWeaponSpread, createActorHitboxes, updateActorHitboxes } from '#simulation'
-import { createMergedMesh } from './merge-parts.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+
+const _object = new THREE.Object3D()
+
+/** 将同材质零件烘焙为单个 Mesh。def: { geometry, position?, rotation?, scale? } */
+function createMergedMesh(defs, material) {
+  const geometries = []
+  for (const def of defs) {
+    _object.position.set(0, 0, 0)
+    _object.rotation.set(0, 0, 0)
+    _object.scale.set(1, 1, 1)
+    if (def.position) _object.position.fromArray(def.position)
+    if (def.rotation) _object.rotation.set(def.rotation[0], def.rotation[1], def.rotation[2])
+    if (def.scale) {
+      if (Array.isArray(def.scale)) {
+        _object.scale.fromArray(def.scale)
+      } else {
+        _object.scale.setScalar(def.scale)
+      }
+    }
+    _object.updateMatrix()
+    const geometry = def.geometry.clone()
+    geometry.applyMatrix4(_object.matrix)
+    geometries.push(geometry)
+  }
+  const merged = mergeGeometries(geometries, false)
+  for (const geometry of geometries) geometry.dispose()
+  const mesh = new THREE.Mesh(merged, material)
+  mesh.castShadow = false
+  mesh.receiveShadow = false
+  return mesh
+}
 
 const ANIM_MID_DIST_SQ = 28 * 28
 const ANIM_FAR_DIST_SQ = 48 * 48
@@ -25,234 +55,24 @@ const BOT_GEOMETRY = {
   rifleGrip: new THREE.BoxGeometry(0.07, 0.18, 0.08),
 }
 
-export class Bot {
+class Bot {
   constructor(team, spawnPosition, services) {
     Object.assign(this, services)
-    this.mode = services.mode
-    this.ai = services.ai
-    this.id = this.ai.allocateActorId()
-    const botConfig = this.config.bot
     this.team = team
-    this.actorKind = 'soldier'
     this.position = spawnPosition.clone()
-    this.position.y = this.gameState.groundHeightAt(this.position.x, this.position.z)
     this.velocity = new THREE.Vector3()
-    this.yaw = Math.random() * Math.PI * 2
+    this.yaw = 0
     this.alive = true
-    this.health = botConfig.maxHealth
-    this.maxHealth = botConfig.maxHealth
+    this.health = 0
+    this.maxHealth = this.config.bot.maxHealth
     this.stateName = 'patrol'
-    this.target = null
     this.targetVisible = false
     this.reloading = false
-    this.spreadBloom = 0
-    this.botSkill = botConfig.skillMin + Math.random() * botConfig.skillRange
-    this.randomizeLoadout()
+    this.weaponData = services.weaponData
     this.kills = 0
     this.deaths = 0
-    this.radius = botConfig.radius
-    this.hitboxes = createActorHitboxes('soldier', this.config)
-    this.name = this.generateName()
-    this._simulationTurnDifference = 0
     this.buildModel()
     this.scene.add(this.group)
-  }
-
-  randomizeLoadout() {
-    const randomId = entries => entries[Math.floor(Math.random() * entries.length)]
-    const weaponId = randomId(Object.keys(this.config.weapons))
-    const grenadeId = randomId(Object.keys(this.config.grenades))
-    const itemId = randomId(Object.keys(this.config.items))
-    this.loadout = { weapon: weaponId, grenade: grenadeId, item: itemId }
-    this.weaponData = this.config.weapons[weaponId]
-    this.grenadeData = this.config.grenades[grenadeId]
-    this.itemData = this.config.items[itemId]
-    this.magazine = this.weaponData.magazineSize
-    this.reserveAmmo = this.weaponData.reserveAmmo
-    this.grenadeCount = this.grenadeData.count
-    this.itemUses = this.itemData.uses || 0
-    if (this.rifle) this.configureRifleModel()
-  }
-
-  generateName() {
-    const allies = [
-      'Miller',
-      'Davis',
-      'Johnson',
-      'Thompson',
-      'Carter',
-      'Wright',
-      'Bennett',
-      'Hayes',
-      'Cooper',
-      'Reed',
-      'Anderson',
-      'Baker',
-      'Brooks',
-      'Campbell',
-      'Clark',
-      'Collins',
-      'Edwards',
-      'Evans',
-      'Foster',
-      'Garcia',
-      'Gibson',
-      'Grant',
-      'Harris',
-      'Hughes',
-      'Jackson',
-      'Kelly',
-      'Lewis',
-      'Mitchell',
-      'Morgan',
-      'Murphy',
-      'Nelson',
-      'Parker',
-      'Patterson',
-      'Perry',
-      'Phillips',
-      'Price',
-      'Roberts',
-      'Robinson',
-      'Rogers',
-      'Russell',
-      'Sanders',
-      'Scott',
-      'Stewart',
-      'Taylor',
-      'Turner',
-      'Walker',
-      'Ward',
-      'Watson',
-      'White',
-      'Wilson',
-      'Young',
-      'Adams',
-      'Bailey',
-      'Barnes',
-      'Bell',
-      'Butler',
-      'Coleman',
-      'Cox',
-      'Diaz',
-      'Flores',
-      'Graham',
-      'Gray',
-      'Green',
-      'Hall',
-      'Henderson',
-      'Hill',
-      'Howard',
-      'James',
-      'Jenkins',
-      'Jones',
-      'King',
-      'Lee',
-      'Long',
-      'Martin',
-      'Moore',
-      'Morris',
-      'Peterson',
-      'Powell',
-      'Ramirez',
-      'Richardson',
-      'Rivera',
-      'Ross',
-      'Simmons',
-      'Sullivan',
-      'Torres',
-      'Wood',
-    ]
-    const axis = [
-      'Müller',
-      'Schmidt',
-      'Weber',
-      'Fischer',
-      'Becker',
-      'Hoffmann',
-      'Wagner',
-      'Klein',
-      'Schwarz',
-      'Richter',
-      'Bauer',
-      'Berger',
-      'Braun',
-      'Engel',
-      'Frank',
-      'Friedrich',
-      'Fuchs',
-      'Graf',
-      'Haas',
-      'Hartmann',
-      'Heinz',
-      'Hermann',
-      'Jung',
-      'Kaiser',
-      'Keller',
-      'Koch',
-      'König',
-      'Krause',
-      'Krüger',
-      'Lang',
-      'Lange',
-      'Lehmann',
-      'Lorenz',
-      'Ludwig',
-      'Maier',
-      'Mayer',
-      'Meier',
-      'Neumann',
-      'Otto',
-      'Peters',
-      'Pfeiffer',
-      'Pohl',
-      'Roth',
-      'Sauer',
-      'Schäfer',
-      'Scholz',
-      'Schreiber',
-      'Schubert',
-      'Schulz',
-      'Schumacher',
-      'Seidel',
-      'Simon',
-      'Sommer',
-      'Stein',
-      'Thomas',
-      'Vogel',
-      'Vogt',
-      'Walter',
-      'Werner',
-      'Wolf',
-      'Wolff',
-      'Ziegler',
-      'Zimmermann',
-      'Albrecht',
-      'Arnold',
-      'Bachmann',
-      'Dietrich',
-      'Ebert',
-      'Gärtner',
-      'Hahn',
-      'Hirsch',
-      'Jäger',
-      'Kraus',
-      'Kuhn',
-      'Lenz',
-      'Lutz',
-      'Marx',
-      'Nagel',
-      'Pfeil',
-      'Reinhardt',
-      'Schröder',
-      'Stark',
-      'Steinberg',
-      'Voigt',
-      'Weidner',
-      'Winkler',
-    ]
-    const names = this.team === 'allies' ? allies : axis
-    return names[Math.floor(Math.random() * names.length)]
   }
 
   buildModel() {
@@ -373,7 +193,6 @@ export class Bot {
     this.moveBlend = 0
     this.aimPose = 0
     this.reloadPose = 0
-    this.fireKick = 0
     this.deathTime = -1
     this._animSkip = 0
     this._animCulled = false
@@ -452,75 +271,7 @@ export class Bot {
     this.rifleMuzzle.position.set(0, 0.02, muzzleZ)
   }
 
-  getHitboxes() {
-    return updateActorHitboxes(this, this.hitboxes, 'soldier', this.config)
-  }
-
-  applySimulationState(data, resolveTarget) {
-    if (!this.alive) return
-    let yawDifference = data.yaw - this.yaw
-    while (yawDifference > Math.PI) yawDifference -= Math.PI * 2
-    while (yawDifference < -Math.PI) yawDifference += Math.PI * 2
-    this._simulationTurnDifference += yawDifference
-    this.position.set(data.x, data.y, data.z)
-    this.velocity.set(data.vx, 0, data.vz)
-    this.yaw = data.yaw
-    this.group.position.copy(this.position)
-    this.group.rotation.y = this.yaw
-    this.stateName = data.stateName
-    this.target = resolveTarget(data.targetId)
-    this.targetVisible = data.targetVisible
-    this.reloading = data.reloading
-    this.magazine = data.magazine
-    this.reserveAmmo = data.reserveAmmo
-    this.grenadeCount = data.grenadeCount
-    this.itemUses = data.itemUses
-  }
-
-  applySimulationItem(health, itemUses) {
-    this.health = health
-    this.itemUses = itemUses
-  }
-
-  applySimulationResupply(kind) {
-    if (kind === 'medical') this.health = this.maxHealth
-    else {
-      this.reserveAmmo = this.weaponData.reserveAmmo
-      this.grenadeCount = this.grenadeData.count
-      this.itemUses = this.itemData.uses
-    }
-  }
-
-  fireFromSimulation(targetId) {
-    this.target = this.ai.resolveTarget(targetId)
-    this.targetVisible = true
-    return this.fire()
-  }
-
-  throwGrenadeFromSimulation(direction) {
-    if (!this.alive) return
-    const origin = this.position.clone().setY(this.position.y + 1.3)
-    this.combat.throwGrenade(
-      origin,
-      new THREE.Vector3(direction.x, direction.y, direction.z),
-      this.grenadeData,
-      this.team,
-      this
-    )
-  }
-
-  update(dt) {
-    if (!this.alive && this.gameState.simulationTimeMs >= this.respawnAt) this.respawn()
-    this.spreadBloom = Math.max(
-      0,
-      this.spreadBloom - dt * this.config.weapon.spreadBloomRecovery
-    )
-    const turnDifference = this._simulationTurnDifference
-    this._simulationTurnDifference = 0
-    this.updateModelAnimation(dt, turnDifference)
-  }
-
-  updateModelAnimation(dt, turnDifference = 0) {
+  updateModelAnimation(dt) {
     this.animationTime += dt
     if (!this.alive) {
       this.deathTime = Math.max(0, this.deathTime) + dt
@@ -562,8 +313,9 @@ export class Bot {
     const moveBlendTarget = THREE.MathUtils.clamp(speed / 1.5, 0, 1)
     this.moveBlend +=
       (moveBlendTarget - this.moveBlend) * (1 - Math.exp(-10 * dt))
-    if (this.moveBlend > 0.01)
+    if (this.moveBlend > 0.01) {
       this.legPhase += dt * (7.5 + Math.min(speed, 6) * 0.65)
+    }
 
     const forwardX = -Math.sin(this.yaw)
     const forwardZ = -Math.cos(this.yaw)
@@ -608,17 +360,15 @@ export class Bot {
       this.rifleMag.position.y =
         (modelId === 'thompson' ? -0.13 : -0.1) - this.reloadPose * 0.16
     }
-    this.fireKick *= Math.exp(-14 * dt)
-    const recoil = this.fireKick * this.fireKick
     const holdPose = this.aimPose * (1 - this.reloadPose * 0.9)
 
     const breathing = Math.sin(this.animationTime * 1.65) * 0.008
     const stepLift = (1 - Math.cos(this.legPhase * 2)) * 0.005 * this.moveBlend
     const bodyYTarget = 0.78 + breathing + stepLift
     const bodyPitchTarget = THREE.MathUtils.clamp(
-      -forwardSpeed * 0.004 - holdPose * 0.008 + recoil * 0.012,
+      -forwardSpeed * 0.004 - holdPose * 0.008,
       -0.04,
-      0.025
+      0.025,
     )
     const bodyRollTarget =
       THREE.MathUtils.clamp(-sideSpeed * 0.004, -0.035, 0.035) +
@@ -678,29 +428,7 @@ export class Bot {
         this.rightArm.rotation.z) *
       armEase
 
-    const horizontalTargetDistance = this.target
-      ? Math.max(
-          0.1,
-          Math.hypot(
-            this.target.position.x - this.position.x,
-            this.target.position.z - this.position.z
-          )
-        )
-      : 20
-    const rifleHeight = this.position.y + this.body.position.y + 0.46
-    const targetGroundHeight = this.target
-      ? this.target.position.y - (this.target.currentHeight ?? 0)
-      : 0
-    const targetPitch = this.target?.alive
-      ? THREE.MathUtils.clamp(
-          Math.atan2(
-            targetGroundHeight + this.config.bot.targetHeight - rifleHeight,
-            horizontalTargetDistance
-          ),
-          -0.18,
-          0.18
-        )
-      : 0.02
+    const targetPitch = 0.02
     const carryRifleX = 0.22
     const carryRifleY = 0.46
     const carryRifleZ = -0.38
@@ -739,30 +467,27 @@ export class Bot {
       THREE.MathUtils.lerp(
         THREE.MathUtils.lerp(carryRifleX, aimRifleX, this.aimPose),
         reloadRifleX,
-        this.reloadPose
+        this.reloadPose,
       ),
       THREE.MathUtils.lerp(
         THREE.MathUtils.lerp(carryRifleY, aimRifleY, this.aimPose),
         reloadRifleY,
-        this.reloadPose
+        this.reloadPose,
       ),
       THREE.MathUtils.lerp(
         THREE.MathUtils.lerp(carryRifleZ, aimRifleZ, this.aimPose),
         reloadRifleZ,
-        this.reloadPose
-      )
+        this.reloadPose,
+      ),
     )
     const rifleEase = 1 - Math.exp(-13 * dt)
     this.rifle.position.lerp(this._rifleTarget, rifleEase)
-    this.rifle.position.z += recoil * 0.035
     const riflePitchTarget =
       THREE.MathUtils.lerp(-0.18, targetPitch + 0.02, this.aimPose) +
-      this.reloadPose * reloadPitchOffset +
-      recoil * 0.06
+      this.reloadPose * reloadPitchOffset
     const rifleYawTarget =
       THREE.MathUtils.lerp(0.08, 0.015, this.aimPose) +
-      this.reloadPose * reloadYawOffset +
-      recoil * 0.012
+      this.reloadPose * reloadYawOffset
     const rifleRollTarget =
       THREE.MathUtils.lerp(0.06, 0.015, this.aimPose) +
       this.reloadPose * reloadRollOffset
@@ -772,7 +497,7 @@ export class Bot {
 
     const headEase = 1 - Math.exp(-9 * dt)
     const headPitchTarget = targetPitch * this.aimPose * 0.3 - bodyPitchTarget * 0.35
-    const headYawTarget = THREE.MathUtils.clamp(turnDifference * 0.32, -0.22, 0.22)
+    const headYawTarget = 0
     const headRollTarget = -bodyRollTarget * 0.45
     this.head.rotation.x += (headPitchTarget - this.head.rotation.x) * headEase
     this.head.rotation.y += (headYawTarget - this.head.rotation.y) * headEase
@@ -780,126 +505,269 @@ export class Bot {
 
   }
 
-  getSpread() {
-    return calculateWeaponSpread({
-      baseSpread: this.weaponData.baseSpread,
-      speed: Math.hypot(this.velocity.x, this.velocity.z),
-      aiming: this.targetVisible,
-      crouching: false,
-      sprinting: false,
-      grounded: true,
-      reloading: this.reloading,
-      bloom: this.spreadBloom,
-    }, this.config.weapon)
+  destroy() {
+    this.scene.remove(this.group)
   }
+}
 
-  fire() {
-    if (this.reloading || !this.target?.alive) return false
-    this.fireKick = Math.min(
-      1,
-      this.fireKick + (this.weaponData.modelId === 'shotgun' ? 1 : 0.72)
-    )
-    const targetHeight = this.config.bot.targetHeight
-    const muzzle = new THREE.Vector3()
-    this.rifleMuzzle.getWorldPosition(muzzle)
-    const target = this.target.position.clone()
-    const targetGroundHeight = this.target.position.y - (this.target.currentHeight ?? 0)
-    target.y = targetGroundHeight + targetHeight
-    if (this.target.velocity) {
-      const distance = Math.hypot(
-        target.x - muzzle.x,
-        target.z - muzzle.z
-      )
-      const leadTime = THREE.MathUtils.clamp(
-        (distance / 90) * (0.16 + this.botSkill * 0.22),
-        0,
-        0.28
-      )
-      target.x += this.target.velocity.x * leadTime
-      target.z += this.target.velocity.z * leadTime
-    }
-    const aimDirection = new THREE.Vector3().subVectors(target, muzzle).normalize()
-    const spread = this.getSpread()
-    const spreadBloomPerShot = this.targetVisible
-      ? this.weaponData.aimedSpreadBloomPerShot
-      : this.weaponData.spreadBloomPerShot
-    this.spreadBloom = Math.min(
-      this.config.weapon.spreadBloomMax,
-      this.spreadBloom + spreadBloomPerShot
-    )
-    const pelletCount = this.weaponData.pellets ?? 1
-    for (let pellet = 0; pellet < pelletCount; pellet++) {
-      const direction = aimDirection.clone()
-      direction.x += (Math.random() - 0.5) * spread * 2
-      direction.y += (Math.random() - 0.5) * spread * 2
-      direction.z += (Math.random() - 0.5) * spread * 2
-      direction.normalize()
-      this.combat.fireBullet(muzzle, direction, this.team, this, muzzle, this.weaponData)
-    }
-    this.effects.spawnMuzzleFlash(muzzle, aimDirection)
-    this.audio.botShot(muzzle, this.weaponData.modelId)
-    return true
-  }
+const ZOMBIE_ANIM_MID_DIST_SQ = 28 * 28
+const ZOMBIE_ANIM_FAR_DIST_SQ = 48 * 48
 
-  takeDamage(amount, attacker, isHeadshot = false, attackType = 'weapon') {
-    if (!this.alive) return
-    this.health -= amount
-    this.ai.reportDamage(this, amount, attacker, attackType)
-    const hitPosition = this.position.clone().setY(1.2)
-    this.audio.hitFlesh(hitPosition)
-    if (this.health <= 0) this.die(attacker, isHeadshot, attackType)
-    else this.audio.pain(this.config.bot.painChance, hitPosition)
-  }
+const GEOMETRY = {
+  leg: new THREE.BoxGeometry(0.2, 0.7, 0.22),
+  boot: new THREE.BoxGeometry(0.18, 0.13, 0.3),
+  torso: new THREE.BoxGeometry(0.5, 0.72, 0.3),
+  shoulder: new THREE.BoxGeometry(0.58, 0.18, 0.34),
+  collar: new THREE.BoxGeometry(0.32, 0.12, 0.34),
+  belt: new THREE.BoxGeometry(0.53, 0.09, 0.33),
+  buckle: new THREE.BoxGeometry(0.09, 0.1, 0.035),
+  arm: new THREE.BoxGeometry(0.14, 0.62, 0.16),
+  hand: new THREE.BoxGeometry(0.11, 0.12, 0.11),
+  neck: new THREE.CylinderGeometry(0.08, 0.09, 0.12, 8),
+  head: new THREE.BoxGeometry(0.28, 0.3, 0.26),
+  jaw: new THREE.BoxGeometry(0.24, 0.11, 0.2),
+  mouth: new THREE.BoxGeometry(0.18, 0.07, 0.025),
+  eye: new THREE.SphereGeometry(0.035, 6, 4),
+  wound: new THREE.BoxGeometry(0.09, 0.12, 0.025),
+}
 
-  die(attacker, isHeadshot, attackType = 'weapon') {
-    this.alive = false
-    this.stateName = 'dead'
-    this.deathTime = 0
-    this.velocity.set(0, 0, 0)
-    this.group.rotation.z = 0
-    this.group.position.y = this.position.y + 0.1
-    const fallPosition = this.position.clone().setY(this.position.y + 0.3)
-    this.effects.spawnBlood(this.position.clone().setY(this.position.y + 1.2))
-    this.audio.pain(this.config.bot.deathPainChance, fallPosition)
-    this.audio.bodyFall(fallPosition)
-    this.ai.reportDeath(this)
-    this.scoring.recordElimination(this, attacker, isHeadshot, attackType)
-    this.respawnAt =
-      this.gameState.simulationTimeMs + this.mode.getBotRespawnDelay(this) * 1000
-  }
+const EYE_MATERIAL = new THREE.MeshBasicMaterial({ color: 0xffd447 })
 
-  respawn() {
-    if (!this.mode.canRespawn(this)) return
+class Zombie {
+  constructor(spawnPosition, services) {
+    Object.assign(this, services)
+    this.team = 'axis'
+    this.name = '丧尸'
+    this.position = spawnPosition.clone()
+    this.velocity = new THREE.Vector3()
+    this.yaw = 0
     this.alive = true
-    this.randomizeLoadout()
-    this.health = this.maxHealth
-    this.reloading = false
-    this.stateName = 'patrol'
-    this.target = null
-    this.targetVisible = false
-    this.spreadBloom = 0
-    this.position.copy(this.getRandomSpawn(this.team))
-    this.position.y = this.gameState.groundHeightAt(this.position.x, this.position.z)
-    this.velocity.set(0, 0, 0)
-    this.yaw = Math.random() * Math.PI * 2
+    this.health = 0
+    this.maxHealth = this.config.modes.zombie.enemy.maxHealth
+    this.kills = 0
+    this.deaths = 0
     this.deathTime = -1
+    this.animationTime = Math.random() * Math.PI * 2
+    this.legPhase = Math.random() * Math.PI * 2
     this.moveBlend = 0
-    this.aimPose = 0
-    this.reloadPose = 0
-    this.fireKick = 0
-    this.body.position.y = 0.78
-    this.body.rotation.set(0, 0, 0)
-    this.head.rotation.set(0, 0, 0)
-    this.leftLeg.rotation.set(0, 0, 0)
-    this.rightLeg.rotation.set(0, 0, 0)
-    this.leftArm.rotation.set(0, 0, 0)
-    this.rightArm.rotation.set(0, 0, 0)
-    this.rifle.position.set(0.22, 0.46, -0.38)
-    this.rifle.rotation.set(0, 0, 0)
-    this._simulationTurnDifference = 0
-    this.group.rotation.set(0, this.yaw, 0)
-    this.group.position.copy(this.position)
-    this.ai.respawnActor(this)
+    this.buildModel()
+    this.scene.add(this.group)
   }
 
+  buildModel() {
+    this.group = new THREE.Group()
+    this.group.position.copy(this.position)
+    this.group.rotation.y = this.yaw
+
+    this.body = new THREE.Group()
+    this.body.position.y = 0.78
+    this.group.add(this.body)
+
+    const createLeg = side => {
+      const leg = new THREE.Group()
+      leg.position.set(side * 0.13, 0.78, 0)
+      leg.add(
+        createMergedMesh(
+          [
+            { geometry: GEOMETRY.leg, position: [0, -0.36, 0] },
+            { geometry: GEOMETRY.boot, position: [0, -0.7, -0.08] },
+          ],
+          this.matLib.axisUniform,
+        ),
+      )
+      this.group.add(leg)
+      return leg
+    }
+    this.leftLeg = createLeg(-1)
+    this.rightLeg = createLeg(1)
+
+    const bodyMesh = createMergedMesh(
+      [
+        { geometry: GEOMETRY.torso, position: [0, 0.38, 0] },
+        { geometry: GEOMETRY.shoulder, position: [0, 0.68, 0] },
+        { geometry: GEOMETRY.collar, position: [0, 0.75, -0.015] },
+        { geometry: GEOMETRY.belt, position: [0, 0.17, -0.015] },
+        { geometry: GEOMETRY.buckle, position: [0, 0.17, -0.19] },
+        {
+          geometry: GEOMETRY.wound,
+          position: [-0.16, 0.44, -0.165],
+          rotation: [0, 0, 0.8],
+        },
+        {
+          geometry: GEOMETRY.wound,
+          position: [0.12, 0.28, -0.165],
+          rotation: [0, 0, -0.6],
+        },
+      ],
+      this.matLib.rust,
+    )
+    bodyMesh.castShadow = true
+    bodyMesh.receiveShadow = true
+    this.body.add(bodyMesh)
+
+    this.head = new THREE.Group()
+    this.head.position.set(0, 0.75, 0)
+    this.body.add(this.head)
+    this.head.add(
+      createMergedMesh(
+        [
+          { geometry: GEOMETRY.neck },
+          { geometry: GEOMETRY.head, position: [0, 0.15, 0] },
+          { geometry: GEOMETRY.jaw, position: [0, 0.02, -0.105] },
+          { geometry: GEOMETRY.mouth, position: [0, 0.075, -0.215] },
+        ],
+        this.matLib.skin,
+      ),
+    )
+    this.head.add(
+      createMergedMesh(
+        [
+          { geometry: GEOMETRY.eye, position: [-0.08, 0.19, -0.13] },
+          { geometry: GEOMETRY.eye, position: [0.08, 0.19, -0.13] },
+        ],
+        EYE_MATERIAL,
+      ),
+    )
+
+    const createArm = side => {
+      const arm = new THREE.Group()
+      arm.position.set(side * 0.32, 0.65, 0)
+      arm.add(
+        createMergedMesh(
+          [
+            { geometry: GEOMETRY.arm, position: [0, -0.3, 0] },
+            { geometry: GEOMETRY.hand, position: [0, -0.62, -0.02] },
+          ],
+          this.matLib.rust,
+        ),
+      )
+      this.body.add(arm)
+      return arm
+    }
+    this.leftArm = createArm(-1)
+    this.rightArm = createArm(1)
+
+    this._animSkip = 0
+    this._animCulled = false
+    this.matLib.addOutline(this.group, 1.04)
+  }
+
+  updateModelAnimation(dt) {
+    this.animationTime += dt
+    if (!this.alive) {
+      this.deathTime += dt
+      const progress = Math.min(1, this.deathTime / 0.62)
+      this.group.rotation.z = (Math.PI / 2) * (1 - Math.pow(1 - progress, 3))
+      this.group.position.y = this.position.y + 0.04 + (1 - progress) * 0.05
+      return
+    }
+
+    const cam = this.camera.position
+    const distSq =
+      (this.position.x - cam.x) ** 2 +
+      (this.position.y - cam.y) ** 2 +
+      (this.position.z - cam.z) ** 2
+    if (distSq > ZOMBIE_ANIM_FAR_DIST_SQ) {
+      if (!this._animCulled) {
+        this._animCulled = true
+        this.leftLeg.rotation.set(0, 0, 0)
+        this.rightLeg.rotation.set(0, 0, 0)
+        this.leftArm.rotation.set(1.08, 0, -0.12)
+        this.rightArm.rotation.set(1.08, 0, 0.12)
+        this.body.position.y = 0.78
+        this.body.rotation.z = 0
+      }
+      return
+    }
+    this._animCulled = false
+    if (distSq > ZOMBIE_ANIM_MID_DIST_SQ) {
+      this._animSkip ^= 1
+      if (this._animSkip) return
+      dt *= 2
+    }
+
+    const speed = Math.hypot(this.velocity.x, this.velocity.z)
+    const blend = THREE.MathUtils.clamp(speed / this.config.modes.zombie.enemy.speed, 0, 1)
+    this.moveBlend += (blend - this.moveBlend) * (1 - Math.exp(-9 * dt))
+    if (this.moveBlend > 0.01) this.legPhase += dt * 8
+    const stride = Math.sin(this.legPhase) * 0.55 * this.moveBlend
+    const armReach = this.moveBlend * 0.35
+    const ease = 1 - Math.exp(-12 * dt)
+    this.leftLeg.rotation.x += (stride - this.leftLeg.rotation.x) * ease
+    this.rightLeg.rotation.x += (-stride - this.rightLeg.rotation.x) * ease
+    this.leftArm.rotation.x += (1.08 + armReach - this.leftArm.rotation.x) * ease
+    this.rightArm.rotation.x += (1.08 - armReach - this.rightArm.rotation.x) * ease
+    this.leftArm.rotation.z += (-0.12 - this.leftArm.rotation.z) * ease
+    this.rightArm.rotation.z += (0.12 - this.rightArm.rotation.z) * ease
+    this.body.position.y += (0.78 + Math.sin(this.animationTime * 2.1) * 0.012 - this.body.position.y) * ease
+    this.body.rotation.z +=
+      (THREE.MathUtils.clamp(this.velocity.x * -0.006, -0.04, 0.04) - this.body.rotation.z) * ease
+  }
+
+  destroy() {
+    this.scene.remove(this.group)
+  }
+}
+
+export function createRemoteActorView(actor, services) {
+  const y = actor.kind === 'player' && actor.deployed ? actor.y - actor.currentHeight : actor.y
+  const common = {
+    scene: services.scene, camera: services.camera, matLib: services.matLib, config: services.config,
+  }
+  const position = new THREE.Vector3(actor.x, y, actor.z)
+  const view = actor.kind === 'zombie'
+    ? new Zombie(position, common)
+    : new Bot(actor.team, position, { ...common, weaponData: services.config.weapons[actor.weapon] })
+  view.id = actor.id
+  view.name = actor.name
+  view.networkPosition = view.position.clone()
+  view.networkYaw = actor.yaw
+  view.networkUpdatedAt = performance.now()
+  return view
+}
+
+export function applyRemoteActorSnapshot(view, actor) {
+  const wasAlive = view.alive
+  view.alive = actor.alive
+  if (wasAlive && !actor.alive) {
+    view.deathTime = 0
+    view.stateName = 'dead'
+  }
+  view.health = actor.health
+  view.maxHealth = actor.maxHealth
+  if (actor.kind !== 'zombie' && view.weaponData !== view.config.weapons[actor.weapon]) {
+    view.weaponData = view.config.weapons[actor.weapon]
+    view.configureRifleModel()
+  }
+  view.kills = actor.kills
+  view.deaths = actor.deaths
+  const y = actor.kind === 'player' && actor.deployed ? actor.y - actor.currentHeight : actor.y
+  view.networkPosition.set(actor.x, y, actor.z)
+  view.networkYaw = actor.yaw
+  view.networkUpdatedAt = performance.now()
+  view.velocity.set(actor.vx, actor.vy, actor.vz)
+  view.yaw = actor.yaw
+  view.stateName = actor.alive ? actor.stateName ?? view.stateName : 'dead'
+  view.targetVisible = actor.targetVisible ?? actor.alive
+  view.reloading = actor.reloading
+  view.group.visible = actor.kind !== 'player' || actor.deployed
+  if ((!wasAlive && actor.alive) || view.position.distanceToSquared(view.networkPosition) > 64) {
+    view.position.copy(view.networkPosition)
+    view.deathTime = -1
+    view.group.rotation.set(0, actor.yaw, 0)
+  }
+}
+
+export function interpolateRemoteActor(view, dt, now) {
+  if (view.alive) {
+    const elapsed = Math.min(0.1, (now - view.networkUpdatedAt) / 1000)
+    const alpha = 1 - Math.exp(-20 * dt)
+    view.position.x += (view.networkPosition.x + view.velocity.x * elapsed - view.position.x) * alpha
+    view.position.y += (view.networkPosition.y + view.velocity.y * elapsed - view.position.y) * alpha
+    view.position.z += (view.networkPosition.z + view.velocity.z * elapsed - view.position.z) * alpha
+    const turn = Math.atan2(Math.sin(view.networkYaw - view.yaw), Math.cos(view.networkYaw - view.yaw))
+    view.yaw += turn * alpha
+  }
+  view.group.position.copy(view.position)
+  view.group.rotation.y = view.yaw
 }

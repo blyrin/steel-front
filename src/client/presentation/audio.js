@@ -1,5 +1,14 @@
 import * as THREE from 'three'
 
+export const AUDIO_FILES = Object.fromEntries(
+  Object.entries(import.meta.glob('../audio/*.ogg', {
+    eager: true,
+    query: '?url',
+    import: 'default',
+  })).map(([path, url]) => [path.split('/').pop().replace('.ogg', ''), url]),
+)
+
+
 export class AudioSystem {
   constructor(files, config) {
     this.camera = null
@@ -26,7 +35,6 @@ export class AudioSystem {
     this.maxVoices = config.audio.maxVoices
     this.overflowVoices = config.audio.overflowVoices
     this._lastWorldShot = 0
-    this._lastZombieStep = 0
     this._lastZombieVoice = 0
     this._lastZombieImpact = 0
     this._lastZombieBite = 0
@@ -120,7 +128,7 @@ export class AudioSystem {
         this.buffers[name] = await this.ctx.decodeAudioData(raw.slice(0))
         done++
         report()
-      })
+      }),
     )
     this.ready = true
     onProgress?.(1)
@@ -142,8 +150,9 @@ export class AudioSystem {
       for (let i = 0; i < len; i++) {
         const t = i / rate
         let earlyReflection = 0
-        if (t > 0.018 && t < 0.1)
+        if (t > 0.018 && t < 0.1) {
           earlyReflection = (Math.random() * 2 - 1) * Math.exp(-(t - 0.018) * 20) * 0.5
+        }
         const tail =
           (Math.random() * 2 - 1) * Math.exp(-t * 2.1) * (0.18 + 0.06 * Math.sin(t * 9 + ch))
         data[i] = earlyReflection + tail
@@ -183,7 +192,7 @@ export class AudioSystem {
         this._fwd.z,
         this._up.x,
         this._up.y,
-        this._up.z
+        this._up.z,
       )
     }
   }
@@ -253,7 +262,7 @@ export class AudioSystem {
       wet = 0,
       slap = false,
       priority = 0,
-    } = {}
+    } = {},
   ) {
     if (!this.enabled || !this.ready) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
@@ -373,7 +382,7 @@ export class AudioSystem {
     this.ambienceGain.gain.setValueAtTime(this.ambienceGain.gain.value, time)
     this.ambienceGain.gain.linearRampToValueAtTime(
       muted ? 0 : this.ambienceVol || 0.28,
-      time + 0.25
+      time + 0.25,
     )
   }
 
@@ -387,6 +396,7 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   thompsonShot() {
     this.play(['thompson_shot_01', 'thompson_shot_02'], {
       vol: 0.5,
@@ -397,6 +407,7 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   barShot() {
     this.play('bar_shot', {
       vol: 0.8,
@@ -407,6 +418,7 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   shotgunShot() {
     this.play(['shotgun_shot_01', 'shotgun_shot_02'], {
       vol: 0.7,
@@ -417,6 +429,7 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   rpgShot() {
     this.play('rpg_shot', {
       vol: 0.92,
@@ -427,6 +440,7 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   shotgunPump() {
     this.play('shotgun_pump', {
       vol: 0.7,
@@ -434,9 +448,11 @@ export class AudioSystem {
       priority: 1,
     })
   }
+
   reload() {
     this.play('reload_insert', { vol: 0.7, rateJitter: 0.02, priority: 1 })
   }
+
   reloadStage(stage) {
     switch (stage) {
       case 'open':
@@ -461,16 +477,19 @@ export class AudioSystem {
         break
     }
   }
+
   ping() {
     this.play('ping', { vol: 0.72, rateJitter: 0.04, priority: 2 })
     this.play('clip_eject', { vol: 0.42, rate: 1.05, priority: 1 })
   }
+
   step() {
     this.play(['step_01', 'step_02', 'step_03'], {
       vol: 0.15,
       rateJitter: 0.1,
     })
   }
+
   whoosh() {
     this.play(['whoosh', 'whoosh2'], {
       vol: 0.55,
@@ -480,6 +499,7 @@ export class AudioSystem {
       priority: 1,
     })
   }
+
   impact() {
     this.play('land', {
       vol: 0.75,
@@ -503,6 +523,7 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   smokeGrenade(pos) {
     this.play('smoke_grenade', {
       vol: 0.52,
@@ -580,7 +601,7 @@ export class AudioSystem {
       })
       return
     }
-    if (distance > 55)
+    if (distance > 55) {
       this.play(['distant_01', 'distant_02'], {
         vol: 0.5,
         rateJitter: 0.05,
@@ -590,7 +611,7 @@ export class AudioSystem {
         rolloff: 0.24,
         wet: 0.18,
       })
-    else if (distance > 28)
+    } else if (distance > 28) {
       this.play(['rifle_03', 'rifle_04', 'distant_01'], {
         vol: 0.6,
         rateJitter: 0.05,
@@ -601,7 +622,7 @@ export class AudioSystem {
         wet: 0.12,
         priority: 1,
       })
-    else
+    } else {
       this.play(['rifle_01', 'rifle_02', 'rifle_03', 'rifle_04'], {
         vol: 0.6,
         rateJitter: 0.05,
@@ -612,24 +633,7 @@ export class AudioSystem {
         wet: 0.1,
         priority: 1,
       })
-  }
-
-  zombieStep(pos) {
-    if (!pos) return
-    const now = performance.now()
-    if (now - this._lastZombieStep < 85) return
-    if (this.camera.position.distanceTo(pos) > 52) return
-    this._lastZombieStep = now
-    this.play(['zombie_step_01', 'zombie_step_02', 'zombie_step_03'], {
-      vol: 0.15,
-      rate: 0.9,
-      rateJitter: 0.12,
-      pos,
-      ref: 10,
-      max: 58,
-      rolloff: 0.35,
-      wet: 0.05,
-    })
+    }
   }
 
   zombieGroan(pos) {
@@ -654,7 +658,7 @@ export class AudioSystem {
         max: 80,
         rolloff: 0.32,
         wet: 0.18,
-      }
+      },
     )
   }
 
@@ -693,10 +697,6 @@ export class AudioSystem {
       wet: 0.05,
       priority: 1,
     })
-  }
-
-  zombieHit(pos) {
-    this.zombieImpact(pos)
   }
 
   zombieBite(pos) {
@@ -747,7 +747,7 @@ export class AudioSystem {
         max: 72,
         rolloff: 0.36,
         wet: 0.08,
-      }
+      },
     )
   }
 
@@ -792,6 +792,7 @@ export class AudioSystem {
       priority: pos ? 1 : 2,
     })
   }
+
   pain(chance = 0.3, pos = null) {
     if (Math.random() >= chance) return
     this.play(['pain_01', 'pain_02', 'pain_03'], {
@@ -804,6 +805,7 @@ export class AudioSystem {
       priority: pos ? 0 : 2,
     })
   }
+
   bodyFall(pos) {
     this.play(['body_fall', 'body_fall2'], {
       vol: 0.35,
@@ -815,6 +817,7 @@ export class AudioSystem {
       priority: pos ? 0 : 1,
     })
   }
+
   bulletWhiz(pos) {
     this.play('whiz', {
       vol: 0.08,
@@ -826,6 +829,7 @@ export class AudioSystem {
       rolloff: 0.4,
     })
   }
+
   ricochet(pos) {
     this.play('ricochet', {
       vol: 0.3,
@@ -837,6 +841,7 @@ export class AudioSystem {
       wet: 0.08,
     })
   }
+
   shellDrop(pos) {
     if (pos && this.camera.position.distanceTo(pos) > 24) return
     this.play('shell_drop', {
@@ -848,6 +853,7 @@ export class AudioSystem {
       rolloff: 0.4,
     })
   }
+
   stabSwing() {
     this.play(['stab_swing', 'stab_swing2'], {
       vol: 0.55,
@@ -857,6 +863,7 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   stabHitFlesh(pos) {
     this.play('stab_hit', {
       vol: 0.55,
@@ -875,6 +882,7 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   stabHitMetal(pos) {
     this.play('stab_metal', {
       vol: 0.45,
@@ -885,13 +893,16 @@ export class AudioSystem {
       priority: 2,
     })
   }
+
   killConfirm(kind = 'normal') {
-    if (kind === 'head') this.play('kill_head', { vol: 1.35, rate: 1.12, priority: 2 })
-    else
+    if (kind === 'head') {
+      this.play('kill_head', { vol: 1.35, rate: 1.12, priority: 2 })
+    } else {
       this.play('kill_confirm', {
         vol: 1.15,
         rate: 1 + Math.random() * 0.04,
         priority: 2,
       })
+    }
   }
 }
