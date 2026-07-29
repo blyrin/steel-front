@@ -34,6 +34,7 @@ const TOUCH_ICONS = {
   weapon: '↔',
   scoreboard: '≡',
   pause: 'Ⅱ',
+  chat: 'T',
 }
 
 function inside(x, y, rect) {
@@ -57,7 +58,10 @@ function createCanvasUi({ state, deploy, config }) {
   const keyboardInput = document.createElement('input')
   keyboardInput.tabIndex = -1
   keyboardInput.autocomplete = 'off'
-  keyboardInput.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none'
+  keyboardInput.autocapitalize = 'off'
+  keyboardInput.enterKeyHint = 'send'
+  keyboardInput.spellcheck = false
+  keyboardInput.style.cssText = 'position:fixed;display:none;box-sizing:border-box;border:1px solid #626b66;border-radius:0;outline:none;background:#202928;color:#f3efe2;padding:0 8px;font:16px "Microsoft YaHei",sans-serif;z-index:21'
   document.body.appendChild(keyboardInput)
   const ctx = canvas.getContext('2d', { alpha: true })
   ctx.imageSmoothingEnabled = false
@@ -75,9 +79,9 @@ function createCanvasUi({ state, deploy, config }) {
   let modeDefinitions = []
   let records = []
   let portal = null
-  let portalTransitionKey = ''
-  let portalEnteredAt = performance.now()
   let activePortalField = null
+  const portalInputs = new Map()
+  const visiblePortalInputs = new Set()
   let hoveredAction = null
   let deployment = null
   let endData = null
@@ -111,9 +115,12 @@ function createCanvasUi({ state, deploy, config }) {
   const touchLabels = {
     fire: '开火', aim: '瞄准', jump: '跳跃', crouch: '蹲下', reload: '装弹',
     melee: '刺刀', grenade: '手雷', item: '道具', supply: '补给', weapon: '副',
-    scoreboard: '战况', pause: '暂停',
+    scoreboard: '战况', pause: '暂停', chat: '聊天',
   }
   const touchActive = {}
+  const horizontalTouchActions = new Set([
+    'scoreboard', 'pause', 'chat', 'reload', 'melee', 'grenade', 'item', 'supply', 'weapon',
+  ])
   const hits = []
   const healthBarPosition = new THREE.Vector3()
   const actorScreenPosition = new THREE.Vector3()
@@ -122,13 +129,8 @@ function createCanvasUi({ state, deploy, config }) {
   const healthBarUntil = new WeakMap()
 
   function resize() {
-    if (touchMode && innerHeight > innerWidth) {
-      width = 360
-      height = Math.max(540, Math.round((width * innerHeight) / innerWidth))
-    } else {
-      height = touchMode ? 360 : 540
-      width = Math.max(640, Math.round((height * innerWidth) / innerHeight))
-    }
+    height = 540
+    width = Math.max(960, Math.round((height * innerWidth) / innerHeight))
     canvas.width = Math.round(width * PIXEL_SCALE)
     canvas.height = Math.round(height * PIXEL_SCALE)
     ctx.setTransform(PIXEL_SCALE, 0, 0, PIXEL_SCALE, 0, 0)
@@ -147,6 +149,45 @@ function createCanvasUi({ state, deploy, config }) {
     ctx.fillStyle = color
     ctx.textAlign = align
     ctx.fillText(String(value ?? ''), Math.round(x), Math.round(y))
+  }
+
+  function positionInput(input, rect) {
+    input.style.left = `${rect.x / width * innerWidth}px`
+    input.style.top = `${rect.y / height * innerHeight}px`
+    input.style.width = `${rect.w / width * innerWidth}px`
+    input.style.height = `${rect.h / height * innerHeight}px`
+  }
+
+  function showPortalInput(field, rect) {
+    let input = portalInputs.get(field.id)
+    if (!input) {
+      input = document.createElement('input')
+      input.autocomplete = 'off'
+      input.autocapitalize = 'off'
+      input.enterKeyHint = 'done'
+      input.spellcheck = false
+      input.style.cssText = 'position:fixed;box-sizing:border-box;border:1px solid rgba(255,255,255,.1);border-radius:0;outline:none;background:#202726;color:#f3efe2;padding:0 12px;font:16px "Microsoft YaHei",sans-serif;z-index:21'
+      input.addEventListener('focus', () => {
+        activePortalField = field.id
+        dirty = true
+      })
+      input.addEventListener('input', () => handlers.onPortalInput?.(field.id, input.value))
+      input.addEventListener('keydown', event => {
+        if (event.isComposing || event.keyCode === 229 || event.key !== 'Enter') return
+        event.preventDefault()
+        handlers.onPortalSubmit?.()
+      })
+      document.body.appendChild(input)
+      portalInputs.set(field.id, input)
+    }
+    input.type = field.password ? 'password' : 'text'
+    input.maxLength = field.maxLength || 128
+    input.placeholder = field.placeholder || ''
+    if (input.value !== field.value) input.value = field.value
+    input.style.background = activePortalField === field.id ? '#303a38' : '#202726'
+    input.style.display = 'block'
+    positionInput(input, rect)
+    visiblePortalInputs.add(field.id)
   }
 
   function box(x, y, w, h, fill = COLORS.panel) {
@@ -206,68 +247,59 @@ function createCanvasUi({ state, deploy, config }) {
     text(state.uiBootStatus || '正在装配武器...', cx, height * 0.62, 9, '#465056', 'center')
   }
 
-  function drawPortal(now) {
+  function portalMargin() {
+    return Math.max(28, width * 0.045)
+  }
+
+  function drawPortal() {
     battlefieldBackdrop()
-    const transition = clamp((now - portalEnteredAt) / 240, 0, 1)
-    const eased = 1 - (1 - transition) ** 3
-    ctx.save()
-    ctx.globalAlpha = eased
-    ctx.translate(0, (1 - eased) * 10)
-    const compact = width < 700
-    const margin = compact ? 16 : Math.max(28, width * 0.045)
-    text('钢 铁 前 线', margin, compact ? 29 : 35, compact ? 18 : 22, COLORS.text, 'left', 800)
-    text('STEEL FRONT  /  FIELD OPERATIONS', margin, compact ? 50 : 59, 7, COLORS.gold, 'left', 700)
-    if (!compact) text('作战终端  01', width - margin, 36, 8, COLORS.muted, 'right', 700)
+    const margin = portalMargin()
+    text('钢 铁 前 线', margin, 35, 22, COLORS.text, 'left', 800)
+    text('STEEL FRONT  /  FIELD OPERATIONS', margin, 59, 7, COLORS.gold, 'left', 700)
+    text('作战终端  01', width - margin, 36, 8, COLORS.muted, 'right', 700)
 
     const x = margin
-    const y = compact ? 68 : 78
+    const y = 78
     const panelW = width - margin * 2
-    const panelH = height - y - (compact ? 42 : 34)
+    const panelH = height - y - 34
     box(x, y, panelW, panelH, 'rgba(13,18,18,.92)')
     ctx.strokeStyle = 'rgba(222,205,157,.24)'
     ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1)
-    const pad = compact ? 15 : 24
-    const titleY = y + (compact ? 25 : 30)
-    text(portal.title, x + pad, titleY, compact ? 16 : 20, COLORS.text, 'left', 800)
+    const pad = 24
+    const titleY = y + 30
+    text(portal.title, x + pad, titleY, 20, COLORS.text, 'left', 800)
     if (portal.account) {
       if (portal.account.logout) {
         const logoutRect = { x: x + panelW - pad - 54, y: titleY - 12, w: 54, h: 24 }
         button(logoutRect, '退出', 'portal:logout', false, 'rgba(255,255,255,.04)', 7, COLORS.axis)
-        text(portal.account.label, logoutRect.x - 10, titleY, compact ? 7 : 8, COLORS.ally, 'right', 700)
+        text(portal.account.label, logoutRect.x - 10, titleY, 8, COLORS.ally, 'right', 700)
       } else {
         const rect = { x: x + panelW - pad - 62, y: titleY - 12, w: 62, h: 24 }
         button(rect, '登录', 'portal:login', false, 'rgba(255,255,255,.04)', 7, COLORS.gold)
       }
     } else if (portal.profile) {
-      text(portal.profile, x + panelW - pad, titleY, compact ? 7 : 9, COLORS.ally, 'right', 700)
+      text(portal.profile, x + panelW - pad, titleY, 9, COLORS.ally, 'right', 700)
     }
     ctx.fillStyle = 'rgba(216,180,95,.35)'
     ctx.fillRect(x + pad, y + 65, panelW - pad * 2, 1)
 
-    const split = !compact && panelW >= 760
     const contentX = x + pad
     const contentY = y + 80
-    const actionW = split ? Math.min(250, panelW * 0.3) : panelW - pad * 2
-    const contentW = split ? panelW - pad * 3 - actionW : panelW - pad * 2
-    const actionX = split ? x + panelW - pad - actionW : contentX
+    const actionW = Math.min(250, panelW * 0.3)
+    const contentW = panelW - pad * 3 - actionW
+    const actionX = x + panelW - pad - actionW
     let cursorY = contentY
 
     for (const field of portal.fields || []) {
       text(field.label, contentX, cursorY, 8, COLORS.gold, 'left', 700)
-      const rect = { x: contentX, y: cursorY + 12, w: contentW, h: compact ? 36 : 38 }
+      const rect = { x: contentX, y: cursorY + 12, w: contentW, h: 38 }
       box(rect.x, rect.y, rect.w, rect.h, activePortalField === field.id ? '#303a38' : '#202726')
-      ctx.strokeStyle = 'rgba(255,255,255,.1)'
-      ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1)
-      const value = field.password ? '●'.repeat(field.value.length) : field.value
-      text(value || field.placeholder || '', rect.x + 12, rect.y + rect.h / 2, 9, value ? COLORS.text : '#777b72')
-      hits.push({ ...rect, action: `portal-field:${field.id}` })
-      cursorY += compact ? 60 : 64
+      showPortalInput(field, rect)
+      cursorY += 64
     }
 
     const rows = portal.rows || []
-    const actionCount = (portal.actions || []).length
-    const mobileActionRows = compact ? Math.ceil(actionCount / 2) : 0
-    const rowsBottom = split ? y + panelH - pad : y + panelH - pad - mobileActionRows * 38 - (actionCount ? 12 : 0)
+    const rowsBottom = y + panelH - pad
     const visibleRows = Math.max(0, Math.floor((rowsBottom - cursorY) / 34))
     rows.slice(0, visibleRows).forEach((row, index) => {
       const rowY = cursorY + index * 34
@@ -281,59 +313,48 @@ function createCanvasUi({ state, deploy, config }) {
       ctx.beginPath()
       ctx.rect(contentX + 10, rowY, contentW - reserve - 6, 29)
       ctx.clip()
-      text(row.label, contentX + 11, rowY + 15, compact ? 7 : 8, row.muted ? COLORS.muted : COLORS.text)
+      text(row.label, contentX + 11, rowY + 15, 8, row.muted ? COLORS.muted : COLORS.text)
       ctx.restore()
       if (row.action) button({ x: contentX + contentW - 70, y: rowY + 5, w: 62, h: 19 }, row.actionLabel || '选择', `portal:${row.action}`, row.selected, '#303a38', 7)
     })
     if (rows.length > visibleRows) text(`另有 ${rows.length - visibleRows} 项未显示`, contentX, rowsBottom - 5, 7, COLORS.muted)
 
     const actions = portal.actions || []
-    if (split) {
-      let actionY = contentY
-      for (let index = 0; index < actions.length; index++) {
-        const entry = actions[index]
-        const paired = entry.paired && actions[index + 1]?.paired
-        if (paired) {
-          const gap = 7
-          const itemW = (actionW - gap) / 2
-          for (let pairIndex = 0; pairIndex < 2; pairIndex++) {
-            const pairEntry = actions[index + pairIndex]
-            const rect = { x: actionX + pairIndex * (itemW + gap), y: actionY, w: itemW, h: 34 }
-            button(rect, pairEntry.label, `portal:${pairEntry.id}`, pairEntry.primary,
-              pairEntry.danger ? '#4b2927' : '#252d2c', 8, pairEntry.accent || (pairEntry.danger ? COLORS.axis : COLORS.ally))
-          }
-          index++
-        } else {
-          const rect = { x: actionX, y: actionY, w: actionW, h: 34 }
-          button(rect, entry.label, `portal:${entry.id}`, entry.primary,
-            entry.danger ? '#4b2927' : '#252d2c', 9, entry.accent || (entry.danger ? COLORS.axis : COLORS.ally))
+    let actionY = contentY
+    for (let index = 0; index < actions.length; index++) {
+      const entry = actions[index]
+      const paired = entry.paired && actions[index + 1]?.paired
+      if (paired) {
+        const gap = 7
+        const itemW = (actionW - gap) / 2
+        for (let pairIndex = 0; pairIndex < 2; pairIndex++) {
+          const pairEntry = actions[index + pairIndex]
+          const rect = { x: actionX + pairIndex * (itemW + gap), y: actionY, w: itemW, h: 34 }
+          button(rect, pairEntry.label, `portal:${pairEntry.id}`, pairEntry.primary,
+            pairEntry.danger ? '#4b2927' : '#252d2c', 8, pairEntry.accent || (pairEntry.danger ? COLORS.axis : COLORS.ally))
         }
-        actionY += 42
+        index++
+      } else {
+        const rect = { x: actionX, y: actionY, w: actionW, h: 34 }
+        button(rect, entry.label, `portal:${entry.id}`, entry.primary,
+          entry.danger ? '#4b2927' : '#252d2c', 9, entry.accent || (entry.danger ? COLORS.axis : COLORS.ally))
       }
-    } else if (actions.length) {
-      const gap = 7
-      const itemW = (actionW - gap) / 2
-      const startY = y + panelH - pad - mobileActionRows * 38
-      actions.forEach((entry, index) => {
-        const rect = { x: actionX + (index % 2) * (itemW + gap), y: startY + Math.floor(index / 2) * 38, w: itemW, h: 31 }
-        button(rect, entry.label, `portal:${entry.id}`, entry.primary, entry.danger ? '#4b2927' : '#252d2c', 8, entry.accent || (entry.danger ? COLORS.axis : COLORS.ally))
-      })
+      actionY += 42
     }
 
+    if (chatChannels.length) {
+      button({ x: margin, y: height - 29, w: 80, h: 20 }, '聊天', 'chat-open', false,
+        'rgba(13,18,18,.82)', 8, COLORS.green)
+    }
     if (portal.status) {
       const statusW = Math.min(width - margin * 2, 420)
       const statusX = width - margin - statusW
       box(statusX, height - 29, statusW, 20, portal.error ? 'rgba(86,28,25,.9)' : 'rgba(13,18,18,.82)')
       text(portal.status, statusX + 9, height - 19, 7, portal.error ? '#ffaaa0' : COLORS.muted)
     }
-    ctx.restore()
   }
 
   function drawMenu() {
-    if (touchMode && height > width) {
-      drawPortraitMenu()
-      return
-    }
     backdrop('#c7cec1')
     const left = Math.max(28, width * 0.06)
     text('STEEL FRONT', left, 52, 27, COLORS.ink, 'left', 800)
@@ -369,46 +390,6 @@ function createCanvasUi({ state, deploy, config }) {
       text(value, rx + rw - 18, y, 12, COLORS.text, 'right', 700)
     })
     text('WASD 移动  ·  鼠标射击  ·  TAB 战况  ·  ESC 暂停', left, height - 24, 8, '#4b585b')
-  }
-
-  function drawPortraitMenu() {
-    backdrop('#c7cec1')
-    const margin = 20
-    const contentW = width - margin * 2
-    text('STEEL FRONT', margin, 30, 22, COLORS.ink, 'left', 800)
-    text('作战终端', margin, 51, 8, '#58666a')
-    const gap = 8
-    const cardW = (contentW - gap) / 2
-    modeDefinitions.forEach((definition, index) => {
-      const rect = { x: margin + index * (cardW + gap), y: 72, w: cardW, h: 70 }
-      const selected = definition.id === selectedMode
-      box(rect.x, rect.y, rect.w, rect.h, selected ? '#8fa196' : COLORS.panel)
-      ctx.fillStyle = selected ? COLORS.gold : COLORS.axis
-      ctx.fillRect(rect.x, rect.y, 3, rect.h)
-      text(definition.name, rect.x + 11, rect.y + 21, 12, selected ? COLORS.ink : COLORS.text, 'left', 700)
-      text(definition.description, rect.x + 11, rect.y + 48, 7, selected ? '#303b38' : COLORS.muted)
-      hits.push({ ...rect, action: 'mode', value: definition.id })
-    })
-    button({ x: margin, y: 160, w: contentW, h: 36 }, '进入战场', 'start', true)
-    drawSlider(margin, 232, contentW - 36, '总音量', 'volume', state.settings.masterVolume * 100, 0, 100)
-    drawSlider(margin, 276, contentW - 36, '鼠标灵敏度', 'sensitivity', state.settings.mouseSensitivity * 100, 20, 200)
-
-    const panelY = 312
-    box(margin, panelY, contentW, height - panelY - 20, COLORS.panel)
-    ctx.fillStyle = COLORS.gold
-    ctx.fillRect(margin, panelY, 3, height - panelY - 20)
-    text('战绩档案', margin + 14, panelY + 23, 13, COLORS.gold, 'left', 700)
-    const cellW = (contentW - 28) / 2
-    records.slice(0, 9).forEach(([label, value], index) => {
-      const column = index % 2
-      const row = Math.floor(index / 2)
-      const x = margin + 12 + column * (cellW + 4)
-      const y = panelY + 51 + row * 34
-      ctx.fillStyle = row % 2 === 0 ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.08)'
-      ctx.fillRect(x, y - 13, cellW, 28)
-      text(label, x + 7, y - 6, 7, COLORS.muted)
-      text(value, x + 7, y + 8, 10, COLORS.text, 'left', 700)
-    })
   }
 
   function drawSlider(x, y, w, label, action, value, min, max, dark = false) {
@@ -677,13 +658,12 @@ function createCanvasUi({ state, deploy, config }) {
   }
 
   function drawScoreboard() {
-    const compact = touchMode
-    const panelW = Math.min(720, width - (compact ? 32 : 80))
+    const panelW = Math.min(720, width - 80)
     const x = (width - panelW) / 2
-    const y = compact ? 40 : 78
-    const panelH = height - y - (compact ? 18 : 62)
+    const y = 78
+    const panelH = height - y - 62
     box(x, y, panelW, panelH, 'rgba(18,24,27,.96)')
-    text('战 况', width / 2, y + (compact ? 18 : 25), compact ? 13 : 16, COLORS.gold, 'center', 700)
+    text('战 况', width / 2, y + 25, 16, COLORS.gold, 'center', 700)
     const me = { name: '你', kills: state.player.kills, deaths: state.player.deaths, alive: state.player.alive, me: true }
     const friendly = state.actors.filter(actor => actor.team === state.player.team)
     const enemy = state.actors.filter(actor => actor.team !== state.player.team)
@@ -692,27 +672,27 @@ function createCanvasUi({ state, deploy, config }) {
     const enemyLabel = state.player.team === 'allies' ? '轴心' : '盟军'
     const friendlyColor = state.player.team === 'allies' ? COLORS.ally : COLORS.axis
     const enemyColor = state.player.team === 'allies' ? COLORS.axis : COLORS.ally
-    const teamY = y + (compact ? 40 : 62)
-    drawTeamRows(friendly, x + 22, teamY, panelW / 2 - 34, friendlyColor, compact, friendlyLabel)
-    drawTeamRows(enemy, x + panelW / 2 + 12, teamY, panelW / 2 - 34, enemyColor, compact, enemyLabel)
+    const teamY = y + 62
+    drawTeamRows(friendly, x + 22, teamY, panelW / 2 - 34, friendlyColor, friendlyLabel)
+    drawTeamRows(enemy, x + panelW / 2 + 12, teamY, panelW / 2 - 34, enemyColor, enemyLabel)
   }
 
-  function drawTeamRows(entries, x, y, w, color, compact, label) {
+  function drawTeamRows(entries, x, y, w, color, label) {
     entries.sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
-    text(`${label}士兵`, x, y, compact ? 8 : 9, color)
-    text('K  D', x + w, y, compact ? 8 : 9, color, 'right')
-    const rowGap = compact ? 15 : 19
-    entries.slice(0, compact ? 13 : 14).forEach((entry, index) => {
-      const rowY = y + (compact ? 18 : 24) + index * rowGap
-      const rowH = compact ? 13 : 17
+    text(`${label}士兵`, x, y, 9, color)
+    text('K  D', x + w, y, 9, color, 'right')
+    const rowGap = 19
+    entries.slice(0, 14).forEach((entry, index) => {
+      const rowY = y + 24 + index * rowGap
+      const rowH = 17
       ctx.fillStyle = index % 2 === 0 ? 'rgba(255,255,255,.045)' : 'rgba(0,0,0,.12)'
       ctx.fillRect(x - 4, rowY - Math.floor(rowH / 2), w + 8, rowH)
       if (entry.me) {
         ctx.fillStyle = 'rgba(224,189,98,.15)'
         ctx.fillRect(x - 4, rowY - Math.floor(rowH / 2), w + 8, rowH)
       }
-      text(entry.name || '士兵', x, rowY, compact ? 7 : 8, entry.alive === false ? '#707773' : COLORS.text)
-      text(`${entry.kills || 0}  ${entry.deaths || 0}`, x + w, rowY, compact ? 7 : 8, COLORS.muted, 'right')
+      text(entry.name || '士兵', x, rowY, 8, entry.alive === false ? '#707773' : COLORS.text)
+      text(`${entry.kills || 0}  ${entry.deaths || 0}`, x + w, rowY, 8, COLORS.muted, 'right')
     })
   }
 
@@ -816,9 +796,18 @@ function createCanvasUi({ state, deploy, config }) {
   }
 
   function drawRotate() {
-    backdrop('#cbd2c5')
-    text('↻', width / 2, height * 0.35, 34, COLORS.axis, 'center', 800)
-    text('请横屏游玩', width / 2, height * 0.5, 20, COLORS.ink, 'center', 700)
+    ctx.save()
+    ctx.setTransform(canvas.width / innerWidth, 0, 0, canvas.height / innerHeight, 0, 0)
+    ctx.fillStyle = '#cbd2c5'
+    ctx.fillRect(0, 0, innerWidth, innerHeight)
+    text('需要全屏横屏后继续', innerWidth / 2, innerHeight * 0.42, 16, COLORS.ink, 'center', 700)
+    const rect = { x: innerWidth / 2 - 100, y: innerHeight * 0.52, w: 200, h: 42 }
+    box(rect.x, rect.y, rect.w, rect.h, COLORS.gold)
+    ctx.fillStyle = COLORS.gold
+    ctx.fillRect(rect.x, rect.y, rect.w, 2)
+    text('点击全屏', innerWidth / 2, rect.y + rect.h / 2, 10, COLORS.ink, 'center', 700)
+    ctx.restore()
+    hits.push({ ...touchRect(rect.x, rect.y, rect.w, rect.h), action: 'fullscreen' })
   }
 
   function touchRect(x, y, w, h) {
@@ -838,7 +827,7 @@ function createCanvasUi({ state, deploy, config }) {
     ctx.fill()
   }
 
-  function drawTouchButton(action, rect, accent) {
+  function drawTouchButton(action, rect, accent, hitAction = `touch:${action}`) {
     const active = touchActive[action]
     const fill = active
       ? COLORS.gold
@@ -848,9 +837,14 @@ function createCanvasUi({ state, deploy, config }) {
     ctx.fillRect(rect.x + 5, rect.y + rect.h - 3, rect.w - 10, 3)
     const iconColor = active ? COLORS.ink : action === 'fire' ? COLORS.text : accent
     const labelColor = active ? COLORS.ink : COLORS.text
-    text(TOUCH_ICONS[action], rect.x + rect.w / 2, rect.y + rect.h * 0.4, rect.h >= 58 ? 18 : 12, iconColor, 'center', 700)
-    text(touchLabels[action], rect.x + rect.w / 2, rect.y + rect.h * 0.72, rect.h >= 58 ? 8 : 7, labelColor, 'center', 700)
-    hits.push({ ...rect, action: `touch:${action}` })
+    if (horizontalTouchActions.has(action)) {
+      text(TOUCH_ICONS[action], rect.x + rect.w * 0.27, rect.y + rect.h / 2, 13, iconColor, 'center', 700)
+      text(touchLabels[action], rect.x + rect.w * 0.65, rect.y + rect.h / 2, 9, labelColor, 'center', 700)
+    } else {
+      text(TOUCH_ICONS[action], rect.x + rect.w / 2, rect.y + rect.h * 0.4, rect.h >= 58 ? 18 : 14, iconColor, 'center', 700)
+      text(touchLabels[action], rect.x + rect.w / 2, rect.y + rect.h * 0.72, 8, labelColor, 'center', 700)
+    }
+    hits.push({ ...rect, action: hitAction })
   }
 
   function drawTouch() {
@@ -872,18 +866,19 @@ function createCanvasUi({ state, deploy, config }) {
       ['aim', innerWidth - 202, innerHeight - 132, 68, 68, COLORS.ally],
       ['jump', innerWidth - 96, innerHeight - 230, 64, 58, COLORS.gold],
       ['crouch', innerWidth - 190, innerHeight - 224, 62, 54, COLORS.green],
-      ['reload', innerWidth / 2 - 156, innerHeight - 62, 48, 48, COLORS.text],
-      ['melee', innerWidth / 2 - 104, innerHeight - 62, 48, 48, COLORS.axis],
-      ['grenade', innerWidth / 2 - 52, innerHeight - 62, 48, 48, COLORS.gold],
-      ['item', innerWidth / 2, innerHeight - 62, 48, 48, COLORS.ally],
-      ['supply', innerWidth / 2 + 52, innerHeight - 62, 48, 48, COLORS.text],
-      ['weapon', innerWidth / 2 + 104, innerHeight - 62, 48, 48, COLORS.green],
-      ['scoreboard', 14, 14, 64, 40, COLORS.ally],
-      ['pause', 84, 14, 64, 40, COLORS.gold],
+      ['reload', innerWidth / 2 - 156, innerHeight - 50, 48, 36, COLORS.text],
+      ['melee', innerWidth / 2 - 104, innerHeight - 50, 48, 36, COLORS.axis],
+      ['grenade', innerWidth / 2 - 52, innerHeight - 50, 48, 36, COLORS.gold],
+      ['item', innerWidth / 2, innerHeight - 50, 48, 36, COLORS.ally],
+      ['supply', innerWidth / 2 + 52, innerHeight - 50, 48, 36, COLORS.text],
+      ['weapon', innerWidth / 2 + 104, innerHeight - 50, 48, 36, COLORS.green],
+      ['scoreboard', 14, 14, 64, 32, COLORS.ally],
+      ['pause', 84, 14, 64, 32, COLORS.gold],
+      ['chat', 154, 14, 64, 32, COLORS.green],
     ]
     for (const [action, x, y, w, h, color] of buttons) {
       const rect = touchRect(x, y, w, h)
-      drawTouchButton(action, rect, color)
+      drawTouchButton(action, rect, color, action === 'chat' ? 'chat-open' : `touch:${action}`)
     }
   }
 
@@ -893,11 +888,11 @@ function createCanvasUi({ state, deploy, config }) {
       chatChannels.includes(message.channel) && now - message.receivedAt < 10_000).slice(-5)
     if (!recent.length) return
     const labels = { world: '世界', room: '房间', squad: '小队' }
-    const panelW = Math.min(gameVisible ? 250 : 330, width - 32)
     const lineH = 19
     const panelH = recent.length * lineH + 12
-    const x = 16
-    const y = gameVisible ? height / 2 - panelH / 2 : height - panelH - 38
+    const panelW = Math.min(gameVisible ? 250 : 330, width - 32)
+    const x = gameVisible ? 16 : portalMargin()
+    const y = gameVisible ? height / 2 - panelH / 2 : height - 37 - panelH
     if (!gameVisible) box(x, y, panelW, panelH, 'rgba(10,15,16,.72)')
     recent.forEach((message, index) => {
       const age = now - message.receivedAt
@@ -955,15 +950,10 @@ function createCanvasUi({ state, deploy, config }) {
       ctx.restore()
     })
     const inputY = y + panelH - 35
-    box(x + 12, inputY, panelW - 24, 24, '#202928')
-    ctx.strokeStyle = COLORS.line
-    ctx.strokeRect(x + 12.5, inputY + 0.5, panelW - 25, 23)
-    ctx.save()
-    ctx.beginPath()
-    ctx.rect(x + 20, inputY, panelW - 40, 24)
-    ctx.clip()
-    text(chatValue || '输入消息...', x + 20, inputY + 12, 8, chatValue ? COLORS.text : COLORS.muted)
-    ctx.restore()
+    const inputRect = { x: x + 12, y: inputY, w: panelW - 24, h: 24 }
+    box(inputRect.x, inputRect.y, inputRect.w, inputRect.h, '#202928')
+    keyboardInput.style.display = 'block'
+    positionInput(keyboardInput, inputRect)
   }
 
   function render(now = performance.now()) {
@@ -980,11 +970,12 @@ function createCanvasUi({ state, deploy, config }) {
     lastDraw = now
     dirty = false
     hits.length = 0
+    visiblePortalInputs.clear()
     ctx.clearRect(0, 0, width, height)
     if (screen === 'boot') {
       drawBoot()
     } else if (screen === 'portal') {
-      drawPortal(now)
+      drawPortal()
     } else if (screen === 'menu') {
       drawMenu()
     } else if (gameVisible) {
@@ -997,6 +988,10 @@ function createCanvasUi({ state, deploy, config }) {
     }
     drawRecentChat(now)
     drawChat()
+    keyboardInput.style.display = chatOpen && !rotateVisible ? 'block' : 'none'
+    for (const [id, input] of portalInputs) {
+      input.style.display = !rotateVisible && visiblePortalInputs.has(id) ? 'block' : 'none'
+    }
     if (rotateVisible) drawRotate()
   }
 
@@ -1005,11 +1000,12 @@ function createCanvasUi({ state, deploy, config }) {
   }
 
   function findHit(event) {
-    if (rotateVisible) return null
     const point = logicalPosition(event)
     for (let i = hits.length - 1; i >= 0; i--) {
       const hit = hits[i]
-      if (inside(point.x, point.y, hit) && (!chatOpen || hit.action.startsWith('chat-'))) return hit
+      if (rotateVisible && hit.action !== 'fullscreen') continue
+      if (chatOpen && hit.action === 'chat-open') continue
+      if (inside(point.x, point.y, hit) && (!chatOpen || rotateVisible || hit.action.startsWith('chat-'))) return hit
     }
     return null
   }
@@ -1021,9 +1017,23 @@ function createCanvasUi({ state, deploy, config }) {
     dirty = true
   }
 
+  function openChat() {
+    if (!chatChannels.length) return
+    chatOpen = true
+    chatValue = ''
+    keyboardInput.type = 'text'
+    keyboardInput.maxLength = 160
+    keyboardInput.value = ''
+    keyboardInput.style.display = 'block'
+    keyboardInput.focus({ preventScroll: true })
+    handlers.onChatToggle?.(true)
+    dirty = true
+  }
+
   canvas.addEventListener('pointerdown', event => {
     if (rotateVisible) {
       blockedPointers.add(event.pointerId)
+      if (findHit(event)?.action === 'fullscreen') handlers.onFullscreen?.()
       return
     }
     if (chatOpen) {
@@ -1031,6 +1041,7 @@ function createCanvasUi({ state, deploy, config }) {
       return
     }
     const hit = findHit(event)
+    if (hit?.action === 'chat-open') return
     if (hit?.action === 'slider') {
       activeSlider = hit
       canvas.setPointerCapture(event.pointerId)
@@ -1084,7 +1095,9 @@ function createCanvasUi({ state, deploy, config }) {
     }
     const hit = findHit(event)
     if (!hit) return
-    if (hit.action === 'chat-close') {
+    if (hit.action === 'chat-open') {
+      openChat()
+    } else if (hit.action === 'chat-close') {
       chatOpen = false
       keyboardInput.blur()
       handlers.onChatToggle?.(false)
@@ -1108,13 +1121,6 @@ function createCanvasUi({ state, deploy, config }) {
     } else if (hit.action.startsWith('loadout:')) {
       const [, kind, id] = hit.action.split(':')
       handlers.onLoadout?.(kind, id)
-    } else if (hit.action.startsWith('portal-field:')) {
-      activePortalField = hit.action.slice(13)
-      const field = portal.fields.find(item => item.id === activePortalField)
-      keyboardInput.type = field.password ? 'password' : 'text'
-      keyboardInput.maxLength = field.maxLength || 128
-      keyboardInput.value = field.value
-      keyboardInput.focus({ preventScroll: true })
     } else if (hit.action.startsWith('portal:')) handlers.onPortalAction?.(hit.action.slice(7))
     dirty = true
   })
@@ -1127,38 +1133,31 @@ function createCanvasUi({ state, deploy, config }) {
 
   window.addEventListener('resize', resize)
   keyboardInput.addEventListener('input', () => {
-    if (chatOpen) {
-      chatValue = keyboardInput.value
-      dirty = true
-    } else if (screen === 'portal' && activePortalField) handlers.onPortalInput?.(activePortalField, keyboardInput.value)
+    if (!chatOpen) return
+    chatValue = keyboardInput.value
+    dirty = true
   })
   keyboardInput.addEventListener('keydown', event => {
-    if (chatOpen) {
-      if (event.isComposing) return
-      if (event.key === 'Enter') {
-        const value = chatValue.trim()
-        if (value) handlers.onChatSend?.(chatChannel, value)
-        chatValue = ''
-        keyboardInput.value = ''
-      } else if (event.key === 'Escape') {
-        chatOpen = false
-        keyboardInput.blur()
-        handlers.onChatToggle?.(false)
-      } else if (event.key === 'Tab' || event.ctrlKey || event.metaKey || event.altKey || event.key.length > 1) {
-        event.preventDefault()
-        event.stopPropagation()
-        return
-      } else {
-        return
-      }
+    if (!chatOpen || event.isComposing || event.keyCode === 229) return
+    if (event.key === 'Enter') {
+      const value = chatValue.trim()
+      if (value) handlers.onChatSend?.(chatChannel, value)
+      chatValue = ''
+      keyboardInput.value = ''
+    } else if (event.key === 'Escape') {
+      chatOpen = false
+      keyboardInput.blur()
+      handlers.onChatToggle?.(false)
+    } else if (event.key === 'Tab' || event.ctrlKey || event.metaKey || event.altKey || event.key.length > 1) {
       event.preventDefault()
       event.stopPropagation()
-      dirty = true
+      return
+    } else {
       return
     }
-    if (event.key !== 'Enter') return
     event.preventDefault()
-    handlers.onPortalSubmit?.()
+    event.stopPropagation()
+    dirty = true
   })
   window.addEventListener('keydown', event => {
     if (rotateVisible) {
@@ -1166,19 +1165,14 @@ function createCanvasUi({ state, deploy, config }) {
       return
     }
     if (event.code === 'KeyT' && chatChannels.length && document.activeElement !== keyboardInput) {
-      chatOpen = true
-      chatValue = ''
-      keyboardInput.type = 'text'
-      keyboardInput.maxLength = 160
-      keyboardInput.value = ''
-      keyboardInput.focus({ preventScroll: true })
-      handlers.onChatToggle?.(true)
+      openChat()
       event.preventDefault()
       event.stopPropagation()
       dirty = true
       return
     }
     if (screen !== 'portal') return
+    if (event.target instanceof HTMLInputElement) return
     if (event.key === 'Escape') {
       handlers.onPortalBack?.()
       event.preventDefault()
@@ -1221,12 +1215,7 @@ function createCanvasUi({ state, deploy, config }) {
       dirty = true
     },
     showPortal(value) {
-      const transitionKey = value.title
-      if (screen !== 'portal' || transitionKey !== portalTransitionKey) {
-        portalTransitionKey = transitionKey
-        portalEnteredAt = performance.now()
-        hoveredAction = null
-      }
+      if (screen !== 'portal' || value.title !== portal?.title) hoveredAction = null
       portal = value
       screen = 'portal'
       gameVisible = false
@@ -1358,6 +1347,7 @@ function createCanvasUi({ state, deploy, config }) {
     destroy() {
       canvas.remove()
       keyboardInput.remove()
+      for (const input of portalInputs.values()) input.remove()
     },
   }
 }
@@ -1380,7 +1370,7 @@ export function createClient() {
   const touchDevice = detectTouchDevice()
 
   function syncPageOrientation() {
-    ui.setRotateVisible(touchDevice && innerHeight > innerWidth)
+    ui.setRotateVisible(touchDevice && (innerHeight > innerWidth || !document.fullscreenElement))
   }
 
   async function lockLandscape() {
@@ -1395,11 +1385,7 @@ export function createClient() {
   syncPageOrientation()
   window.addEventListener('resize', syncPageOrientation)
   window.addEventListener('orientationchange', syncPageOrientation)
-  if (touchDevice) {
-    document.addEventListener('pointerdown', () => {
-      lockLandscape().catch(console.error)
-    }, { capture: true, once: true })
-  }
+  document.addEventListener('fullscreenchange', syncPageOrientation)
 
   let user = null
   let room = null
@@ -1724,6 +1710,7 @@ export function createClient() {
   }
 
   ui.setHandlers({
+    onFullscreen() { lockLandscape().catch(console.error) },
     onPortalAction: action,
     onPortalBack() {
       if (screen === 'choice') return

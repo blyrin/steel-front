@@ -282,7 +282,7 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
   }
 
   function updateLandscapeState() {
-    landscapeOk = !touchMode || window.innerWidth >= window.innerHeight
+    landscapeOk = !touchMode || (window.innerWidth >= window.innerHeight && !!document.fullscreenElement)
     ui.setRotateVisible(touchMode && !landscapeOk)
     if (!landscapeOk) clearTouchActions()
   }
@@ -573,6 +573,10 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
     updateLandscapeState()
     updateTouchUi()
     resetGyroBaseline()
+  })
+  document.addEventListener('fullscreenchange', () => {
+    updateLandscapeState()
+    updateTouchUi()
   })
 
   ui.setTouchHandlers({ down: onTouchDown, move: onPointerMove, up: onPointerEnd })
