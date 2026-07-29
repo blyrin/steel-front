@@ -17,6 +17,7 @@ export const CLIENT_MESSAGE = Object.freeze({
   QUICK_MATCH: 'quick_match',
   CREATE_ROOM: 'create_room',
   JOIN_ROOM: 'join_room',
+  CHANGE_TEAM: 'change_team',
   LEAVE_ROOM: 'leave_room',
   KICK_MEMBER: 'kick_member',
   START_MATCH: 'start_match',

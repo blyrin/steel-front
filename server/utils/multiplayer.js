@@ -106,6 +106,14 @@ class Room {
     this.updateState()
   }
 
+  changeTeam(userId, team) {
+    if (this.modeId !== 'classic' || this.simulation) throw new Error('当前不能切换阵营')
+    const member = this.members.get(userId)
+    if (!member) throw new Error('房间成员不存在')
+    member.team = team
+    this.updateState()
+  }
+
   disconnect(userId) {
     const member = this.members.get(userId)
     if (!member) return
@@ -273,6 +281,9 @@ class MultiplayerManager {
       case 'quick_match': return this.quickMatch(connection, message.modeId)
       case 'create_room': return this.create(connection, message)
       case 'join_room': return this.join(connection, message.roomId || message.invite)
+      case 'change_team':
+        if (!room) throw new Error('当前不在房间中')
+        return room.changeTeam(connection.user.id, message.team)
       case 'leave_room': room?.leave(connection.user.id, true); connection.room = null; return send(connection.peer, { type: 'left' })
       case 'start_match':
         if (room?.hostId !== connection.user.id || room.status !== 'waiting') throw new Error('只有房主可开赛')

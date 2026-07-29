@@ -166,8 +166,6 @@ function createCanvasUi({ state, deploy, config }) {
     ctx.globalAlpha = selected ? 0.78 + Math.sin(performance.now() * 0.006) * 0.22 : 1
     ctx.fillRect(rect.x, rect.y, selected ? rect.w : hovered ? 5 : 3, selected ? 2 : rect.h)
     ctx.globalAlpha = 1
-    ctx.strokeStyle = selected || hovered ? 'rgba(255,239,178,.38)' : 'rgba(255,255,255,.08)'
-    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1)
     while (fontSize > 6) {
       font(fontSize, 700)
       if (ctx.measureText(label).width <= rect.w - 16) break
@@ -258,7 +256,7 @@ function createCanvasUi({ state, deploy, config }) {
       text(field.label, contentX, cursorY, 8, COLORS.gold, 'left', 700)
       const rect = { x: contentX, y: cursorY + 12, w: contentW, h: compact ? 36 : 38 }
       box(rect.x, rect.y, rect.w, rect.h, activePortalField === field.id ? '#303a38' : '#202726')
-      ctx.strokeStyle = activePortalField === field.id ? COLORS.gold : 'rgba(255,255,255,.1)'
+      ctx.strokeStyle = 'rgba(255,255,255,.1)'
       ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1)
       const value = field.password ? '●'.repeat(field.value.length) : field.value
       text(value || field.placeholder || '', rect.x + 12, rect.y + rect.h / 2, 9, value ? COLORS.text : '#777b72')
@@ -273,9 +271,11 @@ function createCanvasUi({ state, deploy, config }) {
     const visibleRows = Math.max(0, Math.floor((rowsBottom - cursorY) / 34))
     rows.slice(0, visibleRows).forEach((row, index) => {
       const rowY = cursorY + index * 34
-      box(contentX, rowY, contentW, 29, index % 2 ? 'rgba(255,255,255,.035)' : '#202726')
-      ctx.fillStyle = row.muted ? COLORS.line : (index === 0 ? COLORS.gold : COLORS.ally)
-      ctx.fillRect(contentX, rowY, 2, 29)
+      if (!row.section) {
+        box(contentX, rowY, contentW, 29, index % 2 ? 'rgba(255,255,255,.035)' : '#202726')
+        ctx.fillStyle = row.accent || (row.muted ? COLORS.line : (index === 0 ? COLORS.gold : COLORS.ally))
+        ctx.fillRect(contentX, rowY, 2, 29)
+      }
       const reserve = row.action ? 76 : 12
       ctx.save()
       ctx.beginPath()
@@ -289,17 +289,34 @@ function createCanvasUi({ state, deploy, config }) {
 
     const actions = portal.actions || []
     if (split) {
-      actions.forEach((entry, index) => {
-        const rect = { x: actionX, y: contentY + index * 42, w: actionW, h: 34 }
-        button(rect, entry.label, `portal:${entry.id}`, entry.primary, entry.danger ? '#4b2927' : '#252d2c', 9, entry.danger ? COLORS.axis : COLORS.ally)
-      })
+      let actionY = contentY
+      for (let index = 0; index < actions.length; index++) {
+        const entry = actions[index]
+        const paired = entry.paired && actions[index + 1]?.paired
+        if (paired) {
+          const gap = 7
+          const itemW = (actionW - gap) / 2
+          for (let pairIndex = 0; pairIndex < 2; pairIndex++) {
+            const pairEntry = actions[index + pairIndex]
+            const rect = { x: actionX + pairIndex * (itemW + gap), y: actionY, w: itemW, h: 34 }
+            button(rect, pairEntry.label, `portal:${pairEntry.id}`, pairEntry.primary,
+              pairEntry.danger ? '#4b2927' : '#252d2c', 8, pairEntry.accent || (pairEntry.danger ? COLORS.axis : COLORS.ally))
+          }
+          index++
+        } else {
+          const rect = { x: actionX, y: actionY, w: actionW, h: 34 }
+          button(rect, entry.label, `portal:${entry.id}`, entry.primary,
+            entry.danger ? '#4b2927' : '#252d2c', 9, entry.accent || (entry.danger ? COLORS.axis : COLORS.ally))
+        }
+        actionY += 42
+      }
     } else if (actions.length) {
       const gap = 7
       const itemW = (actionW - gap) / 2
       const startY = y + panelH - pad - mobileActionRows * 38
       actions.forEach((entry, index) => {
         const rect = { x: actionX + (index % 2) * (itemW + gap), y: startY + Math.floor(index / 2) * 38, w: itemW, h: 31 }
-        button(rect, entry.label, `portal:${entry.id}`, entry.primary, entry.danger ? '#4b2927' : '#252d2c', 8, entry.danger ? COLORS.axis : COLORS.ally)
+        button(rect, entry.label, `portal:${entry.id}`, entry.primary, entry.danger ? '#4b2927' : '#252d2c', 8, entry.accent || (entry.danger ? COLORS.axis : COLORS.ally))
       })
     }
 
@@ -413,15 +430,22 @@ function createCanvasUi({ state, deploy, config }) {
     const mode = getMode()?.getHudState()
     drawActorHealthBars(now)
     if (mode) {
+      const friendlyIsAllies = player.team === 'allies'
+      const friendlyLabel = friendlyIsAllies ? mode.alliesLabel : mode.axisLabel
+      const friendlyScore = friendlyIsAllies ? mode.alliesScore : mode.axisScore
+      const enemyLabel = friendlyIsAllies ? mode.axisLabel : mode.alliesLabel
+      const enemyScore = friendlyIsAllies ? mode.axisScore : mode.alliesScore
+      const friendlyColor = friendlyIsAllies ? COLORS.ally : COLORS.axis
+      const enemyColor = friendlyIsAllies ? COLORS.axis : COLORS.ally
       const topW = 220
       const x = width / 2 - topW / 2
       box(x, 8, topW, 30, 'rgba(18,24,27,.66)')
-      ctx.fillStyle = COLORS.ally
+      ctx.fillStyle = friendlyColor
       ctx.fillRect(x, 8, 3, 30)
-      ctx.fillStyle = COLORS.axis
+      ctx.fillStyle = enemyColor
       ctx.fillRect(x + topW - 3, 8, 3, 30)
-      text(`${mode.alliesLabel}  ${mode.alliesScore}`, width / 2 - 52, 18, 11, COLORS.ally, 'center', 700)
-      text(`${mode.axisScore}  ${mode.axisLabel}`, width / 2 + 52, 18, 11, COLORS.axis, 'center', 700)
+      text(`${friendlyLabel}  ${friendlyScore}`, width / 2 - 52, 18, 11, friendlyColor, 'center', 700)
+      text(`${enemyScore}  ${enemyLabel}`, width / 2 + 52, 18, 11, enemyColor, 'center', 700)
       text(mode.targetText, width / 2, 31, 7, COLORS.muted, 'center')
     }
 
@@ -507,7 +531,7 @@ function createCanvasUi({ state, deploy, config }) {
     ctx.fillRect(x - barW / 2, y - 11, barW, 3)
     ctx.fillStyle = actor.health / actor.maxHealth < 0.3
       ? COLORS.danger
-      : actor.team === state.player.team ? COLORS.ally : COLORS.axis
+      : actor.team === 'allies' ? COLORS.ally : COLORS.axis
     ctx.fillRect(x - barW / 2 + 1, y - 10, (barW - 2) * clamp(actor.health / actor.maxHealth, 0, 1), 1)
   }
 
@@ -520,7 +544,7 @@ function createCanvasUi({ state, deploy, config }) {
       fontSize--
     }
     text(actor.name, clamp(x, maxWidth / 2, width - maxWidth / 2), y - 16, fontSize,
-      actor.team === state.player.team ? COLORS.ally : COLORS.axis, 'center', 700)
+      actor.team === 'allies' ? COLORS.ally : COLORS.axis, 'center', 700)
   }
 
   function drawEquipmentState(player, x, y, w) {
@@ -661,17 +685,21 @@ function createCanvasUi({ state, deploy, config }) {
     box(x, y, panelW, panelH, 'rgba(18,24,27,.96)')
     text('战 况', width / 2, y + (compact ? 18 : 25), compact ? 13 : 16, COLORS.gold, 'center', 700)
     const me = { name: '你', kills: state.player.kills, deaths: state.player.deaths, alive: state.player.alive, me: true }
-    const allies = state.actors.filter(a => a.team === 'allies')
-    const axis = state.actors.filter(a => a.team !== 'allies')
-    ;(state.player.team === 'allies' ? allies : axis).unshift(me)
+    const friendly = state.actors.filter(actor => actor.team === state.player.team)
+    const enemy = state.actors.filter(actor => actor.team !== state.player.team)
+    friendly.unshift(me)
+    const friendlyLabel = state.player.team === 'allies' ? '盟军' : '轴心'
+    const enemyLabel = state.player.team === 'allies' ? '轴心' : '盟军'
+    const friendlyColor = state.player.team === 'allies' ? COLORS.ally : COLORS.axis
+    const enemyColor = state.player.team === 'allies' ? COLORS.axis : COLORS.ally
     const teamY = y + (compact ? 40 : 62)
-    drawTeamRows(allies, x + 22, teamY, panelW / 2 - 34, COLORS.ally, compact)
-    drawTeamRows(axis, x + panelW / 2 + 12, teamY, panelW / 2 - 34, COLORS.axis, compact)
+    drawTeamRows(friendly, x + 22, teamY, panelW / 2 - 34, friendlyColor, compact, friendlyLabel)
+    drawTeamRows(enemy, x + panelW / 2 + 12, teamY, panelW / 2 - 34, enemyColor, compact, enemyLabel)
   }
 
-  function drawTeamRows(entries, x, y, w, color, compact) {
+  function drawTeamRows(entries, x, y, w, color, compact, label) {
     entries.sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
-    text('士兵', x, y, compact ? 8 : 9, color)
+    text(`${label}士兵`, x, y, compact ? 8 : 9, color)
     text('K  D', x + w, y, compact ? 8 : 9, color, 'right')
     const rowGap = compact ? 15 : 19
     entries.slice(0, compact ? 13 : 14).forEach((entry, index) => {
@@ -700,36 +728,6 @@ function createCanvasUi({ state, deploy, config }) {
     if (!deployment) return
     ctx.fillStyle = 'rgba(8,13,15,.24)'
     ctx.fillRect(0, 0, width, height)
-    const panelH = 72
-    box(0, 0, width, panelH, 'rgba(18,24,27,.94)')
-    const groups = deployment.loadoutGroups
-    const groupAccents = [COLORS.gold, COLORS.ally, COLORS.axis, COLORS.green]
-    const totalItems = groups.reduce((sum, group) => sum + group.items.length, 0)
-    const startX = 16
-    const availableW = width - 32
-    let groupX = startX
-    groups.forEach((group, groupIndex) => {
-      const accent = groupAccents[groupIndex]
-      const groupW = (availableW - (groups.length - 1) * 14) * group.items.length / totalItems
-      ctx.fillStyle = accent
-      ctx.fillRect(groupX, 8, 3, 8)
-      text(group.label, groupX + 8, 12, 8, accent, 'left', 700)
-      const itemW = (groupW - (group.items.length - 1) * 4) / group.items.length
-      group.items.forEach((item, index) => {
-        const rect = { x: groupX + index * (itemW + 4), y: 25, w: itemW, h: 32 }
-        const action = `loadout:${group.kind}:${item.id}`
-        ctx.fillStyle = item.selected ? COLORS.gold : '#303c40'
-        ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
-        if (hoveredAction === action && !item.selected) {
-          ctx.fillStyle = 'rgba(255,255,255,.08)'
-          ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
-        }
-        text(item.name, rect.x + rect.w / 2, rect.y + rect.h / 2, 8,
-          item.selected ? COLORS.ink : COLORS.text, 'center', 700)
-        hits.push({ ...rect, action })
-      })
-      groupX += groupW + (groupIndex < groups.length - 1 ? 14 : 0)
-    })
     deployment.markers.forEach((marker, index) => {
       const markerX = (marker.x / innerWidth) * width
       const markerY = (marker.y / innerHeight) * height
@@ -739,6 +737,46 @@ function createCanvasUi({ state, deploy, config }) {
       text(`${marker.id} ${marker.name}`, rect.x + rect.w / 2, rect.y + 15, 8, COLORS.text, 'center', 700)
       text(marker.contested ? '交战' : '安全', rect.x + rect.w / 2, rect.y + 29, 7, marker.contested ? '#ffc0aa' : '#bde0bd', 'center')
       hits.push({ ...rect, action: `spawn:${index}` })
+    })
+
+    const groups = deployment.loadoutGroups
+    const groupAccents = [COLORS.gold, COLORS.ally, COLORS.axis, COLORS.green]
+    const panelW = clamp(width * 0.22, 154, 210)
+    const panelX = [12, width - panelW - 12]
+    ;[groups.slice(0, 2), groups.slice(2)].forEach((panelGroups, panelIndex) => {
+      const panelH = 20 + panelGroups.reduce((sum, group) => sum + 26 + Math.ceil(group.items.length / 2) * 32, 0)
+      const x = panelX[panelIndex]
+      const y = (height - panelH) / 2
+      box(x, y, panelW, panelH, 'rgba(18,24,27,.94)')
+      let groupY = y + 12
+      panelGroups.forEach(group => {
+        const accent = groupAccents[groups.indexOf(group)]
+        ctx.fillStyle = accent
+        ctx.fillRect(x + 10, groupY, 3, 10)
+        text(group.label, x + 19, groupY + 5, 8, accent, 'left', 700)
+        groupY += 18
+        const gap = 4
+        const itemW = (panelW - 24 - gap) / 2
+        group.items.forEach((item, index) => {
+          const rect = {
+            x: x + 10 + index % 2 * (itemW + gap),
+            y: groupY + Math.floor(index / 2) * 32,
+            w: itemW,
+            h: 27,
+          }
+          const action = `loadout:${group.kind}:${item.id}`
+          ctx.fillStyle = item.selected ? COLORS.gold : '#303c40'
+          ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+          if (hoveredAction === action && !item.selected) {
+            ctx.fillStyle = 'rgba(255,255,255,.08)'
+            ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+          }
+          text(item.name, rect.x + rect.w / 2, rect.y + rect.h / 2, 7,
+            item.selected ? COLORS.ink : COLORS.text, 'center', 700)
+          hits.push({ ...rect, action })
+        })
+        groupY += Math.ceil(group.items.length / 2) * 32 + 8
+      })
     })
   }
 
@@ -1373,6 +1411,7 @@ export function createClient() {
   let screen = 'choice'
   let register = false
   let selectedMode = 'classic'
+  let selectedTeam = 'allies'
   let visibility = 'public'
   let leaderboardMode = 'classic'
   let profileRows = []
@@ -1437,9 +1476,16 @@ export function createClient() {
         account: user
           ? { label: user.displayName, logout: true }
           : { label: '登录' },
-        rows: modeRows.concat(roomRows),
+        rows: modeRows.concat(user ? [
+          { label: '联机房间', muted: true, section: true },
+          ...(roomRows.length ? roomRows : [{ label: '暂无公开房间', muted: true }]),
+        ] : []),
         actions: [
-          { id: 'offline-start', label: '单人作战', primary: true },
+          ...(selectedMode === 'classic' ? [
+            { id: 'team', label: `单人：${selectedTeam === 'allies' ? '盟军' : '轴心'}`, paired: true,
+              accent: selectedTeam === 'allies' ? COLORS.ally : COLORS.axis },
+            { id: 'offline-start', label: '单人作战', primary: true, paired: true },
+          ] : [{ id: 'offline-start', label: '单人作战', primary: true }]),
           { id: `quick:${selectedMode}`, label: '快速匹配' },
           ...(user ? [{ id: 'create', label: '创建房间' }, { id: 'invite', label: '邀请码' },
             { id: 'stats', label: '战绩排行' }] : []),
@@ -1484,16 +1530,25 @@ export function createClient() {
   function showRoomCanvas(common = { status, error: statusError }) {
     screen = 'room'
     syncChatContext()
+    const ownMember = room.members.find(member => member.userId === user.id)
     ui.showPortal({
       ...common,
       title: room.name,
       profile: `${user.displayName}　${room.modeId === 'classic' ? '经典' : '丧尸'}　${room.status}${room.invite ? `　${room.invite}` : ''}`,
-      rows: room.members.map(member => ({
-        label: `${member.displayName}  ·  ${member.team === 'allies' ? '盟军' : '轴心'}${member.connected ? '' : ' · 掉线'}`,
-        action: room.hostId === user.id && member.userId !== user.id && room.status === 'waiting' ? `kick:${member.userId}` : null,
-        actionLabel: '移除',
-      })),
+      rows: [...room.members]
+        .sort((a, b) => (a.team === 'allies' ? 0 : 1) - (b.team === 'allies' ? 0 : 1))
+        .map(member => ({
+          label: `[${member.team === 'allies' ? '盟军' : '轴心'}]  ${member.displayName}${member.connected ? '' : ' · 掉线'}`,
+          accent: member.team === 'allies' ? COLORS.ally : COLORS.axis,
+          action: room.hostId === user.id && member.userId !== user.id && room.status === 'waiting' ? `kick:${member.userId}` : null,
+          actionLabel: '移除',
+        })),
       actions: [
+        ...(room.modeId === 'classic' && !['active', 'results'].includes(room.status) ? [{
+          id: 'change-team',
+          label: `当前：${ownMember?.team === 'allies' ? '盟军' : '轴心'} · 切换${ownMember?.team === 'allies' ? '轴心' : '盟军'}`,
+          accent: ownMember?.team === 'allies' ? COLORS.ally : COLORS.axis,
+        }] : []),
         ...(room.hostId === user.id && room.status === 'waiting' ? [{ id: 'start-match', label: '开始对局', primary: true }] : []),
         { id: 'leave-room', label: '退出房间', danger: true },
       ],
@@ -1522,7 +1577,7 @@ export function createClient() {
 
   async function startLocal(modeId) {
     activeSession = new LocalSession({ message: handleMessage }, state.records)
-    activeSession.start(modeId)
+    activeSession.start(modeId, modeId === 'classic' ? selectedTeam : 'allies')
     await game.preparePresentation()
   }
 
@@ -1592,6 +1647,9 @@ export function createClient() {
     } else if (id === 'mode') {
       selectedMode = selectedMode === 'classic' ? 'zombie' : 'classic'
       render()
+    } else if (id === 'team') {
+      selectedTeam = selectedTeam === 'allies' ? 'axis' : 'allies'
+      render()
     } else if (id === 'visibility') {
       visibility = visibility === 'public' ? 'private' : 'public'
       render()
@@ -1607,6 +1665,9 @@ export function createClient() {
       render()
     } else if (id === 'invite-submit') {
       networkSession.send({ type: 'join_room', invite: fields.invite.trim().toUpperCase() })
+    } else if (id === 'change-team') {
+      const ownTeam = room.members.find(member => member.userId === user.id)?.team
+      networkSession.send({ type: 'change_team', team: ownTeam === 'allies' ? 'axis' : 'allies' })
     } else if (id === 'start-match') {
       networkSession.send({ type: 'start_match' })
     } else if (id === 'leave-room') {

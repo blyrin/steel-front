@@ -18,7 +18,7 @@ export class LocalSession {
     this.paused = false
   }
 
-  start(modeId) {
+  start(modeId, team = 'allies') {
     this.simulation = createAuthoritativeSimulation({
       modeId,
       seed: Math.floor(Math.random() * 0x100000000),
@@ -27,7 +27,7 @@ export class LocalSession {
       id: this.playerId,
       userId: 'local',
       name: '你',
-      team: 'allies',
+      team,
       loadout: CFG.loadout,
     })
     this.handlers.message({

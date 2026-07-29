@@ -19,6 +19,7 @@ const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('quick_match'), modeId: z.enum(['classic', 'zombie']) }),
   z.object({ type: z.literal('create_room'), modeId: z.enum(['classic', 'zombie']), name: z.string().trim().min(1).max(20).refine(value => !/[\p{Cc}\p{Cf}]/u.test(value)), visibility: z.enum(['public', 'private']) }),
   z.object({ type: z.literal('join_room'), roomId: z.string().uuid().optional(), invite: z.string().regex(/^[2-9A-HJ-NP-Z]{6}$/).optional() }).refine(value => value.roomId || value.invite),
+  z.object({ type: z.literal('change_team'), team: z.enum(['allies', 'axis']) }),
   z.object({ type: z.literal('leave_room') }),
   z.object({ type: z.literal('kick_member'), userId: z.string().uuid() }),
   z.object({ type: z.literal('start_match') }),

@@ -830,8 +830,13 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     const won = snapshot.outcome?.winner === player.team
     if (document.pointerLockElement) document.exitPointerLock()
     const hud = modeHud()
+    const friendlyIsAllies = player.team === 'allies'
+    const friendlyLabel = friendlyIsAllies ? hud.alliesLabel : hud.axisLabel
+    const friendlyScore = friendlyIsAllies ? hud.alliesScore : hud.axisScore
+    const enemyLabel = friendlyIsAllies ? hud.axisLabel : hud.alliesLabel
+    const enemyScore = friendlyIsAllies ? hud.axisScore : hud.alliesScore
     const stats = [
-      `${hud.alliesLabel}: ${hud.alliesScore}    ${hud.axisLabel}: ${hud.axisScore}`,
+      `${friendlyLabel}: ${friendlyScore}    ${enemyLabel}: ${enemyScore}`,
       `结算: ${snapshot.outcome?.reason || '战斗结束'}`,
       ...(snapshot.outcome?.details || []),
       `个人击杀: ${player.kills}    阵亡: ${player.deaths}`,
