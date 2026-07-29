@@ -62,6 +62,16 @@ class Room {
     this.manager.broadcastLobby()
   }
 
+  sendSnapshots(type, extra = {}, includeDefinitions = false) {
+    const snapshot = this.simulation.createSnapshot(null, includeDefinitions)
+    for (const member of this.members.values()) {
+      if (!member.peer) continue
+      const playerId = `player-${member.user.id}`
+      send(member.peer, { type, ...extra,
+        snapshot: { ...snapshot, player: this.simulation.createPlayerSnapshot(playerId) } })
+    }
+  }
+
   chooseTeam() {
     if (this.modeId === 'zombie') return 'allies'
     const counts = { allies: 0, axis: 0 }
@@ -88,7 +98,11 @@ class Room {
     }
     connection.room = this
     send(connection.peer, { type: 'joined', protocol: MULTIPLAYER_PROTOCOL, room: this.publicState(), playerId: `player-${connection.user.id}` })
-    if (this.simulation) send(connection.peer, { type: 'match_start', map: this.simulation.map, snapshot: this.simulation.createSnapshot(), playerId: `player-${connection.user.id}` })
+    if (this.simulation) {
+      const playerId = `player-${connection.user.id}`
+      send(connection.peer, { type: 'match_start', map: this.simulation.map,
+        snapshot: this.simulation.createSnapshot(playerId, true), playerId })
+    }
     this.updateState()
   }
 
@@ -127,7 +141,7 @@ class Room {
       id: `player-${member.user.id}`, userId: member.user.id, name: member.user.displayName,
       team: member.team, loadout: CFG.loadout,
     })
-    this.broadcast({ type: 'match_start', map: this.simulation.map, snapshot: this.simulation.createSnapshot() })
+    this.sendSnapshots('match_start', { map: this.simulation.map }, true)
     this.updateState()
   }
 
@@ -143,7 +157,7 @@ class Room {
       const won = this.modeId === 'zombie' ? winner === 'allies' : actor.team === winner
       recordMatch(this.matchId, this, actor, won).catch(error => console.error('记录比赛失败', error))
     }
-    this.broadcast({ type: 'match_end', snapshot })
+    this.sendSnapshots('match_end')
     this.updateState()
   }
 
@@ -165,7 +179,7 @@ class Room {
     const events = this.simulation.drainEvents()
     if (events.length) this.broadcast({ type: 'events', events })
     if (tick % (SERVER_TICK_RATE / SNAPSHOT_RATE) === 0)
-      this.broadcast({ type: 'snapshot', tick: this.snapshotCounter++, snapshot: this.simulation.createSnapshot() })
+      this.sendSnapshots('snapshot', { tick: this.snapshotCounter++ })
     if (this.simulation.getOutcome()) this.finish()
   }
 }
@@ -259,7 +273,11 @@ class MultiplayerManager {
         return
       case 'input': return room?.simulation?.submitInput(`player-${connection.user.id}`, message)
       case 'request_resync':
-        if (room?.simulation) send(connection.peer, { type: 'match_start', map: room.simulation.map, snapshot: room.simulation.createSnapshot() })
+        if (room?.simulation) {
+          const playerId = `player-${connection.user.id}`
+          send(connection.peer, { type: 'match_start', map: room.simulation.map,
+            snapshot: room.simulation.createSnapshot(playerId, true), playerId })
+        }
         return
       case 'ping': return send(connection.peer, { type: 'pong', at: message.at, serverTime: Date.now() })
       default: throw new Error('未知消息')

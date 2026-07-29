@@ -427,7 +427,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
       })
     )
     mesh.position.copy(origin)
-    addParticle({
+    const particle = {
       mesh,
       type: 'grenade',
       life: grenade.fuse,
@@ -439,7 +439,9 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
         particle.mesh.rotation.z += dt * 7
       },
       onComplete: () => onDetonate(mesh.position.clone()),
-    })
+    }
+    addParticle(particle)
+    return particle
   }
 
   function spawnThrownC4(origin, velocity, secondary) {
@@ -483,9 +485,9 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     return charge
   }
 
-  function removeCharge(charge) {
-    charge.active = false
-    charge.particle.life = 0
+  function removeProjectile(projectile) {
+    if (projectile.active != null) projectile.active = false
+    ;(projectile.particle ?? projectile).life = 0
   }
 
   function createRocketMesh(color) {
@@ -514,7 +516,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     const direction = velocity.clone().normalize()
     orientRocket(mesh, direction)
     let hitPosition = null
-    addParticle({
+    const particle = {
       mesh,
       type: 'rocket',
       life: 4,
@@ -543,7 +545,9 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
         orientRocket(particle.mesh, particle.vel.clone().normalize())
       },
       onComplete: () => onHit((hitPosition || mesh.position).clone()),
-    })
+    }
+    addParticle(particle)
+    return particle
   }
 
   function spawnExplosion(position, radius) {
@@ -806,7 +810,7 @@ export function createEffectsSystem({ scene, state, particles, audio, config }) 
     spawnThrownGrenade,
     spawnThrownC4,
     spawnRocket,
-    removeCharge,
+    removeProjectile,
     spawnExplosion,
     spawnSmokeCloud,
   }

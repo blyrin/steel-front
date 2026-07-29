@@ -7,6 +7,7 @@ const noop = () => {}
 
 export function createRemoteActorView(actor, services) {
   let nextId = 0
+  const y = actor.kind === 'player' && actor.deployed ? actor.y - actor.currentHeight : actor.y
   const common = {
     scene: services.scene, camera: services.camera, matLib: services.matLib, config: services.config,
     audio: silentAudio, effects: { spawnBlood: noop }, scoring: { recordElimination: noop },
@@ -14,10 +15,10 @@ export function createRemoteActorView(actor, services) {
     ai: { allocateActorId: () => `remote-${nextId++}`, reportDamage: noop, reportDeath: noop },
   }
   const view = actor.kind === 'zombie'
-    ? new Zombie(new THREE.Vector3(actor.x, actor.y, actor.z), {
+    ? new Zombie(new THREE.Vector3(actor.x, y, actor.z), {
         ...common, enemyConfig: services.config.modes.zombie.enemy,
       })
-    : new Bot(actor.team, new THREE.Vector3(actor.x, actor.y, actor.z), {
+    : new Bot(actor.team, new THREE.Vector3(actor.x, y, actor.z), {
         ...common, combat: {}, mode: {}, getRandomSpawn: noop,
       })
   view.id = actor.id
@@ -35,20 +36,30 @@ export function createRemoteActorView(actor, services) {
 export function applyRemoteActorSnapshot(view, actor) {
   const wasAlive = view.alive
   view.alive = actor.alive
+  if (wasAlive && !actor.alive) {
+    view.deathTime = 0
+    view.stateName = 'dead'
+  }
   view.health = actor.health
   view.maxHealth = actor.maxHealth
+  if (actor.kind !== 'zombie' && view.weaponData !== view.config.weapons[actor.weapon]) {
+    view.weaponData = view.config.weapons[actor.weapon]
+    view.configureRifleModel()
+  }
   view.kills = actor.kills
   view.deaths = actor.deaths
   view.controller = actor.controller
-  const y = actor.kind === 'player' ? actor.y - view.config.player.standHeight : actor.y
+  const y = actor.kind === 'player' && actor.deployed ? actor.y - actor.currentHeight : actor.y
   view.networkPosition.set(actor.x, y, actor.z)
   view.networkYaw = actor.yaw
   view.networkUpdatedAt = performance.now()
   view.velocity.set(actor.vx, actor.vy, actor.vz)
   view.yaw = actor.yaw
   view.pitch = actor.pitch
-  view.targetVisible = actor.alive
-  view.group.visible = true
+  view.stateName = actor.alive ? actor.stateName ?? view.stateName : 'dead'
+  view.targetVisible = actor.targetVisible ?? actor.alive
+  view.reloading = actor.reloading
+  view.group.visible = actor.kind !== 'player' || actor.deployed
   if ((!wasAlive && actor.alive) || view.position.distanceToSquared(view.networkPosition) > 64) {
     view.position.copy(view.networkPosition)
     view.deathTime = -1

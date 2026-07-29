@@ -61,6 +61,16 @@ function makeLoadout(loadout = CFG.loadout) {
   }
 }
 
+function randomBotLoadout() {
+  const pick = values => values[Math.floor(Math.random() * values.length)]
+  return {
+    weapon: pick(Object.keys(CFG.weapons)),
+    secondary: CFG.loadout.defaultSecondary,
+    grenade: pick(Object.keys(CFG.grenades)),
+    item: pick(Object.keys(CFG.items)),
+  }
+}
+
 function createActor(definition) {
   const loadout = makeLoadout(definition.loadout)
   return {
@@ -107,6 +117,7 @@ function createActor(definition) {
     reloadAt: 0,
     autoReloadAt: 0,
     respawnAt: 0,
+    diedAt: 0,
     targetId: null,
     plantedCharges: [],
     rpgLoaded: true,
@@ -116,6 +127,9 @@ function createActor(definition) {
     pendingSlot: 1,
     switchAt: 0,
     spreadBloom: 0,
+    viewRecoilPitch: 0,
+    viewRecoilYaw: 0,
+    viewRecoilRoll: 0,
     botSkill: CFG.bot.skillMin + Math.random() * CFG.bot.skillRange,
     lastShot: null,
   }
@@ -129,6 +143,9 @@ function resetActorActions(actor) {
   actor.autoRpgReloadAt = 0
   actor.switchAt = 0
   actor.pendingSlot = actor.activeSlot
+  actor.viewRecoilPitch = 0
+  actor.viewRecoilYaw = 0
+  actor.viewRecoilRoll = 0
 }
 
 export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
@@ -205,11 +222,12 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       kind,
       controller: kind === 'zombie' ? 'zombie' : 'bot',
       team,
+      loadout: kind === 'zombie' ? CFG.loadout : randomBotLoadout(),
       ...position,
     })
     actors.set(actor.id, actor)
     if (aiReady) ai.addActor(aiActor(actor))
-    emit('actor_added', { actor: publicActor(actor) })
+    emit('actor_added', { actor: actorDefinition(actor) })
     if (kind === 'zombie') emit('zombie_groan', { position: { x: actor.x, y: actor.y, z: actor.z } })
     return actor
   }
@@ -238,7 +256,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     const position = randomSpawn(team)
     const actor = createActor({ id, userId, name, kind: 'player', controller: 'human', team, loadout, ...position })
     actors.set(id, actor)
-    emit('actor_added', { actor: publicActor(actor) })
+    emit('actor_added', { actor: actorDefinition(actor) })
     return actor
   }
 
@@ -309,6 +327,13 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     }))
   }
 
+  function actorDirection(actor) {
+    return directionFromAngles(
+      actor.yaw + (actor.controller === 'human' ? actor.viewRecoilYaw : 0),
+      actor.pitch + (actor.controller === 'human' ? actor.viewRecoilPitch : 0),
+    )
+  }
+
   function hitboxes(actor) {
     const kind = actor.controller === 'human' ? 'player' : actor.kind
     actor.hitboxes ??= createActorHitboxes(kind, CFG)
@@ -327,6 +352,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     if (target.health > 0) return
     target.alive = false
     target.health = 0
+    target.diedAt = timeMs
     target.respawnAt = timeMs + (target.controller === 'human' ? CFG.player.deathTimer : modeId === 'classic' ? CFG.modes.classic.respawnTime : CFG.modes.zombie.alliedRespawnTime) * 1000
     if (target.controller === 'human') {
       for (const id of target.plantedCharges) {
@@ -376,6 +402,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     if (!trigger || actor.activeSlot !== 1 || actor.reloadAt || actor.meleeAt || actor.switchAt || actor.ammo <= 0) return
     if (timeMs - actor.lastFireAt < weapon.fireDelay * 1000) return
     actor.lastFireAt = timeMs
+    actor.lastShot = { x: actor.x, z: actor.z, at: timeMs }
     actor.ammo--
     const spread = calculateWeaponSpread({
       baseSpread: weapon.baseSpread,
@@ -387,8 +414,11 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       reloading: !!actor.reloadAt,
       bloom: actor.spreadBloom,
     }, CFG.weapon)
-    const baseDirection = directionFromAngles(actor.yaw, actor.pitch)
+    const baseDirection = actorDirection(actor)
     const recoil = createWeaponRecoil(actor.aiming, weapon.recoilMultiplier, CFG.weapon)
+    actor.viewRecoilPitch += recoil.pitch
+    actor.viewRecoilYaw += recoil.yaw
+    actor.viewRecoilRoll += recoil.roll
     emit('weapon_fired', {
       actorId: actor.id, weaponId: actor.weapon, direction: baseDirection,
       recoil, empty: actor.ammo === 0,
@@ -437,7 +467,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     else handleSecondary(actor)
     if (actor.meleeAt && timeMs >= actor.meleeAt) {
       actor.meleeAt = 0
-      const direction = directionFromAngles(actor.yaw, actor.pitch)
+      const direction = actorDirection(actor)
       const trace = traceHitscan({
         origin: { x: actor.x, y: actor.y, z: actor.z }, direction,
         range: CFG.weapon.meleeRange, obstacles: map.obstacles,
@@ -529,6 +559,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       if (!actor.input.firePressed || actor.reloadAt || actor.meleeAt || actor.switchAt ||
         !actor.rpgLoaded || actor.secondaryCount <= 0 || timeMs - actor.lastFireAt < secondary.fireDelay * 1000) return
       actor.lastFireAt = timeMs
+      actor.lastShot = { x: actor.x, z: actor.z, at: timeMs }
       actor.secondaryCount--
       actor.rpgLoaded = false
       spawnProjectile(actor, actor.secondary, { ...secondary, throwSpeed: secondary.rocketSpeed, fuse: 4, rocket: true })
@@ -552,7 +583,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
   }
 
   function spawnProjectile(actor, kind, data, directionOverride = null) {
-    const direction = directionOverride ?? directionFromAngles(actor.yaw, actor.pitch)
+    const direction = directionOverride ?? actorDirection(actor)
     const projectile = {
       id: randomId('projectile'), ownerId: actor.id, team: actor.team, kind,
       x: actor.x + direction.x * 0.5, y: actor.y + direction.y * 0.5, z: actor.z + direction.z * 0.5,
@@ -692,7 +723,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       }
       if (actor.kind === 'zombie') continue
       const position = randomSpawn(actor.team)
-      Object.assign(actor, position, makeLoadout(actor))
+      Object.assign(actor, position, makeLoadout(randomBotLoadout()))
       actor.rpgLoaded = true
       actor.alive = true
       actor.health = actor.maxHealth
@@ -726,12 +757,13 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       modeState.wave++
       modeState.waveTotal = zombieWaveTotal(modeState.wave, CFG.modes.zombie)
       modeState.waveSpawned = modeState.waveDefeated = 0
+      spawnTimer = CFG.modes.zombie.waveSpawnInterval
       emit('wave_started', { wave: modeState.wave, total: modeState.waveTotal })
       emit('center_message', { text: `第 ${modeState.wave} 波`, duration: 1400, big: '丧尸来袭' })
     }
     if (modeState.phase !== 'assault') return
     for (const actor of [...actors.values()]) {
-      if (actor.kind === 'zombie' && !actor.alive && timeMs - actor.respawnAt > 1500) {
+      if (actor.kind === 'zombie' && !actor.alive && timeMs - actor.diedAt > 700) {
         actors.delete(actor.id)
         ai.removeActor(actor.id)
         emit('actor_removed', { actorId: actor.id })
@@ -770,10 +802,13 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     if (outcome) return
     timeMs += dt * 1000
     for (const actor of actors.values()) {
+      actor.viewRecoilPitch *= Math.pow(CFG.weapon.viewRecoilPitchDecay, dt)
+      actor.viewRecoilYaw *= Math.pow(CFG.weapon.viewRecoilYawDecay, dt)
+      actor.viewRecoilRoll *= Math.pow(CFG.weapon.viewRecoilRollDecay, dt)
       resolveMovement(actor, dt)
       handleActions(actor)
       actor.spreadBloom = Math.max(0, actor.spreadBloom - dt * CFG.weapon.spreadBloomRecovery)
-      if (actor.alive && modeId === 'classic' && actor.health < actor.maxHealth)
+      if (actor.alive && actor.controller === 'human' && modeId === 'classic' && actor.health < actor.maxHealth)
         actor.health = Math.min(actor.maxHealth, actor.health + CFG.player.healthRegen * dt)
     }
     updateSharedAi(dt)
@@ -787,29 +822,53 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
   function publicActor(actor) {
     return {
       id: actor.id, name: actor.name, kind: actor.kind, controller: actor.controller, team: actor.team,
-      connected: actor.connected, deployed: actor.deployed, alive: actor.alive,
+      deployed: actor.deployed, alive: actor.alive,
       x: actor.x, y: actor.y, z: actor.z, vx: actor.vx, vy: actor.vy, vz: actor.vz,
-      yaw: actor.yaw, pitch: actor.pitch, grounded: actor.grounded,
-      currentHeight: actor.currentHeight, crouching: actor.crouching, health: actor.health,
-      maxHealth: actor.maxHealth, weapon: actor.weapon, ammo: actor.ammo, reserveAmmo: actor.reserveAmmo,
-      secondary: actor.secondary, secondaryCount: actor.secondaryCount, rpgLoaded: actor.rpgLoaded,
-      grenade: actor.grenade, grenadeCount: actor.grenadeCount, item: actor.item, itemUses: actor.itemUses,
-      activeSlot: actor.activeSlot, aiming: actor.aiming, sprinting: actor.sprinting,
-      spreadBloom: actor.spreadBloom,
-      kills: actor.kills, deaths: actor.deaths, headshots: actor.headshots,
-      meleeKills: actor.meleeKills, grenadeKills: actor.grenadeKills,
-      killStreak: actor.killStreak, bestKillStreak: actor.bestKillStreak,
-      respawnAt: actor.respawnAt, ack: actor.lastInputSeq,
-      stateName: actor.stateName, targetVisible: actor.targetVisible,
+      yaw: actor.yaw, pitch: actor.pitch, currentHeight: actor.currentHeight,
+      health: actor.health, maxHealth: actor.maxHealth, weapon: actor.weapon,
+      kills: actor.kills, deaths: actor.deaths, stateName: actor.stateName,
+      targetVisible: actor.controller === 'human' ? actor.aiming : actor.targetVisible,
       reloading: !!actor.reloading || !!actor.reloadAt || !!actor.rpgReloadAt,
     }
   }
 
-  function createSnapshot() {
+  function actorDefinition(actor) {
+    return {
+      id: actor.id, name: actor.name, kind: actor.kind,
+      controller: actor.controller, team: actor.team, weapon: actor.weapon,
+      maxHealth: actor.maxHealth,
+    }
+  }
+
+  function actorFrame(actor) {
+    return [
+      actor.id, actor.x, actor.y, actor.z, actor.vx, actor.vy, actor.vz,
+      actor.yaw, actor.pitch, actor.alive, actor.health, actor.kills, actor.deaths,
+      actor.stateName, actor.controller === 'human' ? actor.aiming : actor.targetVisible,
+      !!actor.reloading || !!actor.reloadAt || !!actor.rpgReloadAt,
+      actor.currentHeight, actor.deployed, actor.weapon,
+    ]
+  }
+
+  function privatePlayer(actor) {
+    return {
+      ...publicActor(actor), grounded: actor.grounded, crouching: actor.crouching,
+      ammo: actor.ammo, reserveAmmo: actor.reserveAmmo,
+      secondary: actor.secondary, secondaryCount: actor.secondaryCount, rpgLoaded: actor.rpgLoaded,
+      grenade: actor.grenade, grenadeCount: actor.grenadeCount, item: actor.item, itemUses: actor.itemUses,
+      activeSlot: actor.activeSlot, aiming: actor.aiming, sprinting: actor.sprinting,
+      spreadBloom: actor.spreadBloom, headshots: actor.headshots,
+      meleeKills: actor.meleeKills, grenadeKills: actor.grenadeKills,
+      killStreak: actor.killStreak, bestKillStreak: actor.bestKillStreak,
+    }
+  }
+
+  function createSnapshot(playerId = null, includeDefinitions = false) {
     return {
       timeMs, modeId, score: { ...score }, modeState: { ...modeState }, outcome,
-      actors: [...actors.values()].map(publicActor),
-      projectiles: [...projectiles.values()].map(item => ({ ...item })),
+      player: playerId ? privatePlayer(actors.get(playerId)) : null,
+      definitions: includeDefinitions ? [...actors.values()].map(actorDefinition) : null,
+      actors: [...actors.values()].map(actorFrame),
     }
   }
 
@@ -827,7 +886,8 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
   events.length = 0
   return {
     modeId, map, actors, addPlayer, removePlayer, setConnected, submitInput, deployPlayer, redeployPlayer,
-    step, createSnapshot, drainEvents: () => events.splice(0), getOutcome: () => outcome,
+    step, createSnapshot, createPlayerSnapshot: id => privatePlayer(actors.get(id)),
+    drainEvents: () => events.splice(0), getOutcome: () => outcome,
     get timeMs() { return timeMs },
   }
 }

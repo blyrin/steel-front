@@ -317,6 +317,7 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
       deploy.phase === 'none' &&
       landscapeOk
     ui.setTouchVisible(show)
+    if (!touchMode) return
     if (!show) clearTouchActions()
     else updateTouchActionLabels()
   }

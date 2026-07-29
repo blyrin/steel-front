@@ -36,9 +36,10 @@ export function createPortal() {
   let activeSession = null
   const fields = { username: '', displayName: '', password: '', roomName: '', invite: '' }
   const session = {
-    get kind() { return activeSession?.kind },
     send(message) { return activeSession?.send(message) ?? false },
     sendInput(input) { return activeSession?.sendInput(input) ?? false },
+    setPaused(paused) { activeSession?.setPaused?.(paused) },
+    resultStats(context) { return activeSession?.resultStats?.(context) ?? [] },
   }
   const game = createGame({ session, ui, state, deploy, getPlayerId: () => playerId })
   const networkSession = new NetworkSession({
@@ -139,7 +140,7 @@ export function createPortal() {
   }
 
   async function startLocal(modeId) {
-    activeSession = new LocalSession({ message: handleMessage })
+    activeSession = new LocalSession({ message: handleMessage }, state.records)
     activeSession.start(modeId)
     await game.preparePresentation()
   }

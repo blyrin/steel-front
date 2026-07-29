@@ -3,14 +3,11 @@ import { MULTIPLAYER_PROTOCOL } from '../../shared/multiplayer/protocol.js'
 
 export class NetworkSession {
   constructor(handlers) {
-    this.kind = 'network'
     this.handlers = handlers
     this.socket = null
     this.reconnectTimer = 0
     this.wantConnection = false
     this.latency = 0
-    this.lastInput = null
-    this.lastInputAt = 0
   }
 
   connect() {
@@ -22,7 +19,6 @@ export class NetworkSession {
     this.socket = socket
     socket.addEventListener('open', () => {
       if (this.socket !== socket) return
-      this.lastInput = null
       this.handlers.status?.('online')
       this.ping()
       this.pingTimer = setInterval(() => this.ping(), 2000)
@@ -61,15 +57,12 @@ export class NetworkSession {
       input.seq, input.moveX, input.moveZ, input.yaw, input.pitch, input.slot,
       input.crouch, input.sprint, input.aim, input.fire, input.actions,
     ]
-    const now = performance.now()
-    let changed = !this.lastInput
-    for (let index = 1; !changed && index < 10; index++)
-      changed = payload[index] !== this.lastInput[index]
-    if (!changed && !input.actions && now - this.lastInputAt < 250) return false
     this.socket.send(pack(payload))
-    this.lastInput = payload
-    this.lastInputAt = now
     return true
+  }
+
+  resultStats() {
+    return [`网络延迟: ${Math.round(this.latency)} ms`]
   }
 
   ping() {

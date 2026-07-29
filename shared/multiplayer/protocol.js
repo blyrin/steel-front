@@ -1,12 +1,17 @@
-export const MULTIPLAYER_PROTOCOL = 4
+export const MULTIPLAYER_PROTOCOL = 5
 export const SERVER_TICK_RATE = 60
 export const SNAPSHOT_RATE = 15
-export const CLIENT_INPUT_RATE = 60
 export const MESSAGE_RATE_LIMIT = 180
 export const RECONNECT_MS = 60_000
 export const MAX_MESSAGE_BYTES = 8 * 1024
 export const CLASSIC_CAPACITY = 12
 export const ZOMBIE_CAPACITY = 4
+
+export const ACTOR_FRAME = Object.freeze({
+  ID: 0, X: 1, Y: 2, Z: 3, VX: 4, VY: 5, VZ: 6, YAW: 7, PITCH: 8,
+  ALIVE: 9, HEALTH: 10, KILLS: 11, DEATHS: 12, STATE: 13,
+  TARGET_VISIBLE: 14, RELOADING: 15, CURRENT_HEIGHT: 16, DEPLOYED: 17, WEAPON: 18,
+})
 
 export const CLIENT_MESSAGE = Object.freeze({
   QUICK_MATCH: 'quick_match',

@@ -7,7 +7,7 @@ import {
   INPUT_ACTION,
   stepPlayerMotion,
 } from '#simulation'
-import { CLIENT_INPUT_RATE } from '../../shared/multiplayer/protocol.js'
+import { ACTOR_FRAME } from '../../shared/multiplayer/protocol.js'
 import { AUDIO_FILES, CFG } from './config.js'
 import { AudioSystem } from './audio/audio-system.js'
 import { createEffectsSystem } from './combat/effects.js'
@@ -15,7 +15,7 @@ import { applyRemoteActorSnapshot, createRemoteActorView, interpolateRemoteActor
 import { WeaponView } from './entities/weapon-view.js'
 import { createInputSystem } from './input.js'
 import { createSceneRuntime } from './scene.js'
-import { recordMatchResult, saveRecords, saveSettings } from './state.js'
+import { saveSettings } from './state.js'
 import { createDeploymentSystem } from './ui/deployment.js'
 import { getKillNotice } from './ui/hud.js'
 import { createMap } from './world/maps/registry.js'
@@ -33,8 +33,8 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   let active = false
   let latency = 0
   let inputSeq = 0
-  let lastInputAt = 0
   let lastFrameAt = performance.now()
+  let frameAccumulator = 0
   let activeSlot = 1
   let crouching = false
   let predictionInput = {
@@ -47,7 +47,9 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   let deathCameraTime = 0
   const particles = []
   const views = new Map()
-  const charges = new Map()
+  const actorDefinitions = new Map()
+  const frameStep = 1 / CFG.match.tickRate
+  const projectiles = new Map()
   const actions = createActionEngine()
   const actionDefs = createPlayerWeaponActions(CFG.weapon)
   const vector = value => new THREE.Vector3(value.x, value.y, value.z)
@@ -129,7 +131,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   }
 
   function boot(mapDefinition, snapshot) {
-    const ownActor = snapshot.actors.find(actor => actor.id === getPlayerId())
+    const ownActor = snapshot.player
     ensureWorld(mapDefinition, ownActor)
     active = true
     state.running = true
@@ -151,10 +153,23 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     player.networkPosition.set(actor.x, actor.y, actor.z)
     player.networkVelocity.set(actor.vx, actor.vy, actor.vz)
     player.networkUpdatedAt = performance.now()
-    if (!player.networkReady || (!wasAlive && actor.alive) ||
-      player.position.distanceToSquared(player.networkPosition) > 64) player.position.copy(player.networkPosition)
+    const deployed = !wasAlive && actor.alive
+    if (!player.networkReady || deployed ||
+      player.position.distanceToSquared(player.networkPosition) > 64)
+      player.position.copy(player.networkPosition)
     player.networkReady = true
-    if (firstSnapshot) player.velocity.copy(player.networkVelocity)
+    if (firstSnapshot || deployed) {
+      player.velocity.copy(player.networkVelocity)
+      player.currentHeight = actor.currentHeight
+      player.grounded = actor.grounded
+      player.crouching = actor.crouching
+      player.sprinting = actor.sprinting
+    }
+    if (firstSnapshot || deployed) {
+      player.aiming = actor.aiming
+      crouching = actor.crouching
+      activeSlot = actor.activeSlot
+    }
     player.health = actor.health
     player.maxHealth = actor.maxHealth
     player.alive = actor.alive
@@ -177,11 +192,6 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     player.rpgLoaded = actor.rpgLoaded
     player.spreadBloom = actor.spreadBloom
     player.reloading = actor.reloading
-    player.aiming = actor.aiming
-    player.sprinting = actor.sprinting
-    player.crouching = actor.crouching
-    player.currentHeight = actor.currentHeight
-    player.grounded = actor.grounded
     player.activeSlot = actor.activeSlot
     player.weaponData = CFG.weapons[actor.weapon]
     player.secondaryData = CFG.secondaries[actor.secondary]
@@ -197,19 +207,36 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       player.weapon.setRpgRocketVisible(actor.rpgLoaded)
   }
 
+  function decodeActor(frame) {
+    const definition = actorDefinitions.get(frame[ACTOR_FRAME.ID])
+    return {
+      ...definition,
+      x: frame[ACTOR_FRAME.X], y: frame[ACTOR_FRAME.Y], z: frame[ACTOR_FRAME.Z],
+      vx: frame[ACTOR_FRAME.VX], vy: frame[ACTOR_FRAME.VY], vz: frame[ACTOR_FRAME.VZ],
+      yaw: frame[ACTOR_FRAME.YAW], pitch: frame[ACTOR_FRAME.PITCH],
+      alive: frame[ACTOR_FRAME.ALIVE], health: frame[ACTOR_FRAME.HEALTH],
+      kills: frame[ACTOR_FRAME.KILLS], deaths: frame[ACTOR_FRAME.DEATHS],
+      stateName: frame[ACTOR_FRAME.STATE], targetVisible: frame[ACTOR_FRAME.TARGET_VISIBLE],
+      reloading: frame[ACTOR_FRAME.RELOADING], currentHeight: frame[ACTOR_FRAME.CURRENT_HEIGHT],
+      deployed: frame[ACTOR_FRAME.DEPLOYED], weapon: frame[ACTOR_FRAME.WEAPON],
+    }
+  }
+
   function applySnapshot(snapshot) {
-    latest = snapshot
+    for (const definition of snapshot.definitions || []) actorDefinitions.set(definition.id, definition)
+    const ownId = getPlayerId()
+    const actors = snapshot.actors.map(decodeActor).filter(actor => actor.id !== ownId)
+    latest = { ...snapshot, actors }
     state.simulationTimeMs = snapshot.timeMs
     state.match.score = snapshot.score
-    const ownId = getPlayerId()
-    const ids = new Set(snapshot.actors.filter(actor => actor.id !== ownId).map(actor => actor.id))
+    const ids = new Set(actors.map(actor => actor.id))
     for (const [id, view] of views) {
       if (ids.has(id)) continue
       view.destroy()
       views.delete(id)
     }
-    for (const actor of snapshot.actors) {
-      if (actor.id === ownId) { syncPlayer(actor); continue }
+    syncPlayer(snapshot.player)
+    for (const actor of actors) {
       let view = views.get(actor.id)
       if (!view) {
         view = createRemoteActorView(actor, { scene: runtime.scene, camera: runtime.camera, matLib: runtime.matLib, config: CFG })
@@ -222,10 +249,24 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     input.updateTouchUi()
   }
 
-  function actorName(id) { return latest?.actors.find(actor => actor.id === id)?.name || '未知' }
+  function snapshotActor(id) {
+    return latest?.player?.id === id ? latest.player : latest?.actors.find(actor => actor.id === id)
+  }
+
+  function actorName(id) { return snapshotActor(id)?.name || '未知' }
 
   function handleEvents(events) {
     for (const event of events) {
+      if (event.type === 'actor_added') {
+        actorDefinitions.set(event.actor.id, event.actor)
+        continue
+      }
+      if (event.type === 'actor_removed') {
+        actorDefinitions.delete(event.actorId)
+        const view = views.get(event.actorId)
+        if (view) { view.destroy(); views.delete(event.actorId) }
+        continue
+      }
       if (event.type === 'shot') {
         const direction = vector(event.direction)
         const end = vector(event.end)
@@ -272,7 +313,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           player.weapon.applyRecoil(player.aiming, event.recoil)
           player.addShake((player.aiming ? CFG.weapon.aimingFireShake : CFG.weapon.hipFireShake) * player.weaponData.recoilMultiplier)
         } else {
-          const actor = latest?.actors.find(item => item.id === event.actorId)
+          const actor = snapshotActor(event.actorId)
           const view = views.get(event.actorId)
           const muzzle = view?.rifleMuzzle?.getWorldPosition(new THREE.Vector3()) ?? (actor ? vector(actor) : null)
           if (muzzle) {
@@ -285,7 +326,9 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       } else if (event.type === 'rpg_reload_started' && event.actorId === player.id) {
         actions.play(actionDefs.rpgReload)
       } else if (event.type === 'weapon_switch' && event.actorId === player.id) {
-        actions.play(actionDefs.weaponSwitch, { toSlot: event.slot })
+        const action = actions.get('weaponSwitch')
+        if (!action || action.params.toSlot !== event.slot)
+          actions.play(actionDefs.weaponSwitch, { fromSlot: player.activeSlot, toSlot: event.slot })
       } else if (event.type === 'melee' && event.actorId === player.id) {
         actions.play(actionDefs.melee)
         audio.stabSwing()
@@ -314,7 +357,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         if (projectile.rocket) {
           const own = projectile.ownerId === player.id
           const muzzle = own ? player.weapon.muzzlePos.getWorldPosition(new THREE.Vector3()) : null
-          effects.spawnRocket(origin, velocity, CFG.secondaries[projectile.kind], muzzle, () => {})
+          projectiles.set(projectile.id, effects.spawnRocket(origin, velocity, CFG.secondaries[projectile.kind], muzzle, () => {}))
           if (own) {
             audio.rpgShot()
             player.viewRecoilPitch += 0.05
@@ -329,24 +372,26 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           }
         } else if (projectile.sticky) {
           const charge = effects.spawnThrownC4(origin, velocity, CFG.secondaries[projectile.kind])
-          charges.set(projectile.id, charge)
+          projectiles.set(projectile.id, charge)
           if (projectile.ownerId === player.id) {
             player.viewRecoilPitch += 0.01
             player.weapon.kickZ += 0.03
           }
         } else {
-          effects.spawnThrownGrenade(origin, velocity, CFG.grenades[projectile.kind], () => {})
+          projectiles.set(projectile.id, effects.spawnThrownGrenade(origin, velocity, CFG.grenades[projectile.kind], () => {}))
         }
       } else if (event.type === 'projectile_removed') {
-        const charge = charges.get(event.projectileId)
-        if (charge) { effects.removeCharge(charge); charges.delete(event.projectileId) }
+        const projectile = projectiles.get(event.projectileId)
+        if (projectile) { effects.removeProjectile(projectile); projectiles.delete(event.projectileId) }
       } else if (event.type === 'explosion') {
-        const charge = charges.get(event.projectileId)
-        if (charge) { effects.removeCharge(charge); charges.delete(event.projectileId) }
+        const projectile = projectiles.get(event.projectileId)
+        if (projectile) { effects.removeProjectile(projectile); projectiles.delete(event.projectileId) }
         const position = new THREE.Vector3(event.x, event.y, event.z)
         effects.spawnExplosion(position, event.radius)
         audio.grenadeExplosion(position)
       } else if (event.type === 'smoke') {
+        const projectile = projectiles.get(event.projectileId)
+        if (projectile) { effects.removeProjectile(projectile); projectiles.delete(event.projectileId) }
         effects.spawnSmokeCloud(new THREE.Vector3(event.x, event.y, event.z), event.radius, event.duration)
         audio.smokeGrenade(new THREE.Vector3(event.x, event.y, event.z))
       } else if (event.type === 'damage') {
@@ -357,23 +402,11 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           player.viewRecoilPitch += CFG.player.damageRecoilPitchBase + event.amount * CFG.player.damageRecoilPitchScale
           player.viewRecoilYaw += (Math.random() - 0.5) * CFG.player.damageRecoilYaw
           player.viewRecoilRoll += (Math.random() - 0.5) * CFG.player.damageRecoilRoll
-          const source = latest?.actors.find(actor => actor.id === event.attackerId)
+          const source = snapshotActor(event.attackerId)
           if (source) ui.showDirectionDamage({ x: source.x, y: source.y, z: source.z })
         }
       } else if (event.type === 'elimination') {
         const mine = event.attackerId === player.id
-        if (session.kind === 'local') {
-          const records = state.records[latest.modeId]
-          if (event.victimId === player.id) records.deaths++
-          if (mine) {
-            records.kills++
-            if (event.headshot) records.headshots++
-            if (event.attackType === 'melee') records.meleeKills++
-            if (event.attackType === 'grenade') records.grenadeKills++
-            records.bestKillStreak = Math.max(records.bestKillStreak, event.killStreak)
-          }
-          saveRecords(state.records)
-        }
         if (event.attackerId)
           ui.addFeed({ type: mine ? 'player' : 'enemy', killer: actorName(event.attackerId), victim: actorName(event.victimId) }, CFG.hud.killFeedItemDuration)
         if (mine) {
@@ -384,6 +417,12 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         if (event.victimId === player.id)
           ui.showDeath(event.attackerId ? `被 ${actorName(event.attackerId)} 击杀` : '重新部署')
         if (event.victimId === player.id) {
+          player.alive = false
+          player.health = 0
+          player.killStreak = 0
+          player.aiming = false
+          player.sprinting = false
+          player.crouching = false
           crouching = false
           activeSlot = 1
           actions.cancelAll()
@@ -398,7 +437,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           deathCameraStart = runtime.camera.position.clone()
           deathCameraTime = 0
         } else {
-          const victim = latest?.actors.find(actor => actor.id === event.victimId)
+          const victim = snapshotActor(event.victimId)
           if (victim) {
             const position = vector(victim)
             if (victim.kind === 'zombie') audio.zombieDeath(position)
@@ -415,8 +454,8 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         const text = event.result === 'cooldown' ? `补给冷却中 ${event.remaining} 秒` : event.result === 'health_full' ? '生命值已满' : '补给已满'
         ui.showAction(text, CFG.hud.actionMessageDuration)
       } else if (event.type === 'zombie_attack') {
-        const source = latest?.actors.find(actor => actor.id === event.actorId)
-        const target = latest?.actors.find(actor => actor.id === event.targetId)
+        const source = snapshotActor(event.actorId)
+        const target = snapshotActor(event.targetId)
         if (source && target) audio.zombieAttack(vector(source), vector(target))
       } else if (event.type === 'zombie_groan') audio.zombieGroan(vector(event.position))
       else if (event.type === 'center_message') ui.showCenter(event.text, event.duration ?? CFG.hud.centerMessageDuration, event.big)
@@ -428,6 +467,14 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   function togglePause() {
     if (!active || deploy.phase !== 'none') return
     state.paused = !state.paused
+    if (state.paused) {
+      predictionInput = {
+        moveX: 0, moveZ: 0, yaw: player.yaw, pitch: player.pitch, jump: false,
+        crouch: false, sprint: false, aim: false, fire: false, slot: player.activeSlot, actions: 0,
+      }
+      session.sendInput({ seq: ++inputSeq, ...predictionInput })
+    }
+    session.setPaused(state.paused)
     ui.setPaused(state.paused)
     audio.setAmbienceMuted(state.paused)
     if (state.paused) { input.reset(); ui.setScoreboardVisible(false); if (document.pointerLockElement) document.exitPointerLock() }
@@ -435,27 +482,41 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     input.updateTouchUi()
   }
 
-  function sendInput(now) {
-    if (!latest || state.paused || deploy.phase !== 'none' || now - lastInputAt < 1000 / CLIENT_INPUT_RATE) return
-    lastInputAt = now
+  function sendInput() {
+    if (!latest || !state.running || state.paused || deploy.phase !== 'none') return
     const look = input.consumeLookDelta()
     lookDelta.x += look.x
     lookDelta.y += look.y
-    const sensitivity = CFG.player.lookSensitivity * state.settings.mouseSensitivity * (player.aiming ? CFG.player.aimingLookMultiplier : 1)
-    player.yaw -= look.x * sensitivity
-    player.pitch = THREE.MathUtils.clamp(player.pitch - look.y * sensitivity, -1.45, 1.45)
     if (input.consumePressed('KeyC')) crouching = !crouching
-    if (input.consumePressed('Digit1')) activeSlot = 1
-    if (input.consumePressed('Digit2')) activeSlot = 2
-    if (input.consumePressed('WeaponNext') || input.consumePressed('WeaponPrev')) activeSlot = activeSlot === 1 ? 2 : 1
+    let requestedSlot = activeSlot
+    if (input.consumePressed('Digit1')) requestedSlot = 1
+    if (input.consumePressed('Digit2')) requestedSlot = 2
+    if (input.consumePressed('WeaponNext') || input.consumePressed('WeaponPrev')) requestedSlot = activeSlot === 1 ? 2 : 1
+    if (requestedSlot !== activeSlot && !actions.isActive('weaponSwitch')) {
+      player.aiming = false
+      actions.cancelAll()
+      player.weapon.resetActions()
+      actions.play(actionDefs.weaponSwitch, { fromSlot: player.activeSlot, toSlot: requestedSlot })
+      activeSlot = requestedSlot
+    }
     const move = input.getMoveAxis()
     const sprint = input.isKeyDown('ShiftLeft') || input.isKeyDown('ShiftRight') || input.isStickSprint()
     const aimHeld = input.isMouseDown('right')
-    if (sprint && crouching && !aimHeld) crouching = false
-    const canAim = activeSlot === 1 || player.secondaryData.kind === 'rpg'
+    const canAim = player.activeSlot === 1 || player.secondaryData.kind === 'rpg'
     player.aiming = canAim && aimHeld && !actions.isBusy('hands')
+    if (sprint && crouching && !player.aiming) crouching = false
     player.sprinting = sprint && !crouching && !player.aiming
+    const sensitivity = CFG.player.lookSensitivity * state.settings.mouseSensitivity *
+      (player.aiming ? CFG.player.aimingLookMultiplier : 1)
+    player.yaw -= look.x * sensitivity
+    player.yaw = Math.atan2(Math.sin(player.yaw), Math.cos(player.yaw))
+    player.pitch = THREE.MathUtils.clamp(
+      player.pitch - look.y * sensitivity,
+      -Math.PI / 2 + CFG.player.pitchLimit,
+      Math.PI / 2 - CFG.player.pitchLimit,
+    )
     const jump = input.consumePressed('Space')
+    const firePressed = input.consumePressed('MouseLeft')
     const actionsMask =
       (jump ? INPUT_ACTION.JUMP : 0) |
       (input.consumePressed('KeyR') ? INPUT_ACTION.RELOAD : 0) |
@@ -467,23 +528,19 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     predictionInput = {
       moveX: move.x, moveZ: move.z, yaw: player.yaw, pitch: player.pitch,
       jump, crouch: crouching, sprint: player.sprinting, aim: player.aiming,
-      fire: input.isMouseDown('left'), slot: activeSlot, actions: actionsMask,
+      fire: input.isMouseDown('left') || firePressed, slot: activeSlot, actions: actionsMask,
     }
     session.sendInput({ seq: ++inputSeq, ...predictionInput })
   }
 
-  function frame(now) {
-    const dt = Math.min(CFG.match.maxFrameDelta, (now - lastFrameAt) / 1000)
-    lastFrameAt = now
-    if (!runtime || !active) return
-    sendInput(now)
-    ui.setScoreboardVisible(!state.paused && input.isKeyDown('Tab'))
+  function updateGameplay(updateDt, now) {
+    ui.setScoreboardVisible(input.isKeyDown('Tab'))
     if (player.alive && player.networkReady) {
       const motion = stepPlayerMotion({
         x: player.position.x, y: player.position.y, z: player.position.z,
         vx: player.velocity.x, vy: player.velocity.y, vz: player.velocity.z,
         currentHeight: player.currentHeight, grounded: player.grounded, radius: CFG.player.radius,
-      }, predictionInput, dt, CFG.player, {
+      }, predictionInput, updateDt, CFG.player, {
         obstacles: state.obstacles, mapSize: state.mapSize,
         groundHeightAt: (x, z) => state.groundHeightAt(x, z),
       })
@@ -493,24 +550,32 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       player.grounded = motion.grounded
       player.crouching = motion.crouching
       player.sprinting = motion.sprinting
-      const elapsed = Math.min(0.15, (now - player.networkUpdatedAt + latency * 0.5) / 1000)
-      const alpha = 1 - Math.exp(-6 * dt)
-      player.position.x += (player.networkPosition.x + player.networkVelocity.x * elapsed - player.position.x) * alpha
-      player.position.y += (player.networkPosition.y + player.networkVelocity.y * elapsed - player.position.y) * alpha
-      player.position.z += (player.networkPosition.z + player.networkVelocity.z * elapsed - player.position.z) * alpha
+      const snapshotAge = Math.min(0.15, (now - player.networkUpdatedAt + latency * 0.5) / 1000)
+      const targetX = player.networkPosition.x + player.networkVelocity.x * snapshotAge
+      const targetY = player.networkPosition.y + player.networkVelocity.y * snapshotAge
+      const targetZ = player.networkPosition.z + player.networkVelocity.z * snapshotAge
+      const errorSq = (targetX - player.position.x) ** 2 +
+        (targetY - player.position.y) ** 2 + (targetZ - player.position.z) ** 2
+      if (errorSq > 0.04) {
+        const alpha = 1 - Math.exp(-6 * updateDt)
+        player.position.x += (targetX - player.position.x) * alpha
+        player.position.y += (targetY - player.position.y) * alpha
+        player.position.z += (targetZ - player.position.z) * alpha
+      }
     }
     if (deploy.phase === 'death') {
-      deathCameraTime += dt
+      deathCameraTime += updateDt
       const progress = Math.min(1, deathCameraTime / CFG.player.deathCameraDuration)
       runtime.camera.position.copy(deathCameraStart)
       runtime.camera.position.y -= progress * CFG.player.deathCameraDrop
       runtime.camera.rotation.z = progress * CFG.player.deathCameraRoll
       runtime.camera.rotation.x = progress * CFG.player.deathCameraPitch
-    } else if (deploy.phase === 'to_deploy') deployment.updateToScreen(dt)
+    } else if (deploy.phase === 'to_deploy') deployment.updateToScreen(updateDt)
     else if (deploy.phase === 'deploy_screen') deployment.updateScreenCamera()
-    else if (deploy.phase === 'deploying') deployment.update(dt)
+    else if (deploy.phase === 'deploying') deployment.update(updateDt)
     else if (player.alive) {
-      const moving = Math.hypot(player.velocity.x, player.velocity.z) > 0.1
+      const moveAxis = input.getMoveAxis()
+      const moving = Math.hypot(moveAxis.x, moveAxis.z) > 0 && player.grounded
       let headBobY = 0
       let bobPitch = 0
       let bobRoll = 0
@@ -518,28 +583,27 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         const previousPhase = bobPhase
         const rate = player.sprinting ? 12.5 : player.crouching ? 5.2 : 7.8
         const amplitude = player.sprinting ? 0.018 : player.crouching ? 0.006 : 0.011
-        bobPhase += dt * rate
+        bobPhase += updateDt * rate
         headBobY = Math.sin(bobPhase) * amplitude
         bobPitch = Math.cos(bobPhase * 2) * (player.sprinting ? 0.0055 : 0.0032)
         bobRoll = Math.sin(bobPhase) * (player.sprinting ? 0.008 : 0.0045)
         if (Math.sign(Math.sin(previousPhase)) !== Math.sign(Math.sin(bobPhase))) audio.step()
       } else {
-        bobPhase *= Math.exp(-8 * dt)
+        bobPhase *= Math.exp(-8 * updateDt)
         headBobY = Math.sin(bobPhase) * 0.002
       }
-      player.viewRecoilPitch *= Math.pow(CFG.weapon.viewRecoilPitchDecay, dt)
-      player.viewRecoilYaw *= Math.pow(CFG.weapon.viewRecoilYawDecay, dt)
-      player.viewRecoilRoll *= Math.pow(CFG.weapon.viewRecoilRollDecay, dt)
+      player.viewRecoilPitch *= Math.pow(CFG.weapon.viewRecoilPitchDecay, updateDt)
+      player.viewRecoilYaw *= Math.pow(CFG.weapon.viewRecoilYawDecay, updateDt)
+      player.viewRecoilRoll *= Math.pow(CFG.weapon.viewRecoilRollDecay, updateDt)
       const aimMultiplier = player.aiming ? 0.35 : 1
-      const lookEase = 1 - Math.exp(-10 * dt)
+      const lookEase = 1 - Math.exp(-10 * updateDt)
       player.lookSwayPitch += (THREE.MathUtils.clamp(lookDelta.y * 0.00009 * aimMultiplier, -0.012, 0.012) - player.lookSwayPitch) * lookEase
       player.lookSwayYaw += (THREE.MathUtils.clamp(lookDelta.x * 0.00008 * aimMultiplier, -0.01, 0.01) - player.lookSwayYaw) * lookEase
       player.lookSwayRoll += (THREE.MathUtils.clamp(-lookDelta.x * 0.00014 * aimMultiplier, -0.02, 0.02) - player.lookSwayRoll) * lookEase
-      const moveAxis = input.getMoveAxis()
       const targetLean = THREE.MathUtils.clamp(moveAxis.x * (player.sprinting ? 0.02 : 0.014) * aimMultiplier, -0.025, 0.025)
-      player.moveLean += (targetLean - player.moveLean) * (1 - Math.exp(-7 * dt))
-      player.shakeTime += dt
-      player.shakeTrauma = Math.max(0, player.shakeTrauma - dt * CFG.player.shakeRecovery)
+      player.moveLean += (targetLean - player.moveLean) * (1 - Math.exp(-7 * updateDt))
+      player.shakeTime += updateDt
+      player.shakeTrauma = Math.max(0, player.shakeTrauma - updateDt * CFG.player.shakeRecovery)
       runtime.camera.position.copy(player.position)
       runtime.camera.position.y += headBobY
       runtime.camera.rotation.order = 'YXZ'
@@ -557,8 +621,8 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         rotationZ += Math.sin(time * 51) * strength * 0.018
       }
       runtime.camera.rotation.set(rotationX, rotationY, rotationZ)
-      const targetFov = player.aiming ? CFG.player.aimingFov : player.sprinting && moving ? CFG.player.sprintingFov : CFG.player.fov
-      player.currentFov += (targetFov - player.currentFov) * (1 - Math.exp(-7 * dt))
+      const targetFov = player.aiming ? CFG.player.aimingFov : player.sprinting && moving ? CFG.player.sprintingFov : CFG.player.baseFov
+      player.currentFov += (targetFov - player.currentFov) * (1 - Math.exp(-7 * updateDt))
       if (Math.abs(runtime.camera.fov - player.currentFov) > 0.15) {
         runtime.camera.fov = player.currentFov
         runtime.camera.updateProjectionMatrix()
@@ -568,8 +632,8 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       runtime.sun.target.updateMatrixWorld()
     }
     for (const view of views.values()) {
-      interpolateRemoteActor(view, dt, now)
-      view.updateModelAnimation(dt)
+      interpolateRemoteActor(view, updateDt, now)
+      view.updateModelAnimation(updateDt)
     }
     const speed = Math.hypot(player.velocity.x, player.velocity.z)
     player.currentSpread = calculateWeaponSpread({
@@ -579,7 +643,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     }, CFG.weapon)
     player.getSpread = () => player.currentSpread
     player.weapon.setVisible(player.alive && deploy.phase === 'none')
-    for (const event of actions.update(dt)) {
+    for (const event of actions.update(updateDt)) {
       if (event.type !== 'marker') continue
       if (event.action === 'melee' && event.name === 'prep') {
         player.viewRecoilPitch += 0.03
@@ -590,20 +654,37 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         player.weapon.setRpgRocketVisible(true)
       }
     }
-    player.weapon.update(dt, speed > 0.1, player.sprinting, player.aiming, { x: 0, y: 0 }, bobPhase, input.getMoveAxis(), {
+    const moveAxis = input.getMoveAxis()
+    player.weapon.update(updateDt, Math.hypot(moveAxis.x, moveAxis.z) > 0, player.sprinting, player.aiming, lookDelta, bobPhase, moveAxis, {
       bolt: actions.get('bolt'), reload: actions.get('reload'), melee: actions.get('melee'),
       weaponSwitch: actions.get('weaponSwitch'), rpgReload: actions.get('rpgReload'),
     })
     actions.flush()
-    effects.update(dt)
+    effects.update(updateDt)
     lookDelta.x = 0
     lookDelta.y = 0
-    audio.updateListener()
-    runtime.renderer.render(runtime.scene, runtime.camera)
+  }
+
+  function frame(now) {
+    frameAccumulator += Math.min(CFG.match.maxFrameDelta, (now - lastFrameAt) / 1000)
+    lastFrameAt = now
+    if (frameAccumulator < frameStep) return
+    while (frameAccumulator >= frameStep) {
+      if (runtime && active) {
+        sendInput()
+        if (state.running && !state.paused) updateGameplay(frameStep, now)
+      }
+      frameAccumulator -= frameStep
+    }
+    if (runtime) {
+      audio.updateListener()
+      runtime.renderer.render(runtime.scene, runtime.camera)
+    }
+    ui.render(now)
   }
 
   function animate() {
-    const loop = now => { requestAnimationFrame(loop); frame(now); ui.render(now) }
+    const loop = now => { requestAnimationFrame(loop); frame(now) }
     requestAnimationFrame(loop)
   }
 
@@ -629,6 +710,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   function redeploy() {
     if (!state.paused || deploy.phase !== 'none' || !player.alive) return
     state.paused = false
+    session.setPaused(false)
     ui.setPaused(false)
     audio.setAmbienceMuted(false)
     input.reset()
@@ -638,15 +720,11 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   }
 
   function end(snapshot) {
-    const recordLocalMatch = session.kind === 'local' && state.running
     applySnapshot(snapshot)
     state.running = false
     const won = snapshot.outcome?.winner === player.team
-    if (recordLocalMatch)
-      recordMatchResult(state.records, snapshot.modeId, won, snapshot.timeMs / 1000)
     if (document.pointerLockElement) document.exitPointerLock()
     const hud = modeHud()
-    const records = state.records[snapshot.modeId]
     const stats = [
       `${hud.alliesLabel}: ${hud.alliesScore}    ${hud.axisLabel}: ${hud.axisScore}`,
       `结算: ${snapshot.outcome?.reason || '战斗结束'}`,
@@ -656,9 +734,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       `近战击杀: ${player.meleeKills}    投掷物击杀: ${player.grenadeKills}`,
       `战斗时长: ${Math.floor(snapshot.timeMs / 1000)} 秒`,
     ]
-    if (session.kind === 'local')
-      stats.push(`累计 K/D: ${(records.kills / Math.max(1, records.deaths)).toFixed(2)}    胜率: ${records.matches ? Math.round(records.wins / records.matches * 100) : 0}%`)
-    else stats.push(`网络延迟: ${Math.round(latency)} ms`)
+    stats.push(...session.resultStats({ modeId: snapshot.modeId }))
     ui.showEnd({ won, title: snapshot.outcome?.title || (won ? '胜利' : '战败'), stats })
   }
 
