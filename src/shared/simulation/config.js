@@ -34,9 +34,9 @@ export const CFG = {
       waveSpawnInterval: 1.2,
       waveIntermission: 10,
       // 边缘最远处的单群上限；距离堡垒越远群体越大。
-      wavePackMax: 8,
+      wavePackMax: 12,
       // 同一群内个体相对中心点的散布半径。
-      wavePackScatter: 4,
+      wavePackScatter: 6,
       // 同时存活的丧尸上限。
       maxConcurrent: 128,
       // 盟军 AI 的活动范围中心与半径。
@@ -52,8 +52,8 @@ export const CFG = {
         deckHeight: 4.2,
       },
       enemy: {
-        maxHealth: 100,
-        speed: 3.2,
+        maxHealth: 60,
+        speed: 3,
         radius: 0.46,
         attackRange: 2.0,
         targetSearchRadius: 42,
@@ -73,24 +73,13 @@ export const CFG = {
         separationWeight: 1.25,
         stuckTimeout: 0.65,
         stuckDistance: 0.22,
-        attackInterval: 1.1,
-        attackDamage: 12,
+        attackInterval: 1.5,
+        attackDamage: 10,
       },
     },
   },
   // 武器和射击手感参数。
   weapon: {
-    // 弹匣、备弹、换弹和攻击间隔。
-    // 每个弹匣的弹药数量。
-    magazineSize: 8,
-    // 玩家初始备用弹药数量。
-    reserveAmmo: 96,
-    // 非空弹匣的换弹时长。
-    reloadDuration: 1.75,
-    // 打空弹匣后的换弹时长。
-    emptyReloadDuration: 1.55,
-    // 两次射击之间的最短间隔。
-    fireDelay: 0.15,
     // 打空弹匣后自动开始换弹的延迟。
     emptyReloadDelay: 0.42,
     // 刺刀攻击动画时长。
@@ -108,18 +97,12 @@ export const CFG = {
     // 近战命中伤害。
     meleeDamage: 100,
     // 散布值是方向向量偏移量，越大越不准。
-    // 玩家静止时的基础射击散布。
-    baseSpread: 0.005,
     // 射击散布的最大值。
     maxSpread: 0.09,
     // 连续射击额外散布的上限。
     spreadBloomMax: 0.034,
     // 连续射击散布每秒恢复量。
     spreadBloomRecovery: 0.05,
-    // 玩家每次非瞄准射击增加的散布。
-    spreadBloomPerShot: 0.005,
-    // 玩家瞄准射击每次增加的散布。
-    aimedSpreadBloomPerShot: 0.004,
     // 瞄准时的散布倍率。
     aimingSpreadMultiplier: 0.25,
     // 蹲伏时的散布倍率。
@@ -175,7 +158,6 @@ export const CFG = {
     garand: {
       modelId: 'garand',
       name: 'M1 加兰德',
-      fireMode: '半自动',
       automatic: false,
       magazineSize: 8,
       reserveAmmo: 72,
@@ -196,7 +178,6 @@ export const CFG = {
     shotgun: {
       modelId: 'shotgun',
       name: 'M1897 霰弹枪',
-      fireMode: '泵动',
       automatic: false,
       magazineSize: 5,
       reserveAmmo: 40,
@@ -218,7 +199,6 @@ export const CFG = {
     thompson: {
       modelId: 'thompson',
       name: 'M1A1 汤姆逊',
-      fireMode: '全自动',
       automatic: true,
       magazineSize: 30,
       reserveAmmo: 120,
@@ -239,7 +219,6 @@ export const CFG = {
     bar: {
       modelId: 'bar',
       name: 'M1918 BAR',
-      fireMode: '全自动',
       automatic: true,
       magazineSize: 20,
       reserveAmmo: 80,
@@ -568,19 +547,11 @@ export const CFG = {
     hitboxHeadMinY: 1.5,
     // Bot 头部命中体顶部高度。
     hitboxHeadMaxY: 1.96,
-    // Bot 非致命受击时播放痛苦音效的概率。
-    painChance: 0.25,
-    // Bot 阵亡时播放痛苦音效的概率。
-    deathPainChance: 0.4,
   },
   // 子弹命中、伤害和弹道提示参数。
   combat: {
     // 子弹最大射程。
     bulletRange: 200,
-    // 子弹命中身体时的伤害。
-    bodyDamage: 35,
-    // 子弹命中头部时的伤害。
-    headDamage: 100,
     // 子弹曳光线相对枪口的起始偏移。
     tracerOriginOffset: 0.1,
     // 子弹经过玩家附近时播放掠过音效的最大距离。
@@ -590,24 +561,12 @@ export const CFG = {
     // 子弹掠过判定的最大方向点积。
     bulletWhizAlignmentMax: 0.999,
   },
-  // HUD 阈值、准星尺寸和提示持续时间，时间单位为毫秒。
+  // HUD 准星和提示持续时间，时间单位为毫秒。
   hud: {
-    // 玩家低于该生命值时显示低血量状态。
-    lowHealthThreshold: 30,
-    // 玩家弹药不高于该数量时显示低弹量提示。
-    lowAmmoThreshold: 2,
-    // 准星的基础间距。
-    crosshairBaseGap: 4,
     // 射击散布转换为准星间距的倍率。
     crosshairSpreadScale: 520,
-    // 准星的基础尺寸。
-    crosshairBaseSize: 22,
-    // 准星线段长度。
-    crosshairLength: 8,
     // 连杀统计的有效时间窗口。
     killStreakWindow: 3500,
-    // 击杀提示开始淡出的延迟。
-    killNotifyOutDelay: 1500,
     // 击杀提示清理样式的延迟。
     killNotifyCleanupDelay: 1900,
     // 受击暗角的显示时长。
@@ -618,8 +577,6 @@ export const CFG = {
     healthBarHoldDuration: 1200,
     // 击杀 feed 单条消息的显示时长。
     killFeedItemDuration: 5000,
-    // 击杀 feed 同时保留的最大消息数。
-    killFeedMaxItems: 6,
     // 中央提示默认显示时长。
     centerMessageDuration: 2000,
     // 道具和补给反馈的显示时长。
