@@ -719,6 +719,7 @@ export function createRemoteActorView(actor, services) {
     ? new Zombie(position, common)
     : new Bot(actor.team, position, { ...common, weaponData: services.config.weapons[actor.weapon] })
   view.id = actor.id
+  view.actorKind = actor.kind
   view.name = actor.name
   view.networkPosition = view.position.clone()
   view.networkYaw = actor.yaw

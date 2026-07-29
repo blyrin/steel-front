@@ -43,6 +43,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   let player = null
   let mode = null
   let active = false
+  let chatActive = false
   let latency = 0
   let inputSeq = 0
   let lastFrameAt = performance.now()
@@ -147,7 +148,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       onDeploy(spawnId, loadout) { session.send({ type: 'deploy', spawnId, loadout: { ...loadout } }) },
     })
     runtime.renderer.canvas.addEventListener('click', () => {
-      if (active && !state.paused && deploy.phase === 'none' && !input.isTouchMode()) runtime.renderer.canvas.requestPointerLock().catch(console.error)
+      if (active && !chatActive && !state.paused && deploy.phase === 'none' && !input.isTouchMode()) runtime.renderer.canvas.requestPointerLock().catch(console.error)
     })
     window.addEventListener('resize', () => {
       runtime.resize()
@@ -255,6 +256,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
 
   function applySnapshot(snapshot) {
     for (const definition of snapshot.definitions || []) actorDefinitions.set(definition.id, definition)
+    inputSeq = Math.max(inputSeq, snapshot.player.lastInputSeq)
     const ownId = getPlayerId()
     const actors = snapshot.actors.map(decodeActor).filter(actor => actor.id !== ownId)
     latest = { ...snapshot, actors }
@@ -475,7 +477,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           audio.killConfirm(notice.kind)
         }
         if (event.victimId === player.id) {
-          ui.showDeath(event.attackerId ? `被 ${actorName(event.attackerId)} 击杀` : '重新部署')
+          ui.showDeath(event.attackerId ? actorName(event.attackerId) : '未知')
         }
         if (event.victimId === player.id) {
           player.alive = false
@@ -509,6 +511,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           }
         }
       } else if (event.type === 'deploy_available' && event.actorId === player.id) {
+        if (state.paused) togglePause()
         ui.hideDeath()
         deployment.showScreen()
       } else if (event.type === 'item_used' && event.actorId === player.id) {
@@ -533,7 +536,8 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
   }
 
   function togglePause() {
-    if (!active || deploy.phase !== 'none' || !session.canPause()) return
+    if (!active || (!state.paused && deploy.phase !== 'none')) return
+    const pausesMatch = session.canPause()
     state.paused = !state.paused
     if (state.paused) {
       predictionInput = {
@@ -542,19 +546,43 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
       }
       session.sendInput({ seq: ++inputSeq, ...predictionInput })
     }
-    session.setPaused(state.paused)
-    ui.setPaused(state.paused)
-    audio.setAmbienceMuted(state.paused)
+    session.setPaused(state.paused && pausesMatch)
+    ui.setPaused(state.paused, pausesMatch)
+    audio.setAmbienceMuted(state.paused && pausesMatch)
     if (state.paused) {
       input.reset()
       ui.setScoreboardVisible(false)
       if (document.pointerLockElement) document.exitPointerLock()
-    } else if (!input.isTouchMode()) runtime.renderer.canvas.requestPointerLock().catch(console.error)
+    } else if (deploy.phase === 'none' && player.alive && !input.isTouchMode()) {
+      runtime.renderer.canvas.requestPointerLock().catch(console.error)
+    }
     input.updateTouchUi()
   }
 
+  function setChatOpen(value) {
+    chatActive = value
+    if (!active) return
+    input.reset()
+    if (!value) {
+      if (!state.paused && deploy.phase === 'none' && player.alive && !input.isTouchMode()) {
+        runtime.renderer.canvas.requestPointerLock().catch(console.error)
+      }
+      return
+    }
+    predictionInput = {
+      moveX: 0, moveZ: 0, yaw: player.yaw, pitch: player.pitch, jump: false,
+      crouch: false, sprint: false, aim: false, fire: false, slot: player.activeSlot, actions: 0,
+    }
+    ui.setScoreboardVisible(false)
+    session.sendInput({ seq: ++inputSeq, ...predictionInput })
+    if (document.pointerLockElement) {
+      input.ignoreNextPointerUnlock()
+      document.exitPointerLock()
+    }
+  }
+
   function sendInput() {
-    if (!latest || !state.running || state.paused || deploy.phase !== 'none') return
+    if (!latest || !state.running || state.paused || chatActive || deploy.phase !== 'none') return
     const look = input.consumeLookDelta()
     lookDelta.x += look.x
     lookDelta.y += look.y
@@ -746,7 +774,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     while (frameAccumulator >= frameStep) {
       if (runtime && active) {
         sendInput()
-        if (state.running && !state.paused) updateGameplay(frameStep, now)
+        if (state.running && (!state.paused || !session.canPause())) updateGameplay(frameStep, now)
       }
       frameAccumulator -= frameStep
     }
@@ -832,7 +860,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
 
   return {
     get active() { return active }, boot, snapshot: applySnapshot, events: handleEvents, animate, end,
-    setLatency(value) { latency = value }, togglePause, leave, selectLoadout, applySetting, redeploy,
+    setLatency(value) { latency = value }, togglePause, setChatOpen, leave, selectLoadout, applySetting, redeploy,
     preparePresentation,
     deploy(index) { deployment.startAnimation(index) },
   }

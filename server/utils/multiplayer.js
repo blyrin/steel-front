@@ -249,6 +249,24 @@ class MultiplayerManager {
     if (connection.room !== room) room.join(connection)
   }
 
+  chat(connection, channel, text) {
+    const room = connection.room
+    if (channel === 'world' && ['active', 'results'].includes(room?.status)) throw new Error('对局中没有世界频道')
+    if (channel !== 'world' && !room) throw new Error('当前频道不可用')
+    const message = {
+      type: 'chat', channel, userId: connection.user.id,
+      displayName: connection.user.displayName, text, sentAt: Date.now(),
+    }
+    if (channel === 'world') {
+      const recipients = [...this.connections.values()].filter(target =>
+        !['active', 'results'].includes(target.room?.status))
+      return broadcast(recipients, message)
+    }
+    if (channel === 'room') return room.broadcast(message)
+    const team = room.members.get(connection.user.id).team
+    return broadcast([...room.members.values()].filter(member => member.team === team), message)
+  }
+
   handle(connection, message) {
     const room = connection.room
     switch (message.type) {
@@ -271,6 +289,7 @@ class MultiplayerManager {
       case 'redeploy':
         if (!room?.simulation?.redeployPlayer(`player-${connection.user.id}`)) throw new Error('重新部署请求无效')
         return
+      case 'chat': return this.chat(connection, message.channel, message.text)
       case 'input': return room?.simulation?.submitInput(`player-${connection.user.id}`, message)
       case 'request_resync':
         if (room?.simulation) {

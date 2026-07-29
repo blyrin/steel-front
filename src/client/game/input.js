@@ -116,6 +116,7 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
   let gyroEnabled = false
   let gyroListening = false
   let gyroHasPrevious = false
+  let ignorePointerUnlock = false
 
   const gyroEuler = new THREE.Euler()
   const gyroCurrent = new THREE.Quaternion()
@@ -282,7 +283,7 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
 
   function updateLandscapeState() {
     landscapeOk = !touchMode || window.innerWidth >= window.innerHeight
-    ui.setRotateVisible(touchMode && state.running && !landscapeOk)
+    ui.setRotateVisible(touchMode && !landscapeOk)
     if (!landscapeOk) clearTouchActions()
   }
 
@@ -467,6 +468,7 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
   document.addEventListener(
     'keydown',
     event => {
+      if (event.target instanceof HTMLInputElement) return
       if (blockBrowserShortcut(event)) {
         event.preventDefault()
         event.stopPropagation()
@@ -548,6 +550,10 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
       return
     }
     reset()
+    if (ignorePointerUnlock) {
+      ignorePointerUnlock = false
+      return
+    }
     if (state.running && !state.paused && state.player?.alive && deploy.phase === 'none') onPause()
   })
   document.addEventListener('visibilitychange', () => {
@@ -619,6 +625,9 @@ export function createInputSystem({ state, deploy, onPause, ui, config }) {
     },
     isTouchMode() {
       return touchMode
+    },
+    ignoreNextPointerUnlock() {
+      ignorePointerUnlock = true
     },
     enableGyro,
     syncUi() {

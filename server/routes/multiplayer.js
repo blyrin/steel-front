@@ -24,6 +24,11 @@ const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('start_match') }),
   z.object({ type: z.literal('deploy'), spawnId: z.string().min(1).max(40), loadout }),
   z.object({ type: z.literal('redeploy') }),
+  z.object({
+    type: z.literal('chat'),
+    channel: z.enum(['world', 'room', 'squad']),
+    text: z.string().trim().min(1).max(160).refine(value => !/[\p{Cc}\p{Cf}]/u.test(value)),
+  }),
   z.object({ type: z.literal('request_resync') }),
   z.object({ type: z.literal('ping'), at: z.number().finite() }),
 ])

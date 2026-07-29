@@ -1,4 +1,4 @@
-export const MULTIPLAYER_PROTOCOL = 5
+export const MULTIPLAYER_PROTOCOL = 6
 export const SERVER_TICK_RATE = 60
 export const SNAPSHOT_RATE = 15
 export const MESSAGE_RATE_LIMIT = 180
@@ -23,6 +23,7 @@ export const CLIENT_MESSAGE = Object.freeze({
   DEPLOY: 'deploy',
   REDEPLOY: 'redeploy',
   INPUT: 'input',
+  CHAT: 'chat',
   RESYNC: 'request_resync',
   PING: 'ping',
 })

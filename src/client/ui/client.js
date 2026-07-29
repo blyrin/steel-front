@@ -44,6 +44,11 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
 
+function detectTouchDevice() {
+  return window.matchMedia('(pointer: coarse)').matches ||
+    navigator.maxTouchPoints > 0 && window.matchMedia('(hover: none)').matches
+}
+
 function createCanvasUi({ state, deploy, config }) {
   const canvas = document.createElement('canvas')
   canvas.id = 'uiCanvas'
@@ -64,6 +69,7 @@ function createCanvasUi({ state, deploy, config }) {
   let screen = 'boot'
   let gameVisible = false
   let paused = false
+  let pauseStopsMatch = true
   let rotateVisible = false
   let selectedMode = 'classic'
   let modeDefinitions = []
@@ -83,11 +89,17 @@ function createCanvasUi({ state, deploy, config }) {
   let fpsLast = 0
   let activeSlider = null
   let activeTouch = new Map()
+  const blockedPointers = new Set()
   let handlers = {}
   let touchHandlers = {}
   let touchVisible = false
   let stickOffset = { x: 0, y: 0 }
   let scoreboardVisible = false
+  let chatOpen = false
+  let chatChannels = []
+  let chatChannel = 'world'
+  let chatValue = ''
+  const chatMessages = []
   let deathText = ''
   let hitMarkerUntil = 0
   let damageUntil = 0
@@ -292,8 +304,10 @@ function createCanvasUi({ state, deploy, config }) {
     }
 
     if (portal.status) {
-      box(margin, height - 29, Math.min(width - margin * 2, 420), 20, portal.error ? 'rgba(86,28,25,.9)' : 'rgba(13,18,18,.82)')
-      text(portal.status, margin + 9, height - 19, 7, portal.error ? '#ffaaa0' : COLORS.muted)
+      const statusW = Math.min(width - margin * 2, 420)
+      const statusX = width - margin - statusW
+      box(statusX, height - 29, statusW, 20, portal.error ? 'rgba(86,28,25,.9)' : 'rgba(13,18,18,.82)')
+      text(portal.status, statusX + 9, height - 19, 7, portal.error ? '#ffaaa0' : COLORS.muted)
     }
     ctx.restore()
   }
@@ -443,7 +457,6 @@ function createCanvasUi({ state, deploy, config }) {
     drawTimedText(now)
     drawFeed(now)
     if (scoreboardVisible) drawScoreboard()
-    if (deathText) drawDeath()
   }
 
   function drawActorHealthBars(now) {
@@ -461,14 +474,18 @@ function createCanvasUi({ state, deploy, config }) {
       const actorX = (actorScreenPosition.x * 0.5 + 0.5) * width
       const actorY = (-actorScreenPosition.y * 0.5 + 0.5) * height
       const nearCrosshair = Math.hypot(actorX - width / 2, actorY - height / 2) < 34
+      const human = actor.actorKind === 'player'
+      const nameAlwaysVisible = human && actor.team === state.player.team
       const shownUntil = healthBarUntil.get(actor) || 0
-      if (!nearCrosshair && shownUntil <= now) {
+      const healthVisible = nearCrosshair || shownUntil > now
+      if (!healthVisible && !nameAlwaysVisible) {
         healthBarUntil.delete(actor)
         continue
       }
-      if (!hasActorLineOfSight(actor)) continue
-      if (nearCrosshair) healthBarUntil.set(actor, now + config.hud.healthBarHoldDuration)
-      drawActorHealth(actor, x, y)
+      const actorVisible = hasActorLineOfSight(actor)
+      if (nearCrosshair && actorVisible) healthBarUntil.set(actor, now + config.hud.healthBarHoldDuration)
+      if (healthVisible && actorVisible) drawActorHealth(actor, x, y)
+      if (human && (nameAlwaysVisible || healthVisible && actorVisible)) drawActorName(actor, x, y)
     }
   }
 
@@ -492,6 +509,18 @@ function createCanvasUi({ state, deploy, config }) {
       ? COLORS.danger
       : actor.team === state.player.team ? COLORS.ally : COLORS.axis
     ctx.fillRect(x - barW / 2 + 1, y - 10, (barW - 2) * clamp(actor.health / actor.maxHealth, 0, 1), 1)
+  }
+
+  function drawActorName(actor, x, y) {
+    const maxWidth = 96
+    let fontSize = 8
+    while (fontSize > 6) {
+      font(fontSize, 700)
+      if (ctx.measureText(actor.name).width <= maxWidth) break
+      fontSize--
+    }
+    text(actor.name, clamp(x, maxWidth / 2, width - maxWidth / 2), y - 16, fontSize,
+      actor.team === state.player.team ? COLORS.ally : COLORS.axis, 'center', 700)
   }
 
   function drawEquipmentState(player, x, y, w) {
@@ -662,8 +691,9 @@ function createCanvasUi({ state, deploy, config }) {
   function drawDeath() {
     ctx.fillStyle = 'rgba(28,8,8,.56)'
     ctx.fillRect(0, 0, width, height)
-    text('阵 亡', width / 2, height * 0.44, 29, COLORS.axis, 'center', 800)
-    text(deathText, width / 2, height * 0.52, 10, COLORS.text, 'center')
+    text('阵 亡', width / 2, height * 0.42, 29, COLORS.axis, 'center', 800)
+    text('击杀者', width / 2, height * 0.5, 8, COLORS.muted, 'center', 700)
+    text(deathText, width / 2, height * 0.55, 16, COLORS.text, 'center', 800)
   }
 
   function drawDeployment() {
@@ -687,22 +717,25 @@ function createCanvasUi({ state, deploy, config }) {
       const itemW = (groupW - (group.items.length - 1) * 4) / group.items.length
       group.items.forEach((item, index) => {
         const rect = { x: groupX + index * (itemW + 4), y: 25, w: itemW, h: 32 }
-        button(rect, item.name, `loadout:${group.kind}:${item.id}`, item.selected, '#303c40', 8, accent)
+        const action = `loadout:${group.kind}:${item.id}`
+        ctx.fillStyle = item.selected ? COLORS.gold : '#303c40'
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+        if (hoveredAction === action && !item.selected) {
+          ctx.fillStyle = 'rgba(255,255,255,.08)'
+          ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+        }
+        text(item.name, rect.x + rect.w / 2, rect.y + rect.h / 2, 8,
+          item.selected ? COLORS.ink : COLORS.text, 'center', 700)
+        hits.push({ ...rect, action })
       })
-      if (groupIndex < groups.length - 1) {
-        ctx.fillStyle = 'rgba(102,117,122,.48)'
-        ctx.fillRect(groupX + groupW + 6, 8, 1, 50)
-      }
       groupX += groupW + (groupIndex < groups.length - 1 ? 14 : 0)
     })
     deployment.markers.forEach((marker, index) => {
       const markerX = (marker.x / innerWidth) * width
       const markerY = (marker.y / innerHeight) * height
-      const pulse = 2 + Math.sin(performance.now() * 0.005 + index) * 2
-      ctx.strokeStyle = marker.contested ? 'rgba(224,111,99,.5)' : 'rgba(102,194,206,.5)'
-      ctx.strokeRect(markerX - 38 - pulse, markerY - 24 - pulse, 76 + pulse * 2, 48 + pulse * 2)
       const rect = { x: markerX - 35, y: markerY - 21, w: 70, h: 42 }
-      box(rect.x, rect.y, rect.w, rect.h, marker.contested ? '#713d39' : '#38584e')
+      ctx.fillStyle = marker.contested ? '#713d39' : '#38584e'
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
       text(`${marker.id} ${marker.name}`, rect.x + rect.w / 2, rect.y + 15, 8, COLORS.text, 'center', 700)
       text(marker.contested ? '交战' : '安全', rect.x + rect.w / 2, rect.y + 29, 7, marker.contested ? '#ffc0aa' : '#bde0bd', 'center')
       hits.push({ ...rect, action: `spawn:${index}` })
@@ -719,8 +752,8 @@ function createCanvasUi({ state, deploy, config }) {
     box(x, y, panelW, panelH, '#1b2428')
     ctx.fillStyle = COLORS.gold
     ctx.fillRect(x + 24, y + 18, 3, 16)
-    text('战斗暂停', x + 34, y + 26, 17, COLORS.text, 'left', 700)
-    text('PAUSED / 作战设置', x + 24, y + 45, 7, COLORS.muted)
+    text(pauseStopsMatch ? '战斗暂停' : '作战菜单', x + 34, y + 26, 17, COLORS.text, 'left', 700)
+    text(pauseStopsMatch ? 'PAUSED / 作战设置' : '联机游戏不会暂停', x + 24, y + 45, 7, pauseStopsMatch ? COLORS.muted : COLORS.axis)
     ctx.fillStyle = COLORS.line
     ctx.fillRect(x + 24, y + 60, panelW - 48, 1)
     text('音频与控制', x + 24, y + 76, 7, COLORS.gold, 'left', 700)
@@ -816,6 +849,85 @@ function createCanvasUi({ state, deploy, config }) {
     }
   }
 
+  function drawRecentChat(now) {
+    if (chatOpen || !chatChannels.length) return
+    const recent = chatMessages.filter(message =>
+      chatChannels.includes(message.channel) && now - message.receivedAt < 10_000).slice(-5)
+    if (!recent.length) return
+    const labels = { world: '世界', room: '房间', squad: '小队' }
+    const panelW = Math.min(gameVisible ? 250 : 330, width - 32)
+    const lineH = 19
+    const panelH = recent.length * lineH + 12
+    const x = 16
+    const y = gameVisible ? height / 2 - panelH / 2 : height - panelH - 38
+    if (!gameVisible) box(x, y, panelW, panelH, 'rgba(10,15,16,.72)')
+    recent.forEach((message, index) => {
+      const age = now - message.receivedAt
+      ctx.globalAlpha = age > 8000 ? 1 - (age - 8000) / 2000 : 1
+      const lineY = y + 12 + index * lineH
+      const color = message.channel === 'squad' ? COLORS.green : message.channel === 'room' ? COLORS.ally : COLORS.gold
+      text(`[${labels[message.channel]}]`, x + 9, lineY, 7, color, 'left', 700)
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(x + 44, lineY - 8, panelW - 53, 16)
+      ctx.clip()
+      text(`${message.displayName}: ${message.text}`, x + 46, lineY, 8, COLORS.text)
+      ctx.restore()
+      ctx.globalAlpha = 1
+    })
+  }
+
+  function drawChat() {
+    if (!chatOpen) return
+    const panelW = Math.min(360, width - 32)
+    const panelH = Math.min(196, height - 32)
+    const x = 16
+    const y = height - panelH - 16
+    box(x, y, panelW, panelH, 'rgba(10,15,16,.94)')
+    ctx.strokeStyle = 'rgba(216,180,95,.45)'
+    ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1)
+    const labels = { world: '世界', room: '房间', squad: '小队' }
+    let tabX = x + 12
+    for (const channel of chatChannels) {
+      const selected = channel === chatChannel
+      const tabW = 52
+      const action = `chat-channel:${channel}`
+      if (selected) box(tabX, y + 10, tabW, 22, '#465450')
+      else if (hoveredAction === action) box(tabX, y + 10, tabW, 22, 'rgba(255,255,255,.08)')
+      text(labels[channel], tabX + tabW / 2, y + 21, 8, selected ? COLORS.gold : COLORS.muted, 'center', 700)
+      hits.push({ x: tabX, y: y + 10, w: tabW, h: 22, action })
+      tabX += tabW + 4
+    }
+    const closeRect = { x: x + panelW - 34, y: y + 8, w: 22, h: 22 }
+    if (hoveredAction === 'chat-close') box(closeRect.x, closeRect.y, closeRect.w, closeRect.h, 'rgba(255,255,255,.08)')
+    text('X', closeRect.x + closeRect.w / 2, closeRect.y + closeRect.h / 2, 9, COLORS.muted, 'center', 700)
+    hits.push({ ...closeRect, action: 'chat-close' })
+    ctx.fillStyle = 'rgba(255,255,255,.1)'
+    ctx.fillRect(x + 12, y + 39, panelW - 24, 1)
+    const visible = chatMessages.filter(message => chatChannels.includes(message.channel)).slice(-6)
+    visible.forEach((message, index) => {
+      const lineY = y + 53 + index * 18
+      const color = message.channel === 'squad' ? COLORS.green : message.channel === 'room' ? COLORS.ally : COLORS.gold
+      text(`[${labels[message.channel]}]`, x + 12, lineY, 7, color, 'left', 700)
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(x + 47, lineY - 8, panelW - 59, 16)
+      ctx.clip()
+      text(`${message.displayName}: ${message.text}`, x + 49, lineY, 8, COLORS.text)
+      ctx.restore()
+    })
+    const inputY = y + panelH - 35
+    box(x + 12, inputY, panelW - 24, 24, '#202928')
+    ctx.strokeStyle = COLORS.line
+    ctx.strokeRect(x + 12.5, inputY + 0.5, panelW - 25, 23)
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(x + 20, inputY, panelW - 40, 24)
+    ctx.clip()
+    text(chatValue || '输入消息...', x + 20, inputY + 12, 8, chatValue ? COLORS.text : COLORS.muted)
+    ctx.restore()
+  }
+
   function render(now = performance.now()) {
     if (!fpsLast) fpsLast = now
     fpsFrames++
@@ -839,11 +951,14 @@ function createCanvasUi({ state, deploy, config }) {
       drawMenu()
     } else if (gameVisible) {
       drawHud(now)
+      if (deathText) drawDeath()
       if (deployment?.visible) drawDeployment()
       if (paused) drawPause()
       if (endData) drawEnd()
       if (touchVisible && !paused && !deployment?.visible && !endData) drawTouch()
     }
+    drawRecentChat(now)
+    drawChat()
     if (rotateVisible) drawRotate()
   }
 
@@ -852,8 +967,12 @@ function createCanvasUi({ state, deploy, config }) {
   }
 
   function findHit(event) {
+    if (rotateVisible) return null
     const point = logicalPosition(event)
-    for (let i = hits.length - 1; i >= 0; i--) if (inside(point.x, point.y, hits[i])) return hits[i]
+    for (let i = hits.length - 1; i >= 0; i--) {
+      const hit = hits[i]
+      if (inside(point.x, point.y, hit) && (!chatOpen || hit.action.startsWith('chat-'))) return hit
+    }
     return null
   }
 
@@ -865,6 +984,14 @@ function createCanvasUi({ state, deploy, config }) {
   }
 
   canvas.addEventListener('pointerdown', event => {
+    if (rotateVisible) {
+      blockedPointers.add(event.pointerId)
+      return
+    }
+    if (chatOpen) {
+      event.preventDefault()
+      return
+    }
     const hit = findHit(event)
     if (hit?.action === 'slider') {
       activeSlider = hit
@@ -887,6 +1014,7 @@ function createCanvasUi({ state, deploy, config }) {
   })
 
   canvas.addEventListener('pointermove', event => {
+    if (blockedPointers.has(event.pointerId)) return
     if (activeSlider) updateSlider(activeSlider, event)
     if (activeTouch.has(event.pointerId)) touchHandlers.move?.(event)
     if (!touchMode && !activeSlider && !activeTouch.has(event.pointerId)) {
@@ -905,6 +1033,7 @@ function createCanvasUi({ state, deploy, config }) {
   })
 
   canvas.addEventListener('pointerup', event => {
+    if (blockedPointers.delete(event.pointerId)) return
     if (activeSlider) {
       activeSlider = null
       return
@@ -917,7 +1046,14 @@ function createCanvasUi({ state, deploy, config }) {
     }
     const hit = findHit(event)
     if (!hit) return
-    if (hit.action === 'start') {
+    if (hit.action === 'chat-close') {
+      chatOpen = false
+      keyboardInput.blur()
+      handlers.onChatToggle?.(false)
+    } else if (hit.action.startsWith('chat-channel:')) {
+      chatChannel = hit.action.slice(13)
+      keyboardInput.focus({ preventScroll: true })
+    } else if (hit.action === 'start') {
       handlers.onStart?.()
     } else if (hit.action === 'mode') {
       handlers.onMode?.(hit.value)
@@ -945,6 +1081,7 @@ function createCanvasUi({ state, deploy, config }) {
     dirty = true
   })
   canvas.addEventListener('pointercancel', event => {
+    blockedPointers.delete(event.pointerId)
     activeTouch.delete(event.pointerId)
     activeSlider = null
     touchHandlers.up?.(event)
@@ -952,14 +1089,57 @@ function createCanvasUi({ state, deploy, config }) {
 
   window.addEventListener('resize', resize)
   keyboardInput.addEventListener('input', () => {
-    if (screen === 'portal' && activePortalField) handlers.onPortalInput?.(activePortalField, keyboardInput.value)
+    if (chatOpen) {
+      chatValue = keyboardInput.value
+      dirty = true
+    } else if (screen === 'portal' && activePortalField) handlers.onPortalInput?.(activePortalField, keyboardInput.value)
   })
   keyboardInput.addEventListener('keydown', event => {
+    if (chatOpen) {
+      if (event.isComposing) return
+      if (event.key === 'Enter') {
+        const value = chatValue.trim()
+        if (value) handlers.onChatSend?.(chatChannel, value)
+        chatValue = ''
+        keyboardInput.value = ''
+      } else if (event.key === 'Escape') {
+        chatOpen = false
+        keyboardInput.blur()
+        handlers.onChatToggle?.(false)
+      } else if (event.key === 'Tab' || event.ctrlKey || event.metaKey || event.altKey || event.key.length > 1) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      } else {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      dirty = true
+      return
+    }
     if (event.key !== 'Enter') return
     event.preventDefault()
     handlers.onPortalSubmit?.()
   })
   window.addEventListener('keydown', event => {
+    if (rotateVisible) {
+      event.preventDefault()
+      return
+    }
+    if (event.code === 'KeyT' && chatChannels.length && document.activeElement !== keyboardInput) {
+      chatOpen = true
+      chatValue = ''
+      keyboardInput.type = 'text'
+      keyboardInput.maxLength = 160
+      keyboardInput.value = ''
+      keyboardInput.focus({ preventScroll: true })
+      handlers.onChatToggle?.(true)
+      event.preventDefault()
+      event.stopPropagation()
+      dirty = true
+      return
+    }
     if (screen !== 'portal') return
     if (event.key === 'Escape') {
       handlers.onPortalBack?.()
@@ -1034,12 +1214,18 @@ function createCanvasUi({ state, deploy, config }) {
       records = entries
       dirty = true
     },
-    setPaused(value) {
+    setPaused(value, stopsMatch = true) {
       paused = value
+      pauseStopsMatch = stopsMatch
       dirty = true
     },
     setRotateVisible(value) {
       rotateVisible = value
+      if (value) {
+        activeSlider = null
+        activeTouch.clear()
+        keyboardInput.blur()
+      }
       dirty = true
     },
     setDeployment(value) {
@@ -1107,6 +1293,21 @@ function createCanvasUi({ state, deploy, config }) {
       scoreboardVisible = value
       dirty = true
     },
+    setChatChannels(channels) {
+      chatChannels = channels
+      if (!chatChannels.includes(chatChannel)) chatChannel = chatChannels[0] || 'world'
+      if (!chatChannels.length && chatOpen) {
+        chatOpen = false
+        keyboardInput.blur()
+        handlers.onChatToggle?.(false)
+      }
+      dirty = true
+    },
+    addChatMessage(message) {
+      chatMessages.push({ ...message, receivedAt: performance.now() })
+      if (chatMessages.length > 50) chatMessages.shift()
+      dirty = true
+    },
     showEnd(data) {
       endData = data
       paused = false
@@ -1138,12 +1339,37 @@ export function createClient() {
   const state = createGameState()
   const deploy = createDeployState()
   const ui = createCanvasUi({ state, deploy, config: CFG })
+  const touchDevice = detectTouchDevice()
+
+  function syncPageOrientation() {
+    ui.setRotateVisible(touchDevice && innerHeight > innerWidth)
+  }
+
+  async function lockLandscape() {
+    const root = document.documentElement
+    if (!document.fullscreenElement && root.requestFullscreen) {
+      await root.requestFullscreen({ navigationUI: 'hide' })
+    }
+    if (window.screen.orientation?.lock) await window.screen.orientation.lock('landscape')
+  }
+
+  ui.setTouchMode(touchDevice)
+  syncPageOrientation()
+  window.addEventListener('resize', syncPageOrientation)
+  window.addEventListener('orientationchange', syncPageOrientation)
+  if (touchDevice) {
+    document.addEventListener('pointerdown', () => {
+      lockLandscape().catch(console.error)
+    }, { capture: true, once: true })
+  }
+
   let user = null
   let room = null
   let rooms = []
   let playerId = null
   let status = ''
   let statusError = false
+  let networkConnected = false
   let screen = 'choice'
   let register = false
   let selectedMode = 'classic'
@@ -1161,7 +1387,11 @@ export function createClient() {
   }
   const game = createGame({ session, ui, state, deploy, getPlayerId: () => playerId })
   const networkSession = new NetworkSession({
-    status(value) { setStatus(value === 'online' ? '已连接联机服务器' : value === 'connecting' ? '正在连接...' : '连接已断开') },
+    status(value) {
+      networkConnected = value === 'online'
+      syncChatContext()
+      setStatus(value === 'online' ? '已连接联机服务器' : value === 'connecting' ? '正在连接...' : '连接已断开')
+    },
     latency(value) { game.setLatency(value) },
     disconnected() { if (room) setStatus('连接中断，正在恢复席位...') },
     message: handleMessage,
@@ -1177,7 +1407,14 @@ export function createClient() {
     return { id, label, placeholder, password, maxLength, value: fields[id] }
   }
 
+  function syncChatContext() {
+    if (!networkConnected || activeSession !== networkSession) return ui.setChatChannels([])
+    if (!room) return ui.setChatChannels(['world'])
+    ui.setChatChannels(screen === 'game' ? ['room', 'squad'] : ['world', 'room', 'squad'])
+  }
+
   function render() {
+    syncChatContext()
     const common = { status, error: statusError }
     if (screen === 'choice') {
       const modeRows = MODE_DEFINITIONS.map(mode => {
@@ -1246,6 +1483,7 @@ export function createClient() {
 
   function showRoomCanvas(common = { status, error: statusError }) {
     screen = 'room'
+    syncChatContext()
     ui.showPortal({
       ...common,
       title: room.name,
@@ -1406,6 +1644,7 @@ export function createClient() {
       enterLobby()
     } else if (message.type === 'match_start') {
       screen = 'game'
+      syncChatContext()
       playerId = message.playerId || playerId
       game.boot(message.map, message.snapshot)
     } else if (message.type === 'snapshot') {
@@ -1414,6 +1653,8 @@ export function createClient() {
       game.events(message.events)
     } else if (message.type === 'match_end') {
       game.end(message.snapshot)
+    } else if (message.type === 'chat') {
+      ui.addChatMessage(message)
     } else if (message.type === 'kicked') {
       room = null
       screen = 'choice'
@@ -1430,6 +1671,10 @@ export function createClient() {
       else action('choice')
     },
     onPortalSubmit: () => screen === 'auth' ? submitAuth() : null,
+    onChatToggle(value) { game.setChatOpen(value) },
+    onChatSend(channel, text) {
+      networkSession.send({ type: 'chat', channel, text })
+    },
     onPortalInput(id, value) {
       fields[id] = value;
       render()

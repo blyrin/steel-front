@@ -867,6 +867,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       spreadBloom: actor.spreadBloom, headshots: actor.headshots,
       meleeKills: actor.meleeKills, grenadeKills: actor.grenadeKills,
       killStreak: actor.killStreak, bestKillStreak: actor.bestKillStreak,
+      lastInputSeq: actor.lastInputSeq,
     }
   }
 
