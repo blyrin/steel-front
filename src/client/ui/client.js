@@ -8,15 +8,21 @@ import { LocalSession, NetworkSession } from '../session/session.js'
 const COLORS = {
   ink: '#080c0d',
   paper: '#c9c3ae',
-  panel: '#151b1c',
-  panel2: '#222a2a',
-  line: '#626b66',
+  panel: '#151e24',
+  panel2: '#1e2930',
+  panelHover: '#253440',
+  line: '#2d3e4a',
   text: '#f3efe2',
-  muted: '#aaa999',
-  ally: '#79b9bb',
-  axis: '#d46b5f',
-  gold: '#d8b45f',
-  green: '#789b72',
+  textSub: '#a0b2be',
+  muted: '#6c8290',
+  ally: '#4ecdc4',
+  allyBg: 'rgba(78,205,196,0.12)',
+  axis: '#e65c5c',
+  axisBg: 'rgba(230,92,92,0.12)',
+  gold: '#e5b85c',
+  goldBright: '#f7d279',
+  goldBg: 'rgba(229,184,92,0.14)',
+  green: '#5cb887',
   danger: '#dc4e45',
 }
 
@@ -76,8 +82,6 @@ function createCanvasUi({ state, deploy, config }) {
   let pauseStopsMatch = true
   let rotateVisible = false
   let selectedMode = 'classic'
-  let modeDefinitions = []
-  let records = []
   let portal = null
   let activePortalField = null
   const portalInputs = new Map()
@@ -166,7 +170,7 @@ function createCanvasUi({ state, deploy, config }) {
       input.autocapitalize = 'off'
       input.enterKeyHint = 'done'
       input.spellcheck = false
-      input.style.cssText = 'position:fixed;box-sizing:border-box;border:1px solid rgba(255,255,255,.1);border-radius:0;outline:none;background:#202726;color:#f3efe2;padding:0 12px;font:16px "Microsoft YaHei",sans-serif;z-index:21'
+      input.style.cssText = 'position:fixed;box-sizing:border-box;border:0;border-radius:0;outline:none;background:transparent;color:#f3efe2;padding:0 12px;font:15px "Microsoft YaHei",sans-serif;z-index:21;box-shadow:none;'
       input.addEventListener('focus', () => {
         activePortalField = field.id
         dirty = true
@@ -184,7 +188,8 @@ function createCanvasUi({ state, deploy, config }) {
     input.maxLength = field.maxLength || 128
     input.placeholder = field.placeholder || ''
     if (input.value !== field.value) input.value = field.value
-    input.style.background = activePortalField === field.id ? '#303a38' : '#202726'
+    input.style.background = 'transparent'
+    input.style.borderColor = 'transparent'
     input.style.display = 'block'
     positionInput(input, rect)
     visiblePortalInputs.add(field.id)
@@ -196,200 +201,596 @@ function createCanvasUi({ state, deploy, config }) {
   }
 
   function button(rect, label, action, selected = false, color = COLORS.panel2, fontSize = 10, accent = COLORS.ally) {
-    const hovered = hoveredAction === action
-    ctx.fillStyle = selected ? COLORS.gold : color
-    ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
-    if (hovered && !selected) {
-      ctx.fillStyle = 'rgba(255,255,255,.08)'
-      ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
-    }
-    ctx.fillStyle = selected ? '#f0d783' : accent
-    ctx.globalAlpha = selected ? 0.78 + Math.sin(performance.now() * 0.006) * 0.22 : 1
-    ctx.fillRect(rect.x, rect.y, selected ? rect.w : hovered ? 5 : 3, selected ? 2 : rect.h)
-    ctx.globalAlpha = 1
-    while (fontSize > 6) {
-      font(fontSize, 700)
-      if (ctx.measureText(label).width <= rect.w - 16) break
-      fontSize--
-    }
-    text(label, rect.x + rect.w / 2, rect.y + rect.h / 2, fontSize, selected ? COLORS.ink : COLORS.text, 'center', 700)
-    hits.push({ ...rect, action })
+    drawTacticalButton(rect, label, action, { selected, accent, fontSize })
   }
 
-  function backdrop(color = COLORS.paper) {
-    ctx.fillStyle = color
-    ctx.fillRect(0, 0, width, height)
-    ctx.fillStyle = 'rgba(8,12,13,.1)'
-    for (let y = 8; y < height; y += 20) {
-      for (let x = 8; x < width; x += 20) ctx.fillRect(x, y, 1, 1)
-    }
-  }
-
-  function battlefieldBackdrop() {
+  function drawMainBackdrop() {
     const background = ctx.createLinearGradient(0, 0, 0, height)
-    background.addColorStop(0, '#333b39')
-    background.addColorStop(1, '#111716')
+    background.addColorStop(0, '#0e161c')
+    background.addColorStop(0.5, '#131e26')
+    background.addColorStop(1, '#090e12')
     ctx.fillStyle = background
     ctx.fillRect(0, 0, width, height)
-    ctx.fillStyle = 'rgba(235,224,192,.04)'
-    for (let y = 5; y < height; y += 7) ctx.fillRect(0, y, width, 1)
   }
 
   function drawBoot() {
-    backdrop('#cbd2c5')
+    drawMainBackdrop()
     const cx = width / 2
-    text('钢 铁 前 线', cx, height * 0.38, 29, COLORS.ink, 'center', 800)
-    text('STEEL FRONT', cx, height * 0.45, 10, COLORS.axis, 'center', 700)
-    const w = Math.min(360, width * 0.55)
-    box(cx - w / 2, height * 0.56, w, 10, '#737d78')
-    ctx.fillStyle = COLORS.gold
-    ctx.fillRect(cx - w / 2 + 1, height * 0.56 + 1, (w - 2) * (state.uiBootProgress || 0), 8)
-    text(state.uiBootStatus || '正在装配武器...', cx, height * 0.62, 9, '#465056', 'center')
+    ctx.save()
+    font(13, 800)
+    text('S T E E L   F R O N T', cx, height * 0.35, 11, COLORS.gold, 'center', 700)
+    text('钢 铁 前 线', cx, height * 0.43, 30, COLORS.text, 'center', 800)
+    text('TACTICAL BATTLEFIELD SIMULATION', cx, height * 0.50, 9, COLORS.muted, 'center', 600)
+
+    const w = Math.min(380, width * 0.5)
+    const barY = Math.round(height * 0.58)
+    box(cx - w / 2, barY, w, 10, '#10181e')
+
+    const progress = state.uiBootProgress || 0
+    if (progress > 0) {
+      const grad = ctx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0)
+      grad.addColorStop(0, COLORS.ally)
+      grad.addColorStop(1, COLORS.gold)
+      ctx.fillStyle = grad
+      ctx.fillRect(cx - w / 2 + 1, barY + 1, (w - 2) * progress, 8)
+    }
+    text(state.uiBootStatus || '正在装配武器...', cx, barY + 24, 9, COLORS.muted, 'center')
+    ctx.restore()
   }
 
   function portalMargin() {
-    return Math.max(28, width * 0.045)
+    return Math.max(24, Math.floor(width * 0.038))
+  }
+
+  function drawTacticalPanel(x, y, w, h, fill = 'rgba(20,29,36,0.92)', stroke = 'rgba(229,184,92,0.22)', overlay = null) {
+    x = Math.round(x)
+    y = Math.round(y)
+    w = Math.round(w)
+    h = Math.round(h)
+    ctx.fillStyle = fill
+    ctx.fillRect(x, y, w, h)
+    if (overlay) {
+      ctx.fillStyle = overlay.fill
+      ctx.fillRect(Math.round(overlay.x), Math.round(overlay.y), Math.round(overlay.w), Math.round(overlay.h))
+    }
+  }
+
+  function drawTacticalButton(rect, label, action, options = {}) {
+    const {
+      primary = false,
+      selected = false,
+      danger = false,
+      fontSize = 10,
+      icon = null,
+      sublabel = null,
+      disabled = false,
+    } = options
+
+    const hovered = !disabled && hoveredAction === action
+    if (!disabled && action) {
+      hits.push({ ...rect, action })
+    }
+
+    let bgFill = '#1a252d'
+    let strokeColor = 'rgba(255,255,255,0.08)'
+    let textColor = COLORS.text
+
+    if (disabled) {
+      bgFill = '#131b20'
+      textColor = COLORS.muted
+    } else if (primary) {
+      if (hovered) {
+        bgFill = '#f5c667'
+        strokeColor = '#ffdf96'
+      } else {
+        bgFill = COLORS.gold
+        strokeColor = COLORS.goldBright
+      }
+      textColor = '#0a0e11'
+    } else if (danger) {
+      bgFill = hovered ? '#632e2c' : '#452221'
+      strokeColor = COLORS.axis
+      textColor = '#ffc0c0'
+    } else if (selected) {
+      bgFill = hovered ? '#253542' : '#1e2c37'
+      strokeColor = COLORS.gold
+      textColor = COLORS.goldBright
+    } else if (hovered) {
+      bgFill = '#243442'
+      strokeColor = 'rgba(229,184,92,0.4)'
+    }
+
+    drawTacticalPanel(rect.x, rect.y, rect.w, rect.h, bgFill)
+    ctx.strokeStyle = strokeColor
+    ctx.lineWidth = 1
+    ctx.strokeRect(Math.round(rect.x) + 0.5, Math.round(rect.y) + 0.5, Math.round(rect.w) - 1, Math.round(rect.h) - 1)
+
+    const displayLabel = icon ? `${icon} ${label}` : label
+    if (sublabel) {
+      text(displayLabel, rect.x + 8, rect.y + rect.h / 2 - 6, fontSize, textColor, 'left', 700)
+      text(sublabel, rect.x + 8, rect.y + rect.h / 2 + 7, fontSize - 2, primary ? '#2a3430' : COLORS.muted, 'left')
+    } else {
+      text(displayLabel, rect.x + rect.w / 2, rect.y + rect.h / 2, fontSize, textColor, 'center', primary ? 800 : 700)
+    }
+  }
+
+  function compactPortalStatus(value) {
+    if (!value) return ''
+    if (value === '已连接联机服务器') return '在线'
+    if (value === '正在连接...') return '连接中'
+    if (value === '连接已断开') return '未连接'
+    if (value.includes('恢复')) return '恢复中'
+    return value.length > 10 ? `${value.slice(0, 10)}…` : value
+  }
+
+  function drawPortalHeader(portal, margin) {
+    const headerH = 50
+    box(0, 0, width, headerH, 'rgba(12,18,23,0.96)')
+
+    font(14, 800)
+    text('钢 铁 前 线', margin, 20, 15, COLORS.gold, 'left', 800)
+    text('STEEL FRONT', margin, 36, 7, COLORS.muted, 'left', 600)
+
+    const user = portal.user || (portal.account?.label && portal.account.label !== '登录'
+      ? { displayName: portal.account.label }
+      : null)
+    const accountW = user && user.displayName ? Math.min(220, width * 0.28) : 110
+    const accountX = width - margin - accountW
+    const compactStatus = compactPortalStatus(portal.status)
+    if (compactStatus) {
+      const statusW = Math.min(128, Math.max(60, compactStatus.length * 8 + 28))
+      const statusX = accountX - statusW - 8
+      const isErr = portal.error
+      drawTacticalPanel(statusX, 10, statusW, 30,
+        isErr ? 'rgba(70,20,18,0.92)' : 'rgba(18,27,33,0.92)',
+        isErr ? COLORS.axis : 'rgba(229,184,92,0.25)')
+      ctx.fillStyle = isErr ? COLORS.axis : COLORS.green
+      ctx.fillRect(statusX + 8, 22, 5, 5)
+      text(compactStatus, statusX + 20, 25, 8, isErr ? '#ffaaaa' : COLORS.textSub, 'left')
+    }
+
+    if (user && user.displayName) {
+      const chipW = accountW
+      const chipX = accountX
+      box(chipX, 10, chipW, 30, 'rgba(26,37,45,0.9)')
+
+      text(user.displayName, chipX + 10, 25, 9, COLORS.text, 'left', 700)
+
+      drawTacticalButton({ x: chipX + chipW - 54, y: 13, w: 48, h: 24 }, '退出', 'portal:logout', {
+        danger: true,
+        fontSize: 8,
+      })
+    } else {
+      drawTacticalButton({ x: accountX, y: 12, w: accountW, h: 26 }, '登录 / 注册', 'portal:login', {
+        primary: true,
+        fontSize: 8,
+      })
+    }
+  }
+
+  function drawPortalFooter(portal, margin) {
+    if (chatChannels.length) {
+      drawTacticalButton({ x: margin, y: height - 28, w: 76, h: 22 }, '聊天', 'chat-open', {
+        accent: COLORS.green,
+        fontSize: 8,
+      })
+    }
+  }
+
+  function getScreenType(portal) {
+    if (portal.screenType) return portal.screenType
+    const title = portal.title || ''
+    if (title.includes('账号') || title.includes('登录') || title.includes('注册')) return 'auth'
+    if (title.includes('创建房间')) return 'create'
+    if (title.includes('邀请码')) return 'invite'
+    if (title.includes('战绩排行')) return 'stats'
+    if (portal.profile || portal.room) return 'room'
+    return 'choice'
+  }
+
+  function drawChoiceScreen(portal, margin) {
+    const curMode = portal.selectedMode || selectedMode || 'classic'
+    const curTeam = portal.selectedTeam || 'allies'
+    const recs = portal.records || state.records || {}
+    const user = portal.user
+
+    const usableY = 62
+    const usableH = height - usableY - 34
+    const usableW = width - margin * 2
+    const leftW = Math.floor(usableW * 0.54)
+    const rightX = margin + leftW + 16
+    const rightW = usableW - leftW - 16
+
+    text('选择作战模式', margin, usableY + 10, 9, COLORS.gold, 'left', 700)
+
+    const cardW = Math.floor((leftW - 12) / 2)
+    const cardH = 144
+    const cardY = usableY + 24
+
+    const c1Selected = curMode === 'classic'
+    const c1Rect = { x: margin, y: cardY, w: cardW, h: cardH }
+    drawTacticalPanel(c1Rect.x, c1Rect.y, c1Rect.w, c1Rect.h,
+      c1Selected ? 'rgba(30,45,56,0.92)' : 'rgba(18,26,32,0.85)',
+      c1Selected ? COLORS.gold : (hoveredAction === 'portal:select-mode:classic' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)'))
+    text('经典对抗', c1Rect.x + 12, c1Rect.y + 22, 14, c1Selected ? COLORS.goldBright : COLORS.text, 'left', 800)
+    text('PVP / AI 战术对抗', c1Rect.x + 12, c1Rect.y + 40, 8, COLORS.muted, 'left')
+    text('控制关键要点，消灭敌方兵力', c1Rect.x + 12, c1Rect.y + 64, 8, COLORS.textSub, 'left')
+    text('率先达成设定击杀目标', c1Rect.x + 12, c1Rect.y + 78, 8, COLORS.textSub, 'left')
+
+    const recClassic = recs.classic || { matches: 0, wins: 0, kills: 0 }
+    text(`战绩: ${recClassic.matches || 0}场 | ${recClassic.wins || 0}胜 | ${recClassic.kills || 0}杀`, c1Rect.x + 12, c1Rect.y + 124, 8, c1Selected ? COLORS.gold : COLORS.muted, 'left')
+    hits.push({ ...c1Rect, action: 'portal:select-mode:classic' })
+
+    const c2Selected = curMode === 'zombie'
+    const c2Rect = { x: margin + cardW + 12, y: cardY, w: cardW, h: cardH }
+    drawTacticalPanel(c2Rect.x, c2Rect.y, c2Rect.w, c2Rect.h,
+      c2Selected ? 'rgba(30,45,56,0.92)' : 'rgba(18,26,32,0.85)',
+      c2Selected ? COLORS.gold : (hoveredAction === 'portal:select-mode:zombie' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)'))
+    text('丧尸围城', c2Rect.x + 12, c2Rect.y + 22, 14, c2Selected ? COLORS.goldBright : COLORS.text, 'left', 800)
+    text('PVE 极限阵地生存', c2Rect.x + 12, c2Rect.y + 40, 8, COLORS.muted, 'left')
+    text('坚守防线要塞', c2Rect.x + 12, c2Rect.y + 64, 8, COLORS.textSub, 'left')
+    text('抵抗源源不断的丧尸浪潮', c2Rect.x + 12, c2Rect.y + 78, 8, COLORS.textSub, 'left')
+
+    const recZombie = recs.zombie || { matches: 0, wins: 0, kills: 0 }
+    text(`战绩: ${recZombie.matches || 0}场 | ${recZombie.kills || 0}杀`, c2Rect.x + 12, c2Rect.y + 124, 8, c2Selected ? COLORS.gold : COLORS.muted, 'left')
+    hits.push({ ...c2Rect, action: 'portal:select-mode:zombie' })
+
+    const pracY = cardY + cardH + 14
+    const pracH = usableH - (pracY - usableY)
+    drawTacticalPanel(margin, pracY, leftW, pracH, 'rgba(18,26,32,0.85)', 'rgba(229,184,92,0.2)')
+    text('离线单人试炼', margin + 14, pracY + 20, 10, COLORS.gold, 'left', 700)
+    text('无需登陆注册，体验完整的兵种、武器与仿真AI对战', margin + 14, pracY + 38, 8, COLORS.textSub, 'left')
+
+    if (curMode === 'classic') {
+      const btnY = pracY + 54
+      const teamBtnW = 140
+      const startBtnW = leftW - 28 - teamBtnW - 10
+      drawTacticalButton({ x: margin + 14, y: btnY, w: teamBtnW, h: 36 },
+        `阵营: ${curTeam === 'allies' ? '盟军' : '轴心'}`, 'portal:team', {
+          accent: curTeam === 'allies' ? COLORS.ally : COLORS.axis,
+          fontSize: 8,
+        })
+      drawTacticalButton({ x: margin + 14 + teamBtnW + 10, y: btnY, w: startBtnW, h: 36 },
+        '开始单人对战', 'portal:offline-start', {
+          primary: true,
+          fontSize: 10,
+        })
+    } else {
+      drawTacticalButton({ x: margin + 14, y: pracY + 54, w: leftW - 28, h: 36 },
+        '开始单人对战', 'portal:offline-start', {
+          primary: true,
+          fontSize: 10,
+        })
+    }
+
+    text('联机作战大厅', rightX, usableY + 10, 9, COLORS.gold, 'left', 700)
+
+    const quickModeName = curMode === 'classic' ? '经典对抗' : '丧尸围城'
+    drawTacticalButton({ x: rightX, y: cardY, w: rightW, h: 44 },
+      `快速匹配  [ ${quickModeName} ]`, `portal:quick:${curMode}`, {
+        primary: true,
+        fontSize: 11,
+      })
+
+    const actY = cardY + 52
+    if (user) {
+      const actW = Math.floor((rightW - 12) / 3)
+      drawTacticalButton({ x: rightX, y: actY, w: actW, h: 32 }, '创建房间', 'portal:create', { fontSize: 8 })
+      drawTacticalButton({ x: rightX + actW + 6, y: actY, w: actW, h: 32 }, '邀请码', 'portal:invite', { fontSize: 8 })
+      drawTacticalButton({
+        x: rightX + (actW + 6) * 2,
+        y: actY,
+        w: rightW - (actW + 6) * 2,
+        h: 32,
+      }, '排行榜', 'portal:stats', { fontSize: 8 })
+    } else {
+      drawTacticalButton({ x: rightX, y: actY, w: rightW, h: 32 }, '登录账号解锁联机建房与全服排行', 'portal:login', {
+        accent: COLORS.gold,
+        fontSize: 8,
+      })
+    }
+
+    const roomY = actY + 40
+    const roomH = usableH - (roomY - usableY)
+    drawTacticalPanel(rightX, roomY, rightW, roomH, 'rgba(18,26,32,0.85)', 'rgba(229,184,92,0.18)')
+    text('公开房间列表', rightX + 14, roomY + 18, 9, COLORS.gold, 'left', 700)
+
+    const roomRows = (portal.rooms || []).map(r => ({
+      label: `${r.name}  [${r.modeId === 'classic' ? '经典' : '丧尸'}]  ${r.players}/${r.capacity}`,
+      action: `join:${r.id}`,
+      actionLabel: '加入',
+    }))
+
+    if (!roomRows.length && portal.rows) {
+      for (const row of portal.rows) {
+        if (row.action && row.action.startsWith('join:')) {
+          roomRows.push(row)
+        }
+      }
+    }
+
+    const listY = roomY + 32
+    const listH = roomH - 40
+    const maxItems = Math.max(1, Math.floor(listH / 30))
+
+    if (roomRows.length > 0) {
+      roomRows.slice(0, maxItems).forEach((row, idx) => {
+        const itemY = listY + idx * 30
+        const itemRect = { x: rightX + 8, y: itemY, w: rightW - 16, h: 26 }
+        drawTacticalPanel(itemRect.x, itemRect.y, itemRect.w, itemRect.h,
+          idx % 2 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.2)', 'rgba(255,255,255,0.05)',
+          { x: itemRect.x, y: itemRect.y, w: 2, h: itemRect.h, fill: COLORS.ally })
+        text(row.label, itemRect.x + 8, itemRect.y + itemRect.h / 2, 8, COLORS.text)
+
+        const btnW = 50
+        drawTacticalButton({ x: itemRect.x + itemRect.w - btnW - 3, y: itemRect.y + 2, w: btnW, h: 22 },
+          '加入', `portal:${row.action}`, { primary: true, fontSize: 7 })
+      })
+    } else {
+      text('当前暂无公开房间', rightX + rightW / 2, roomY + roomH / 2 - 8, 9, COLORS.muted, 'center')
+      text('可随时【创建房间】或使用【快速匹配】', rightX + rightW / 2, roomY + roomH / 2 + 10, 8, COLORS.textSub, 'center')
+    }
+  }
+
+  function drawAuthScreen(portal, margin) {
+    const isRegister = portal.register ?? (portal.title?.includes('创建') || false)
+    const boxW = Math.min(400, width - 40)
+    const boxH = Math.min(370, height - 60)
+    const boxX = Math.round((width - boxW) / 2)
+    const boxY = Math.round((height - boxH) / 2)
+
+    drawTacticalPanel(boxX, boxY, boxW, boxH, 'rgba(16,23,29,0.96)', COLORS.gold)
+    text('战场终端账号', boxX + 20, boxY + 22, 11, COLORS.gold, 'left', 800)
+
+    const tabW = Math.floor((boxW - 48) / 2)
+    drawTacticalButton({ x: boxX + 20, y: boxY + 42, w: tabW, h: 32 },
+      '账号登录', 'portal:auth-toggle', { selected: !isRegister, fontSize: 9 })
+    drawTacticalButton({ x: boxX + 20 + tabW + 8, y: boxY + 42, w: tabW, h: 32 },
+      '创建账号', 'portal:auth-toggle', { selected: isRegister, fontSize: 9 })
+
+    let cursorY = boxY + 90
+    for (const field of portal.fields || []) {
+      text(field.label, boxX + 24, cursorY, 8, COLORS.gold, 'left', 700)
+      const inputRect = { x: boxX + 24, y: cursorY + 12, w: boxW - 48, h: 36 }
+      drawTacticalPanel(inputRect.x, inputRect.y, inputRect.w, inputRect.h,
+        activePortalField === field.id ? '#1e2b34' : '#141d24',
+        activePortalField === field.id ? COLORS.gold : 'rgba(229,184,92,0.3)')
+      showPortalInput(field, inputRect)
+      cursorY += 62
+    }
+
+    drawTacticalButton({ x: boxX + 24, y: boxY + boxH - 86, w: boxW - 48, h: 38 },
+      isRegister ? '注册并登录' : '立即登录', 'portal:auth-submit', { primary: true, fontSize: 10 })
+    drawTacticalButton({ x: boxX + 24, y: boxY + boxH - 42, w: boxW - 48, h: 28 },
+      '返回', 'portal:choice', { fontSize: 8 })
+  }
+
+  function drawCreateScreen(portal, margin) {
+    const boxW = Math.min(420, width - 40)
+    const boxH = Math.min(340, height - 60)
+    const boxX = Math.round((width - boxW) / 2)
+    const boxY = Math.round((height - boxH) / 2)
+
+    drawTacticalPanel(boxX, boxY, boxW, boxH, 'rgba(16,23,29,0.96)', COLORS.gold)
+    text('创建作战房间', boxX + 24, boxY + 24, 12, COLORS.gold, 'left', 800)
+
+    let cursorY = boxY + 54
+    for (const field of portal.fields || []) {
+      text(field.label, boxX + 24, cursorY, 8, COLORS.gold, 'left', 700)
+      const inputRect = { x: boxX + 24, y: cursorY + 12, w: boxW - 48, h: 36 }
+      drawTacticalPanel(inputRect.x, inputRect.y, inputRect.w, inputRect.h,
+        activePortalField === field.id ? '#1e2b34' : '#141d24',
+        activePortalField === field.id ? COLORS.gold : 'rgba(229,184,92,0.3)')
+      showPortalInput(field, inputRect)
+      cursorY += 62
+    }
+
+    const modeBtn = portal.actions?.find(a => a.id === 'mode')
+    if (modeBtn) {
+      drawTacticalButton({ x: boxX + 24, y: cursorY, w: boxW - 48, h: 36 },
+        modeBtn.label, 'portal:mode', { accent: COLORS.ally, fontSize: 9 })
+      cursorY += 46
+    }
+
+    const visBtn = portal.actions?.find(a => a.id === 'visibility')
+    if (visBtn) {
+      drawTacticalButton({ x: boxX + 24, y: cursorY, w: boxW - 48, h: 36 },
+        visBtn.label, 'portal:visibility', { accent: COLORS.gold, fontSize: 9 })
+      cursorY += 46
+    }
+
+    drawTacticalButton({ x: boxX + 24, y: boxY + boxH - 86, w: boxW - 48, h: 38 },
+      '确认创建房间', 'portal:create-submit', { primary: true, fontSize: 10 })
+    drawTacticalButton({ x: boxX + 24, y: boxY + boxH - 42, w: boxW - 48, h: 28 },
+      '返回大厅', 'portal:lobby', { fontSize: 8 })
+  }
+
+  function drawInviteScreen(portal, margin) {
+    const boxW = Math.min(380, width - 40)
+    const boxH = Math.min(260, height - 60)
+    const boxX = Math.round((width - boxW) / 2)
+    const boxY = Math.round((height - boxH) / 2)
+
+    drawTacticalPanel(boxX, boxY, boxW, boxH, 'rgba(16,23,29,0.96)', COLORS.gold)
+    text('邀请码加入房间', boxX + 24, boxY + 24, 11, COLORS.gold, 'left', 800)
+
+    let cursorY = boxY + 58
+    for (const field of portal.fields || []) {
+      text(field.label, boxX + 24, cursorY, 8, COLORS.gold, 'left', 700)
+      const inputRect = { x: boxX + 24, y: cursorY + 12, w: boxW - 48, h: 40 }
+      drawTacticalPanel(inputRect.x, inputRect.y, inputRect.w, inputRect.h,
+        activePortalField === field.id ? '#1e2b34' : '#141d24',
+        activePortalField === field.id ? COLORS.gold : 'rgba(229,184,92,0.3)')
+      showPortalInput(field, inputRect)
+    }
+
+    drawTacticalButton({ x: boxX + 24, y: boxY + boxH - 86, w: boxW - 48, h: 38 },
+      '加入房间', 'portal:invite-submit', { primary: true, fontSize: 10 })
+    drawTacticalButton({ x: boxX + 24, y: boxY + boxH - 42, w: boxW - 48, h: 28 },
+      '返回大厅', 'portal:lobby', { fontSize: 8 })
+  }
+
+  function drawRoomScreen(portal, margin) {
+    const rows = portal.rows || []
+    const actions = portal.actions || []
+
+    const usableY = 62
+    const usableW = width - margin * 2
+    const listY = usableY + 48
+    const actionY = height - 68
+    const listH = actionY - listY - 12
+
+    drawTacticalPanel(margin, usableY, usableW, 40, 'rgba(18,27,34,0.92)', 'rgba(229,184,92,0.3)')
+    text(`房间: ${portal.title || '作战房间'}`, margin + 14, usableY + 20, 12, COLORS.goldBright, 'left', 800)
+    if (portal.profile) {
+      text(portal.profile, margin + usableW - 14, usableY + 20, 8, COLORS.textSub, 'right')
+    }
+
+    if (rows.some(r => r.accent === COLORS.ally || r.label.includes('[盟军]') || r.label.includes('[轴心]'))) {
+      const colW = Math.floor((usableW - 16) / 2)
+
+      drawTacticalPanel(margin, listY, colW, listH, 'rgba(14,23,28,0.9)', COLORS.ally,
+        { x: margin, y: listY, w: colW, h: 24, fill: COLORS.ally })
+      text('盟军小队', margin + 12, listY + 12, 9, '#0a0e11', 'left', 800)
+
+      const axisX = margin + colW + 16
+      drawTacticalPanel(axisX, listY, colW, listH, 'rgba(24,16,18,0.9)', COLORS.axis,
+        { x: axisX, y: listY, w: colW, h: 24, fill: COLORS.axis })
+      text('轴心小队', axisX + 12, listY + 12, 9, '#0a0e11', 'left', 800)
+
+      let allyIdx = 0
+      let axisIdx = 0
+      rows.forEach(r => {
+        const isAlly = r.accent === COLORS.ally || r.label.includes('[盟军]')
+        const colX = isAlly ? margin : axisX
+        const idx = isAlly ? allyIdx++ : axisIdx++
+        const itemY = listY + 30 + idx * 32
+        const itemW = colW - 16
+        if (itemY + 28 <= listY + listH) {
+          box(colX + 8, itemY, itemW, 26, 'rgba(255,255,255,0.04)')
+          text(r.label.replace(/\[盟军]\s*|\[轴心]\s*/, ''), colX + 16, itemY + 13, 8, COLORS.text)
+
+          if (r.action) {
+            drawTacticalButton({ x: colX + 8 + itemW - 50, y: itemY + 2, w: 46, h: 22 },
+              '移除', `portal:${r.action}`, { danger: true, fontSize: 7 })
+          }
+        }
+      })
+    } else {
+      drawTacticalPanel(margin, listY, usableW, listH, 'rgba(16,24,30,0.9)', COLORS.gold)
+      text('房间战士列表', margin + 14, listY + 18, 10, COLORS.gold, 'left', 700)
+
+      rows.forEach((r, idx) => {
+        const itemY = listY + 32 + idx * 32
+        if (itemY + 28 <= listY + listH) {
+          box(margin + 12, itemY, usableW - 24, 26, 'rgba(255,255,255,0.04)')
+          text(r.label, margin + 20, itemY + 13, 9, COLORS.text)
+
+          if (r.action) {
+            drawTacticalButton({ x: margin + usableW - 70, y: itemY + 2, w: 56, h: 22 },
+              '移除', `portal:${r.action}`, { danger: true, fontSize: 7 })
+          }
+        }
+      })
+    }
+
+    const changeTeamBtn = actions.find(a => a.id === 'change-team')
+    const startBtn = actions.find(a => a.id === 'start-match')
+    const leaveBtn = actions.find(a => a.id === 'leave-room')
+
+    if (changeTeamBtn) {
+      drawTacticalButton({ x: margin, y: actionY, w: 180, h: 34 },
+        '切换阵营', 'portal:change-team', { accent: changeTeamBtn.accent || COLORS.ally, fontSize: 9 })
+    }
+
+    if (startBtn) {
+      drawTacticalButton({ x: Math.round(width / 2 - 100), y: actionY, w: 200, h: 34 },
+        '开始游戏', 'portal:start-match', { primary: true, fontSize: 10 })
+    }
+
+    if (leaveBtn) {
+      drawTacticalButton({ x: width - margin - 120, y: actionY, w: 120, h: 34 },
+        '退出房间', 'portal:leave-room', { danger: true, fontSize: 9 })
+    }
+  }
+
+  function drawStatsScreen(portal, margin) {
+    const boxW = Math.min(680, width - 40)
+    const boxH = Math.min(440, height - 50)
+    const boxX = Math.round((width - boxW) / 2)
+    const boxY = Math.round((height - boxH) / 2)
+
+    drawTacticalPanel(boxX, boxY, boxW, boxH, 'rgba(16,23,29,0.96)', COLORS.gold)
+    text('战场排行榜 & 个人战绩', boxX + 24, boxY + 24, 12, COLORS.gold, 'left', 800)
+
+    const modeBtn = portal.actions?.find(a => a.id === 'leaderboard-mode')
+    if (modeBtn) {
+      drawTacticalButton({ x: boxX + boxW - 164, y: boxY + 12, w: 140, h: 28 },
+        modeBtn.label, 'portal:leaderboard-mode', { accent: COLORS.gold, fontSize: 8 })
+    }
+
+    const rows = portal.profileRows || portal.rows || []
+    const listY = boxY + 50
+    const listH = boxH - 100
+    const maxItems = Math.max(1, Math.floor(listH / 30))
+
+    rows.slice(0, maxItems).forEach((row, idx) => {
+      const itemY = listY + idx * 30
+      const label = typeof row === 'string' ? row : row.label
+      const rank = typeof row === 'object' && Number.isInteger(row.rank) ? row.rank : null
+
+      box(boxX + 16, itemY, boxW - 32, 26, idx % 2 === 0 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.15)')
+
+      let rankColor = COLORS.text
+      let rankPrefix = ''
+      if (rank === 1) {
+        rankColor = COLORS.goldBright
+        rankPrefix = '[1] '
+      } else if (rank === 2) {
+        rankColor = '#d0d0d0'
+        rankPrefix = '[2] '
+      } else if (rank === 3) {
+        rankColor = '#cd7f32'
+        rankPrefix = '[3] '
+      } else if (rank) {
+        rankColor = COLORS.gold
+        rankPrefix = `[${rank}] `
+      }
+
+      text(`${rankPrefix}${label}`, boxX + 20, itemY + 13, 8, rankColor)
+    })
+
+    drawTacticalButton({ x: boxX + 24, y: boxY + boxH - 42, w: boxW - 48, h: 30 },
+      '返回大厅', 'portal:lobby', { fontSize: 8 })
   }
 
   function drawPortal() {
-    battlefieldBackdrop()
+    if (!portal) return
+    drawMainBackdrop()
     const margin = portalMargin()
-    text('钢 铁 前 线', margin, 35, 22, COLORS.text, 'left', 800)
-    text('STEEL FRONT  /  FIELD OPERATIONS', margin, 59, 7, COLORS.gold, 'left', 700)
-    text('作战终端  01', width - margin, 36, 8, COLORS.muted, 'right', 700)
+    drawPortalHeader(portal, margin)
 
-    const x = margin
-    const y = 78
-    const panelW = width - margin * 2
-    const panelH = height - y - 34
-    box(x, y, panelW, panelH, 'rgba(13,18,18,.92)')
-    ctx.strokeStyle = 'rgba(222,205,157,.24)'
-    ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1)
-    const pad = 24
-    const titleY = y + 30
-    text(portal.title, x + pad, titleY, 20, COLORS.text, 'left', 800)
-    if (portal.account) {
-      if (portal.account.logout) {
-        const logoutRect = { x: x + panelW - pad - 54, y: titleY - 12, w: 54, h: 24 }
-        button(logoutRect, '退出', 'portal:logout', false, 'rgba(255,255,255,.04)', 7, COLORS.axis)
-        text(portal.account.label, logoutRect.x - 10, titleY, 8, COLORS.ally, 'right', 700)
-      } else {
-        const rect = { x: x + panelW - pad - 62, y: titleY - 12, w: 62, h: 24 }
-        button(rect, '登录', 'portal:login', false, 'rgba(255,255,255,.04)', 7, COLORS.gold)
-      }
-    } else if (portal.profile) {
-      text(portal.profile, x + panelW - pad, titleY, 9, COLORS.ally, 'right', 700)
-    }
-    ctx.fillStyle = 'rgba(216,180,95,.35)'
-    ctx.fillRect(x + pad, y + 65, panelW - pad * 2, 1)
+    const type = getScreenType(portal)
 
-    const contentX = x + pad
-    const contentY = y + 80
-    const actionW = Math.min(250, panelW * 0.3)
-    const contentW = panelW - pad * 3 - actionW
-    const actionX = x + panelW - pad - actionW
-    let cursorY = contentY
-
-    for (const field of portal.fields || []) {
-      text(field.label, contentX, cursorY, 8, COLORS.gold, 'left', 700)
-      const rect = { x: contentX, y: cursorY + 12, w: contentW, h: 38 }
-      box(rect.x, rect.y, rect.w, rect.h, activePortalField === field.id ? '#303a38' : '#202726')
-      showPortalInput(field, rect)
-      cursorY += 64
+    if (type === 'choice') {
+      drawChoiceScreen(portal, margin)
+    } else if (type === 'auth') {
+      drawAuthScreen(portal, margin)
+    } else if (type === 'create') {
+      drawCreateScreen(portal, margin)
+    } else if (type === 'invite') {
+      drawInviteScreen(portal, margin)
+    } else if (type === 'room') {
+      drawRoomScreen(portal, margin)
+    } else if (type === 'stats') {
+      drawStatsScreen(portal, margin)
     }
 
-    const rows = portal.rows || []
-    const rowsBottom = y + panelH - pad
-    const visibleRows = Math.max(0, Math.floor((rowsBottom - cursorY) / 34))
-    rows.slice(0, visibleRows).forEach((row, index) => {
-      const rowY = cursorY + index * 34
-      if (!row.section) {
-        box(contentX, rowY, contentW, 29, index % 2 ? 'rgba(255,255,255,.035)' : '#202726')
-        ctx.fillStyle = row.accent || (row.muted ? COLORS.line : (index === 0 ? COLORS.gold : COLORS.ally))
-        ctx.fillRect(contentX, rowY, 2, 29)
-      }
-      const reserve = row.action ? 76 : 12
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(contentX + 10, rowY, contentW - reserve - 6, 29)
-      ctx.clip()
-      text(row.label, contentX + 11, rowY + 15, 8, row.muted ? COLORS.muted : COLORS.text)
-      ctx.restore()
-      if (row.action) button({ x: contentX + contentW - 70, y: rowY + 5, w: 62, h: 19 }, row.actionLabel || '选择', `portal:${row.action}`, row.selected, '#303a38', 7)
-    })
-    if (rows.length > visibleRows) text(`另有 ${rows.length - visibleRows} 项未显示`, contentX, rowsBottom - 5, 7, COLORS.muted)
-
-    const actions = portal.actions || []
-    let actionY = contentY
-    for (let index = 0; index < actions.length; index++) {
-      const entry = actions[index]
-      const paired = entry.paired && actions[index + 1]?.paired
-      if (paired) {
-        const gap = 7
-        const itemW = (actionW - gap) / 2
-        for (let pairIndex = 0; pairIndex < 2; pairIndex++) {
-          const pairEntry = actions[index + pairIndex]
-          const rect = { x: actionX + pairIndex * (itemW + gap), y: actionY, w: itemW, h: 34 }
-          button(rect, pairEntry.label, `portal:${pairEntry.id}`, pairEntry.primary,
-            pairEntry.danger ? '#4b2927' : '#252d2c', 8, pairEntry.accent || (pairEntry.danger ? COLORS.axis : COLORS.ally))
-        }
-        index++
-      } else {
-        const rect = { x: actionX, y: actionY, w: actionW, h: 34 }
-        button(rect, entry.label, `portal:${entry.id}`, entry.primary,
-          entry.danger ? '#4b2927' : '#252d2c', 9, entry.accent || (entry.danger ? COLORS.axis : COLORS.ally))
-      }
-      actionY += 42
-    }
-
-    if (chatChannels.length) {
-      button({ x: margin, y: height - 29, w: 80, h: 20 }, '聊天', 'chat-open', false,
-        'rgba(13,18,18,.82)', 8, COLORS.green)
-    }
-    if (portal.status) {
-      const statusW = Math.min(width - margin * 2, 420)
-      const statusX = width - margin - statusW
-      box(statusX, height - 29, statusW, 20, portal.error ? 'rgba(86,28,25,.9)' : 'rgba(13,18,18,.82)')
-      text(portal.status, statusX + 9, height - 19, 7, portal.error ? '#ffaaa0' : COLORS.muted)
-    }
+    drawPortalFooter(portal, margin)
   }
 
   function drawMenu() {
-    backdrop('#c7cec1')
-    const left = Math.max(28, width * 0.06)
-    text('STEEL FRONT', left, 52, 27, COLORS.ink, 'left', 800)
-    text('作战终端', left, 78, 9, '#58666a')
-    const cardW = Math.min(300, (width * 0.52 - 24) / Math.max(1, modeDefinitions.length))
-    modeDefinitions.forEach((definition, index) => {
-      const rect = { x: left + index * (cardW + 10), y: 108, w: cardW, h: 78 }
-      const selected = definition.id === selectedMode
-      box(rect.x, rect.y, rect.w, rect.h, selected ? '#8fa196' : COLORS.panel)
-      ctx.fillStyle = selected ? COLORS.gold : COLORS.axis
-      ctx.fillRect(rect.x, rect.y, 3, rect.h)
-      text(definition.name, rect.x + 14, rect.y + 23, 15, selected ? COLORS.ink : COLORS.text, 'left', 700)
-      text(definition.description, rect.x + 14, rect.y + 51, 9, selected ? '#303b38' : COLORS.muted)
-      hits.push({ ...rect, action: 'mode', value: definition.id })
-    })
-    button({ x: left, y: 202, w: Math.min(300, width * 0.34), h: 38 }, '进入战场', 'start', true)
-    drawSlider(left, 286, Math.min(300, width * 0.34), '总音量', 'volume', state.settings.masterVolume * 100, 0, 100)
-    drawSlider(left, 338, Math.min(300, width * 0.34), '鼠标灵敏度', 'sensitivity', state.settings.mouseSensitivity * 100, 20, 200)
-
-    const rx = Math.max(width * 0.58, left + 360)
-    const rw = width - rx - left
-    box(rx, 42, rw, height - 84, COLORS.panel)
-    ctx.fillStyle = COLORS.gold
-    ctx.fillRect(rx, 42, 3, height - 84)
-    text('战绩档案', rx + 18, 69, 15, COLORS.gold, 'left', 700)
-    records.slice(0, 9).forEach(([label, value], index) => {
-      const y = 105 + index * 36
-      if (index % 2 === 0) {
-        ctx.fillStyle = 'rgba(255,255,255,.04)'
-        ctx.fillRect(rx + 10, y - 14, rw - 20, 28)
-      }
-      text(label, rx + 18, y, 9, COLORS.muted)
-      text(value, rx + rw - 18, y, 12, COLORS.text, 'right', 700)
-    })
-    text('WASD 移动  ·  鼠标射击  ·  TAB 战况  ·  ESC 暂停', left, height - 24, 8, '#4b585b')
+    drawPortal()
   }
 
   function drawSlider(x, y, w, label, action, value, min, max, dark = false) {
@@ -814,17 +1215,9 @@ function createCanvasUi({ state, deploy, config }) {
     return { x: (x / innerWidth) * width, y: (y / innerHeight) * height, w: (w / innerWidth) * width, h: (h / innerHeight) * height }
   }
 
-  function pixelPanel(rect, fill, notch = 4) {
+  function pixelPanel(rect, fill) {
     ctx.fillStyle = fill
-    ctx.beginPath()
-    ctx.moveTo(rect.x + notch, rect.y)
-    ctx.lineTo(rect.x + rect.w, rect.y)
-    ctx.lineTo(rect.x + rect.w, rect.y + rect.h - notch)
-    ctx.lineTo(rect.x + rect.w - notch, rect.y + rect.h)
-    ctx.lineTo(rect.x, rect.y + rect.h)
-    ctx.lineTo(rect.x, rect.y + notch)
-    ctx.closePath()
-    ctx.fill()
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
   }
 
   function drawTouchButton(action, rect, accent, hitAction = `touch:${action}`) {
@@ -832,9 +1225,8 @@ function createCanvasUi({ state, deploy, config }) {
     const fill = active
       ? COLORS.gold
       : action === 'fire' ? 'rgba(112,43,40,.94)' : 'rgba(18,24,27,.9)'
-    pixelPanel(rect, fill, Math.min(5, rect.w * 0.1))
-    ctx.fillStyle = active ? COLORS.ink : accent
-    ctx.fillRect(rect.x + 5, rect.y + rect.h - 3, rect.w - 10, 3)
+    ctx.fillStyle = fill
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
     const iconColor = active ? COLORS.ink : action === 'fire' ? COLORS.text : accent
     const labelColor = active ? COLORS.ink : COLORS.text
     if (horizontalTouchActions.has(action)) {
@@ -849,13 +1241,13 @@ function createCanvasUi({ state, deploy, config }) {
 
   function drawTouch() {
     const stick = touchRect(16, innerHeight - 196, 132, 132)
-    pixelPanel(stick, 'rgba(18,24,27,.32)', 8)
+    pixelPanel(stick, 'rgba(18,24,27,.32)')
     ctx.fillStyle = 'rgba(102,194,206,.18)'
     ctx.fillRect(stick.x + stick.w / 2 - 1, stick.y + 14, 2, stick.h - 28)
     ctx.fillRect(stick.x + 14, stick.y + stick.h / 2 - 1, stick.w - 28, 2)
     const kx = stick.x + stick.w / 2 + (stickOffset.x / innerWidth) * width
     const ky = stick.y + stick.h / 2 + (stickOffset.y / innerHeight) * height
-    pixelPanel({ x: kx - 20, y: ky - 20, w: 40, h: 40 }, 'rgba(102,194,206,.84)', 5)
+    pixelPanel({ x: kx - 20, y: ky - 20, w: 40, h: 40 }, 'rgba(102,194,206,.84)')
     ctx.fillStyle = COLORS.ink
     ctx.fillRect(kx - 5, ky - 1, 10, 2)
     ctx.fillRect(kx - 1, ky - 5, 2, 10)
@@ -925,8 +1317,9 @@ function createCanvasUi({ state, deploy, config }) {
       const selected = channel === chatChannel
       const tabW = 52
       const action = `chat-channel:${channel}`
-      if (selected) box(tabX, y + 10, tabW, 22, '#465450')
-      else if (hoveredAction === action) box(tabX, y + 10, tabW, 22, 'rgba(255,255,255,.08)')
+      if (selected) {
+        box(tabX, y + 10, tabW, 22, '#465450')
+      } else if (hoveredAction === action) box(tabX, y + 10, tabW, 22, 'rgba(255,255,255,.08)')
       text(labels[channel], tabX + tabW / 2, y + 21, 8, selected ? COLORS.gold : COLORS.muted, 'center', 700)
       hits.push({ x: tabX, y: y + 10, w: tabW, h: 22, action })
       tabX += tabW + 4
@@ -1228,19 +1621,6 @@ function createCanvasUi({ state, deploy, config }) {
       endData = null
       dirty = true
     },
-    setModes(definitions, selected) {
-      modeDefinitions = definitions
-      selectedMode = selected
-      dirty = true
-    },
-    setSelectedMode(id) {
-      selectedMode = id
-      dirty = true
-    },
-    setRecords(entries) {
-      records = entries
-      dirty = true
-    },
     setPaused(value, stopsMatch = true) {
       paused = value
       pauseStopsMatch = stopsMatch
@@ -1440,7 +1820,12 @@ export function createClient() {
 
   function render() {
     syncChatContext()
-    const common = { status, error: statusError }
+    const common = {
+      status,
+      error: statusError,
+      user,
+      account: user ? { label: user.displayName, logout: true } : { label: '登录' },
+    }
     if (screen === 'choice') {
       const modeRows = MODE_DEFINITIONS.map(mode => {
         const records = state.records[mode.id]
@@ -1458,18 +1843,23 @@ export function createClient() {
       })) : []
       ui.showPortal({
         ...common,
+        screenType: 'choice',
+        selectedMode,
+        selectedTeam,
+        user,
+        rooms,
+        records: state.records,
         title: '作战部署',
-        account: user
-          ? { label: user.displayName, logout: true }
-          : { label: '登录' },
         rows: modeRows.concat(user ? [
           { label: '联机房间', muted: true, section: true },
           ...(roomRows.length ? roomRows : [{ label: '暂无公开房间', muted: true }]),
         ] : []),
         actions: [
           ...(selectedMode === 'classic' ? [
-            { id: 'team', label: `单人：${selectedTeam === 'allies' ? '盟军' : '轴心'}`, paired: true,
-              accent: selectedTeam === 'allies' ? COLORS.ally : COLORS.axis },
+            {
+              id: 'team', label: `单人：${selectedTeam === 'allies' ? '盟军' : '轴心'}`, paired: true,
+              accent: selectedTeam === 'allies' ? COLORS.ally : COLORS.axis,
+            },
             { id: 'offline-start', label: '单人作战', primary: true, paired: true },
           ] : [{ id: 'offline-start', label: '单人作战', primary: true }]),
           { id: `quick:${selectedMode}`, label: '快速匹配' },
@@ -1479,7 +1869,11 @@ export function createClient() {
       })
     } else if (screen === 'auth') {
       ui.showPortal({
-        ...common, title: register ? '创建账号' : '账号登录', focus: 'username',
+        ...common,
+        screenType: 'auth',
+        register,
+        title: register ? '创建账号' : '账号登录',
+        focus: 'username',
         fields: [field('username', '用户名', '3-20 位字母、数字或下划线', false, 20),
           ...(register ? [field('displayName', '战场昵称', '最多 16 个字符', false, 16)] : []),
           field('password', '密码', register ? '至少 10 位' : '账号密码', true)],
@@ -1489,15 +1883,22 @@ export function createClient() {
     } else if (screen === 'create') {
       ui.showPortal({
         ...common,
+        screenType: 'create',
+        selectedMode,
+        visibility,
+        user,
         title: '创建房间',
-        fields: [field('roomName', '房间名称', `${user.displayName}的房间`, false, 20)],
+        fields: [field('roomName', '房间名称', `${user?.displayName || '玩家'}的房间`, false, 20)],
         actions: [{ id: 'mode', label: selectedMode === 'classic' ? '模式：经典' : '模式：丧尸' },
           { id: 'visibility', label: visibility === 'public' ? '公开房' : '私密房' },
           { id: 'create-submit', label: '创建', primary: true }, { id: 'lobby', label: '返回大厅' }],
       })
     } else if (screen === 'invite') {
       ui.showPortal({
-        ...common, title: '邀请码加入', fields: [field('invite', '6 位邀请码', '例如 A3H7KP', false, 6)],
+        ...common,
+        screenType: 'invite',
+        title: '邀请码加入',
+        fields: [field('invite', '6 位邀请码', '例如 A3H7KP', false, 6)],
         actions: [{ id: 'invite-submit', label: '加入房间', primary: true }, { id: 'lobby', label: '返回大厅' }],
       })
     } else if (screen === 'room') {
@@ -1505,8 +1906,11 @@ export function createClient() {
     } else if (screen === 'stats') {
       ui.showPortal({
         ...common,
+        screenType: 'stats',
+        leaderboardMode,
+        profileRows,
         title: `战绩排行　${leaderboardMode === 'classic' ? '经典' : '丧尸'}`,
-        rows: profileRows.map(label => ({ label })),
+        rows: profileRows,
         actions: [{ id: 'leaderboard-mode', label: leaderboardMode === 'classic' ? '丧尸' : '经典' },
           { id: 'lobby', label: '返回' }],
       })
@@ -1519,6 +1923,9 @@ export function createClient() {
     const ownMember = room.members.find(member => member.userId === user.id)
     ui.showPortal({
       ...common,
+      screenType: 'room',
+      room,
+      user,
       title: room.name,
       profile: `${user.displayName}　${room.modeId === 'classic' ? '经典' : '丧尸'}　${room.status}${room.invite ? `　${room.invite}` : ''}`,
       rows: [...room.members]
@@ -1586,12 +1993,18 @@ export function createClient() {
         api('/api/multiplayer/profile'),
         api(`/api/multiplayer/leaderboard?mode=${leaderboardMode}`),
       ])
+      const waveLabel = row => leaderboardMode === 'zombie' ? `　最高波次 ${row.highest_wave ?? 0}` : ''
+      const statLabel = row => `${row.matches ?? 0} 场　${row.wins ?? 0} 胜　${row.losses ?? 0} 负　${row.kills ?? 0} 击杀　${row.deaths ?? 0} 阵亡${waveLabel(row)}`
       const ownRows = profile.stats
         .filter(row => row.mode === leaderboardMode)
-        .map(row => `我的　${row.scope === 'ranked' ? '排位' : '全部'}　${row.matches} 场　${row.wins} 胜　${row.kills} 击杀　${row.deaths} 阵亡　波次 ${row.highest_wave}`)
-      const rankRows = leaderboard.entries.map((row, index) => `${index + 1}.　${row.display_name}　${row.wins} 胜　${row.kills} 击杀　${row.deaths} 阵亡　波次 ${row.highest_wave}`)
+        .sort((a, b) => Number(b.scope === 'ranked') - Number(a.scope === 'ranked'))
+        .map(row => ({ label: `我的　${row.scope === 'ranked' ? '排位' : '全部'}　${statLabel(row)}` }))
+      const rankRows = leaderboard.entries.map((row, index) => ({
+        rank: index + 1,
+        label: `${row.display_name ?? row.displayName ?? '未知玩家'}　${statLabel(row)}`,
+      }))
       profileRows = ownRows.concat(rankRows)
-      if (!profileRows.length) profileRows = ['暂无数据']
+      if (!profileRows.length) profileRows = [{ label: '暂无数据' }]
       screen = 'stats'
       render()
     } catch (error) { setStatus(error.message, true) }
@@ -1714,9 +2127,13 @@ export function createClient() {
     onPortalAction: action,
     onPortalBack() {
       if (screen === 'choice') return
-      if (screen === 'room') action('leave-room')
-      else if (['create', 'invite', 'stats'].includes(screen)) action('lobby')
-      else action('choice')
+      if (screen === 'room') {
+        action('leave-room')
+      } else if (['create', 'invite', 'stats'].includes(screen)) {
+        action('lobby')
+      } else {
+        action('choice')
+      }
     },
     onPortalSubmit: () => screen === 'auth' ? submitAuth() : null,
     onChatToggle(value) { game.setChatOpen(value) },
@@ -1724,7 +2141,7 @@ export function createClient() {
       networkSession.send({ type: 'chat', channel, text })
     },
     onPortalInput(id, value) {
-      fields[id] = value;
+      fields[id] = value
       render()
     },
     onResume: () => game.togglePause(), onQuit: () => game.leave(),
@@ -1737,6 +2154,6 @@ export function createClient() {
     start() {
       checkSession()
       game.animate()
-    }
+    },
   }
 }
