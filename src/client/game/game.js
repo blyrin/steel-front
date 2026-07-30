@@ -286,7 +286,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
     return latest?.player?.id === id ? latest.player : latest?.actors.find(actor => actor.id === id)
   }
 
-  function actorName(id) { return snapshotActor(id)?.name || '未知' }
+  function actorName(id) { return snapshotActor(id)?.name || '-' }
 
   function handleEvents(events) {
     for (const event of events) {
@@ -477,7 +477,7 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
           audio.killConfirm(notice.kind)
         }
         if (event.victimId === player.id) {
-          ui.showDeath(event.attackerId ? actorName(event.attackerId) : '未知')
+          ui.showDeath(event.attackerId ? actorName(event.attackerId) : '-')
         }
         if (event.victimId === player.id) {
           player.alive = false

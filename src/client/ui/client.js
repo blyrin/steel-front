@@ -2001,7 +2001,7 @@ export function createClient() {
         .map(row => ({ label: `我的　${row.scope === 'ranked' ? '排位' : '全部'}　${statLabel(row)}` }))
       const rankRows = leaderboard.entries.map((row, index) => ({
         rank: index + 1,
-        label: `${row.display_name ?? row.displayName ?? '未知玩家'}　${statLabel(row)}`,
+        label: `${row.display_name ?? row.displayName ?? '-'}　${statLabel(row)}`,
       }))
       profileRows = ownRows.concat(rankRows)
       if (!profileRows.length) profileRows = [{ label: '暂无数据' }]
