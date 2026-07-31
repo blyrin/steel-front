@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { MODE_DEFINITIONS, rayHitObstacle } from '#simulation'
+import { CFG as SIM_CFG, MODE_DEFINITIONS, rayHitObstacle } from '#simulation'
 import { CFG } from '../game/config.js'
 import { createGame } from '../game/game.js'
 import { createDeployState, createGameState } from '../game/state.js'
@@ -404,7 +404,7 @@ function createCanvasUi({ state, deploy, config }) {
     text('选择作战模式', margin, usableY + 10, 9, COLORS.gold, 'left', 700)
 
     const cardW = Math.floor((leftW - 12) / 2)
-    const cardH = 144
+    const cardH = 112
     const cardY = usableY + 24
 
     const c1Selected = curMode === 'classic'
@@ -418,7 +418,7 @@ function createCanvasUi({ state, deploy, config }) {
     text('率先达成设定击杀目标', c1Rect.x + 12, c1Rect.y + 78, 8, COLORS.textSub, 'left')
 
     const recClassic = recs.classic || { matches: 0, wins: 0, kills: 0 }
-    text(`战绩: ${recClassic.matches || 0}场 | ${recClassic.wins || 0}胜 | ${recClassic.kills || 0}杀`, c1Rect.x + 12, c1Rect.y + 124, 8, c1Selected ? COLORS.gold : COLORS.muted, 'left')
+    text(`战绩: ${recClassic.matches || 0}场 | ${recClassic.wins || 0}胜 | ${recClassic.kills || 0}杀`, c1Rect.x + 12, c1Rect.y + 96, 8, c1Selected ? COLORS.gold : COLORS.muted, 'left')
     hits.push({ ...c1Rect, action: 'portal:select-mode:classic' })
 
     const c2Selected = curMode === 'zombie'
@@ -432,31 +432,54 @@ function createCanvasUi({ state, deploy, config }) {
     text('抵抗源源不断的丧尸浪潮', c2Rect.x + 12, c2Rect.y + 78, 8, COLORS.textSub, 'left')
 
     const recZombie = recs.zombie || { matches: 0, wins: 0, kills: 0 }
-    text(`战绩: ${recZombie.matches || 0}场 | ${recZombie.kills || 0}杀`, c2Rect.x + 12, c2Rect.y + 124, 8, c2Selected ? COLORS.gold : COLORS.muted, 'left')
+    text(`战绩: ${recZombie.matches || 0}场 | ${recZombie.kills || 0}杀`, c2Rect.x + 12, c2Rect.y + 96, 8, c2Selected ? COLORS.gold : COLORS.muted, 'left')
     hits.push({ ...c2Rect, action: 'portal:select-mode:zombie' })
 
     const pracY = cardY + cardH + 14
     const pracH = usableH - (pracY - usableY)
     drawTacticalPanel(margin, pracY, leftW, pracH, 'rgba(18,26,32,0.85)', 'rgba(229,184,92,0.2)')
     text('离线单人试炼', margin + 14, pracY + 20, 10, COLORS.gold, 'left', 700)
-    text('无需登陆注册，体验完整的兵种、武器与仿真AI对战', margin + 14, pracY + 38, 8, COLORS.textSub, 'left')
 
     if (curMode === 'classic') {
-      const btnY = pracY + 54
-      const teamBtnW = 140
-      const startBtnW = leftW - 28 - teamBtnW - 10
-      drawTacticalButton({ x: margin + 14, y: btnY, w: teamBtnW, h: 36 },
-        `阵营: ${curTeam === 'allies' ? '盟军' : '轴心'}`, 'portal:team', {
-          accent: curTeam === 'allies' ? COLORS.ally : COLORS.axis,
-          fontSize: 8,
-        })
-      drawTacticalButton({ x: margin + 14 + teamBtnW + 10, y: btnY, w: startBtnW, h: 36 },
-        '开始单人对战', 'portal:offline-start', {
-          primary: true,
-          fontSize: 10,
-        })
+      drawClassicTabs(margin + 14, pracY + 42, leftW - 28, portal.classicTab)
+      const settingsY = pracY + 76
+      if (portal.classicTab === 'advanced') {
+        drawClassicAdvanced(margin + 14, settingsY, leftW - 28, portal.classic)
+        const btnY = settingsY + 144
+        const teamBtnW = 140
+        const startBtnW = leftW - 28 - teamBtnW - 10
+        drawTacticalButton({ x: margin + 14, y: btnY, w: teamBtnW, h: 28 },
+          `阵营: ${curTeam === 'allies' ? '盟军' : '轴心'}`, 'portal:team', {
+            accent: curTeam === 'allies' ? COLORS.ally : COLORS.axis,
+            fontSize: 8,
+          })
+        drawTacticalButton({ x: margin + 14 + teamBtnW + 10, y: btnY, w: startBtnW, h: 28 },
+          '开始单人对战', 'portal:offline-start', { primary: true, fontSize: 9 })
+      } else {
+        drawSlider(margin + 14, settingsY + 8, leftW - 52, '盟军人数', 'classic.alliesSize', portal.classic?.teamSize.allies ?? 20, 1, 20, true)
+        drawSlider(margin + 14, settingsY + 36, leftW - 52, '轴心人数', 'classic.axisSize', portal.classic?.teamSize.axis ?? 20, 1, 20, true)
+        const botY = settingsY + 64
+        const botW = Math.floor((leftW - 38) / 2)
+        drawTacticalButton({ x: margin + 14, y: botY, w: botW, h: 24 },
+          `盟军BOT：${portal.classic?.botFill.allies ? '开' : '关'}`, 'portal:alliesBot', { accent: COLORS.ally, fontSize: 8 })
+        drawTacticalButton({ x: margin + 24 + botW, y: botY, w: botW, h: 24 },
+          `轴心BOT：${portal.classic?.botFill.axis ? '开' : '关'}`, 'portal:axisBot', { accent: COLORS.axis, fontSize: 8 })
+        const btnY = settingsY + 94
+        const teamBtnW = 140
+        const startBtnW = leftW - 28 - teamBtnW - 10
+        drawTacticalButton({ x: margin + 14, y: btnY, w: teamBtnW, h: 34 },
+          `阵营: ${curTeam === 'allies' ? '盟军' : '轴心'}`, 'portal:team', {
+            accent: curTeam === 'allies' ? COLORS.ally : COLORS.axis,
+            fontSize: 8,
+          })
+        drawTacticalButton({ x: margin + 14 + teamBtnW + 10, y: btnY, w: startBtnW, h: 34 },
+          '开始单人对战', 'portal:offline-start', {
+            primary: true,
+            fontSize: 10,
+          })
+      }
     } else {
-      drawTacticalButton({ x: margin + 14, y: pracY + 54, w: leftW - 28, h: 36 },
+      drawTacticalButton({ x: margin + 14, y: pracY + 42, w: leftW - 28, h: 36 },
         '开始单人对战', 'portal:offline-start', {
           primary: true,
           fontSize: 10,
@@ -567,7 +590,7 @@ function createCanvasUi({ state, deploy, config }) {
 
   function drawCreateScreen(portal, margin) {
     const boxW = Math.min(420, width - 40)
-    const boxH = Math.min(340, height - 60)
+    const boxH = portal.selectedMode === 'classic' ? Math.min(480, height - 40) : Math.min(340, height - 60)
     const boxX = Math.round((width - boxW) / 2)
     const boxY = Math.round((height - boxH) / 2)
 
@@ -583,6 +606,24 @@ function createCanvasUi({ state, deploy, config }) {
         activePortalField === field.id ? COLORS.gold : 'rgba(229,184,92,0.3)')
       showPortalInput(field, inputRect)
       cursorY += 62
+    }
+
+    if (portal.selectedMode === 'classic') {
+      drawClassicTabs(boxX + 24, cursorY, boxW - 48, portal.classicTab)
+      cursorY += 32
+      if (portal.classicTab === 'advanced') {
+        drawClassicAdvanced(boxX + 24, cursorY, boxW - 48, portal.classic)
+        cursorY += 148
+      } else {
+        drawSlider(boxX + 24, cursorY + 8, boxW - 100, '盟军人数', 'classic.alliesSize', portal.classic.teamSize.allies, 1, 20, true)
+        drawSlider(boxX + 24, cursorY + 36, boxW - 100, '轴心人数', 'classic.axisSize', portal.classic.teamSize.axis, 1, 20, true)
+        const botW = Math.floor((boxW - 56) / 2)
+        drawTacticalButton({ x: boxX + 24, y: cursorY + 64, w: botW, h: 24 },
+          `盟军BOT：${portal.classic.botFill.allies ? '开' : '关'}`, 'portal:alliesBot', { accent: COLORS.ally, fontSize: 8 })
+        drawTacticalButton({ x: boxX + 32 + botW, y: cursorY + 64, w: botW, h: 24 },
+          `轴心BOT：${portal.classic.botFill.axis ? '开' : '关'}`, 'portal:axisBot', { accent: COLORS.axis, fontSize: 8 })
+        cursorY += 96
+      }
     }
 
     const modeBtn = portal.actions?.find(a => a.id === 'mode')
@@ -793,8 +834,8 @@ function createCanvasUi({ state, deploy, config }) {
     drawPortal()
   }
 
-  function drawSlider(x, y, w, label, action, value, min, max, dark = false) {
-    text(label, x, y - 12, 8, dark ? COLORS.muted : COLORS.ink)
+  function drawSlider(x, y, w, label, action, value, min, max, dark = false, precision = 0) {
+    text(label, x, y - 7, 8, dark ? COLORS.muted : COLORS.ink)
     const rect = { x, y, w, h: 12 }
     box(x, y, w, 12, dark ? '#313d40' : '#68736f')
     const ratio = (value - min) / (max - min)
@@ -802,8 +843,46 @@ function createCanvasUi({ state, deploy, config }) {
     ctx.fillRect(x + 1, y + 1, (w - 2) * ratio, 10)
     ctx.fillStyle = dark ? COLORS.text : COLORS.ink
     ctx.fillRect(x + 1 + (w - 2) * ratio - 2, y - 2, 4, 16)
-    text(Math.round(value), x + w + 10, y + 6, 8, dark ? COLORS.text : COLORS.ink)
+    text(precision ? Number(value).toFixed(precision) : Math.round(value), x + w + 10, y + 6, 8, dark ? COLORS.text : COLORS.ink)
     hits.push({ ...rect, action: 'slider', setting: action, min, max })
+  }
+
+  function drawInlineSlider(x, y, w, label, action, value, min, max, precision = 0) {
+    const labelW = 142
+    const trackX = x + labelW + 8
+    const trackW = Math.max(80, w - labelW - 52)
+    text(label, x, y + 7, 7, COLORS.muted)
+    box(trackX, y, trackW, 12, '#313d40')
+    const ratio = (value - min) / (max - min)
+    ctx.fillStyle = COLORS.gold
+    ctx.fillRect(trackX + 1, y + 1, (trackW - 2) * ratio, 10)
+    ctx.fillStyle = COLORS.text
+    ctx.fillRect(trackX + 1 + (trackW - 2) * ratio - 2, y - 2, 4, 16)
+    text(precision ? Number(value).toFixed(precision) : Math.round(value), trackX + trackW + 8, y + 7, 7, COLORS.text)
+    hits.push({ x: trackX, y, w: trackW, h: 12, action: 'slider', setting: action, min, max })
+  }
+
+  function drawClassicTabs(x, y, w, active) {
+    const tabW = Math.floor((w - 8) / 2)
+    drawTacticalButton({ x, y, w: tabW, h: 26 }, '基础设置', 'portal:classic-tab:basic', { selected: active === 'basic', fontSize: 8 })
+    drawTacticalButton({ x: x + tabW + 8, y, w: w - tabW - 8, h: 26 }, '高级设置', 'portal:classic-tab:advanced', { selected: active === 'advanced', fontSize: 8 })
+  }
+
+  function drawClassicAdvanced(x, y, w, classic) {
+    const gap = 8
+    const buttonW = Math.floor((w - gap) / 2)
+    const enabled = classic.enabled
+    const button = (bx, by, label, action, accent) => drawTacticalButton(
+      { x: bx, y: by, w: buttonW, h: 24 }, label, `portal:${action}`, { accent, fontSize: 8 })
+    button(x, y, `主武器：${enabled.weapon ? '开' : '关'}`, 'classic-weapon', COLORS.gold)
+    button(x + buttonW + gap, y, `副武器：${enabled.secondary ? '开' : '关'}`, 'classic-secondary', COLORS.gold)
+    button(x, y + 24, `投掷物：${enabled.grenade ? '开' : '关'}`, 'classic-grenade', COLORS.ally)
+    button(x + buttonW + gap, y + 24, `携带补给：${enabled.item ? '开' : '关'}`, 'classic-item', COLORS.ally)
+    drawTacticalButton({ x, y: y + 48, w, h: 22 },
+      `地图补给：${classic.mapSupplies ? '开' : '关'}`, 'portal:classic-map-supplies', { accent: COLORS.gold, fontSize: 8 })
+    drawInlineSlider(x, y + 76, w, '弹夹数量（0=无弹药）', 'classic.magazineCount', classic.magazineCount, 0, 20)
+    drawInlineSlider(x, y + 102, w, '武器伤害倍率', 'classic.damageMultiplier', classic.damageMultiplier, 0.1, 3, 2)
+    drawInlineSlider(x, y + 128, w, '最大生命值', 'classic.maxHealth', classic.maxHealth, 1, 300)
   }
 
   function drawHud(now) {
@@ -1779,6 +1858,17 @@ export function createClient() {
   let selectedMode = 'classic'
   let selectedTeam = 'allies'
   let visibility = 'public'
+  let classicTab = 'basic'
+  const classicDefaults = SIM_CFG.modes.classic
+  let classicSettings = {
+    teamSize: { allies: classicDefaults.teamSize, axis: classicDefaults.teamSize },
+    botFill: { ...classicDefaults.botFill },
+    enabled: { ...classicDefaults.enabled },
+    magazineCount: classicDefaults.magazineCount,
+    mapSupplies: classicDefaults.mapSupplies,
+    damageMultiplier: classicDefaults.damageMultiplier,
+    maxHealth: classicDefaults.maxHealth,
+  }
   let leaderboardMode = 'classic'
   let profileRows = []
   let activeSession = null
@@ -1846,6 +1936,8 @@ export function createClient() {
         screenType: 'choice',
         selectedMode,
         selectedTeam,
+        classic: classicSettings,
+        classicTab,
         user,
         rooms,
         records: state.records,
@@ -1886,6 +1978,8 @@ export function createClient() {
         screenType: 'create',
         selectedMode,
         visibility,
+        classic: classicSettings,
+        classicTab,
         user,
         title: '创建房间',
         fields: [field('roomName', '房间名称', `${user?.displayName || '玩家'}的房间`, false, 20)],
@@ -1970,7 +2064,7 @@ export function createClient() {
 
   async function startLocal(modeId) {
     activeSession = new LocalSession({ message: handleMessage }, state.records)
-    activeSession.start(modeId, modeId === 'classic' ? selectedTeam : 'allies')
+    activeSession.start(modeId, modeId === 'classic' ? selectedTeam : 'allies', modeId === 'classic' ? classicSettings : null)
     await game.preparePresentation()
   }
 
@@ -2049,6 +2143,30 @@ export function createClient() {
     } else if (id === 'team') {
       selectedTeam = selectedTeam === 'allies' ? 'axis' : 'allies'
       render()
+    } else if (id === 'classic-tab:basic' || id === 'classic-tab:advanced') {
+      classicTab = id.slice('classic-tab:'.length)
+      render()
+    } else if (id === 'classic-weapon') {
+      classicSettings.enabled.weapon = !classicSettings.enabled.weapon
+      render()
+    } else if (id === 'classic-secondary') {
+      classicSettings.enabled.secondary = !classicSettings.enabled.secondary
+      render()
+    } else if (id === 'classic-grenade') {
+      classicSettings.enabled.grenade = !classicSettings.enabled.grenade
+      render()
+    } else if (id === 'classic-item') {
+      classicSettings.enabled.item = !classicSettings.enabled.item
+      render()
+    } else if (id === 'classic-map-supplies') {
+      classicSettings.mapSupplies = !classicSettings.mapSupplies
+      render()
+    } else if (id === 'alliesBot') {
+      classicSettings.botFill.allies = !classicSettings.botFill.allies
+      render()
+    } else if (id === 'axisBot') {
+      classicSettings.botFill.axis = !classicSettings.botFill.axis
+      render()
     } else if (id === 'visibility') {
       visibility = visibility === 'public' ? 'private' : 'public'
       render()
@@ -2057,6 +2175,7 @@ export function createClient() {
         type: 'create_room',
         modeId: selectedMode,
         visibility,
+        classic: selectedMode === 'classic' ? classicSettings : undefined,
         name: fields.roomName.trim() || `${user.displayName}的房间`,
       })
     } else if (id === 'invite') {
@@ -2144,8 +2263,17 @@ export function createClient() {
       fields[id] = value
       render()
     },
+    onSetting(setting, value) {
+      if (!setting.startsWith('classic.')) return game.applySetting(setting, value)
+      else if (setting === 'classic.alliesSize') classicSettings.teamSize.allies = Math.round(value)
+      else if (setting === 'classic.axisSize') classicSettings.teamSize.axis = Math.round(value)
+      else if (setting === 'classic.magazineCount') classicSettings.magazineCount = Math.round(value)
+      else if (setting === 'classic.damageMultiplier') classicSettings.damageMultiplier = Math.round(value * 100) / 100
+      else if (setting === 'classic.maxHealth') classicSettings.maxHealth = Math.round(value)
+      render()
+    },
     onResume: () => game.togglePause(), onQuit: () => game.leave(),
-    onRedeploy: () => game.redeploy(), onSetting: (setting, value) => game.applySetting(setting, value),
+    onRedeploy: () => game.redeploy(),
     onRestart: () => game.leave(), onSpawn: index => game.deploy(index),
     onLoadout: (kind, id) => game.selectLoadout(kind, id),
   })

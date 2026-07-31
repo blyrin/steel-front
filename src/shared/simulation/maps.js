@@ -64,7 +64,7 @@ const CLASSIC_SANDBAGS = [
   [70, -30],
 ]
 
-function createClassicMap(seed) {
+function createClassicMap(seed, options = {}) {
   const random = createRandom(seed)
   const size = 240
   const half = size * 0.5
@@ -177,6 +177,7 @@ function createClassicMap(seed) {
   for (const [x, z, rotation] of [
     [4, -29, 0], [-4, 29, Math.PI], [-39, -4, Math.PI / 2], [39, 4, -Math.PI / 2],
   ]) {
+    if (options.mapSupplies === false) continue
     features.push(feature('ammo-station', { x, z, rotation }, random))
     obstacles.push(box('ammo-station', x, z, 2.2, 1.05, 0.72, rotation))
     coverPoints.push({ x, z, r: 1.7, type: 'ammo-station' })
@@ -278,8 +279,8 @@ function createZombieMap(seed, config) {
   }
 }
 
-export function createMapDefinition(id, config, seed = Math.floor(Math.random() * 0x100000000)) {
-  return id === 'classic' ? createClassicMap(seed) : createZombieMap(seed, config)
+export function createMapDefinition(id, config, seed = Math.floor(Math.random() * 0x100000000), options = {}) {
+  return id === 'classic' ? createClassicMap(seed, options) : createZombieMap(seed, config)
 }
 
 export function groundHeightAt(definition, x, z) {

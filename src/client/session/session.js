@@ -18,10 +18,11 @@ export class LocalSession {
     this.paused = false
   }
 
-  start(modeId, team = 'allies') {
+  start(modeId, team = 'allies', classic = null) {
     this.simulation = createAuthoritativeSimulation({
       modeId,
       seed: Math.floor(Math.random() * 0x100000000),
+      classic,
     })
     this.simulation.addPlayer({
       id: this.playerId,

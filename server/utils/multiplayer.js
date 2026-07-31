@@ -21,13 +21,14 @@ function broadcast(members, value) {
 }
 
 class Room {
-  constructor(manager, { modeId, name, visibility, system = false }) {
+  constructor(manager, { modeId, name, visibility, system = false, classic }) {
     this.manager = manager
     this.id = randomUUID()
     this.modeId = modeId
     this.name = name
     this.visibility = visibility
     this.system = system
+    this.classic = modeId === 'classic' ? classic : null
     this.invite = visibility === 'private' ? inviteCode() : null
     this.status = system ? 'countdown' : 'waiting'
     this.countdownAt = system ? Date.now() + 5000 : 0
@@ -41,11 +42,25 @@ class Room {
     this.snapshotCounter = 0
   }
 
+  capacity() {
+    if (this.modeId !== 'classic') return roomCapacity(this.modeId)
+    return Math.min(roomCapacity(this.modeId), this.teamCapacity('allies') + this.teamCapacity('axis'))
+  }
+
+  teamCapacity(team) {
+    return this.classic?.teamSize[team] ?? CFG.modes.classic.teamSize
+  }
+
+  teamCount(team) {
+    return [...this.members.values()].filter(member => member.team === team).length
+  }
+
   publicState() {
     return {
       id: this.id, modeId: this.modeId, name: this.name, visibility: this.visibility,
-      invite: this.invite, status: this.status, capacity: roomCapacity(this.modeId), hostId: this.hostId,
+      invite: this.invite, status: this.status, capacity: this.capacity(), hostId: this.hostId,
       countdownAt: this.countdownAt,
+      classic: this.classic,
       members: [...this.members.values()].map(member => ({
         userId: member.user.id, displayName: member.user.displayName, team: member.team,
         connected: !!member.peer, host: member.user.id === this.hostId,
@@ -74,15 +89,15 @@ class Room {
 
   chooseTeam() {
     if (this.modeId === 'zombie') return 'allies'
-    const counts = { allies: 0, axis: 0 }
-    for (const member of this.members.values()) counts[member.team]++
-    return counts.allies <= counts.axis ? 'allies' : 'axis'
+    const teams = ['allies', 'axis'].filter(team => this.teamCount(team) < this.teamCapacity(team))
+    if (!teams.length) throw new Error('房间已满')
+    return teams.sort((a, b) => this.teamCount(a) - this.teamCount(b))[0]
   }
 
   join(connection) {
     if (this.kicked.has(connection.user.id)) throw new Error('你已被该房间移除')
     let member = this.members.get(connection.user.id)
-    if (!member && this.members.size >= roomCapacity(this.modeId)) throw new Error('房间已满')
+    if (!member && this.members.size >= this.capacity()) throw new Error('房间已满')
     if (!member) {
       member = { user: connection.user, peer: connection.peer, team: this.chooseTeam(), disconnectedAt: 0 }
       this.members.set(connection.user.id, member)
@@ -110,6 +125,7 @@ class Room {
     if (this.modeId !== 'classic' || this.simulation) throw new Error('当前不能切换阵营')
     const member = this.members.get(userId)
     if (!member) throw new Error('房间成员不存在')
+    if (member.team !== team && this.teamCount(team) >= this.teamCapacity(team)) throw new Error('该阵营已满')
     member.team = team
     this.updateState()
   }
@@ -144,7 +160,7 @@ class Room {
     this.status = 'active'
     this.startedAt = Date.now()
     this.matchId = randomUUID()
-    this.simulation = createAuthoritativeSimulation({ modeId: this.modeId, seed: Math.floor(Math.random() * 0x100000000) })
+    this.simulation = createAuthoritativeSimulation({ modeId: this.modeId, classic: this.classic, seed: Math.floor(Math.random() * 0x100000000) })
     for (const member of this.members.values()) this.simulation.addPlayer({
       id: `player-${member.user.id}`, userId: member.user.id, name: member.user.displayName,
       team: member.team, loadout: CFG.loadout,
@@ -226,7 +242,7 @@ class MultiplayerManager {
   roomList() {
     return [...this.rooms.values()].filter(room => room.visibility === 'public').map(room => ({
       id: room.id, modeId: room.modeId, name: room.name, status: room.status,
-      players: room.members.size, capacity: roomCapacity(room.modeId),
+      players: room.members.size, capacity: room.capacity(),
     }))
   }
 
@@ -252,7 +268,7 @@ class MultiplayerManager {
   }
 
   quickMatch(connection, modeId) {
-    let room = [...this.rooms.values()].find(item => item.system && item.modeId === modeId && item.members.size < roomCapacity(modeId))
+    let room = [...this.rooms.values()].find(item => item.system && item.modeId === modeId && item.members.size < item.capacity())
     room ??= this.create(connection, { modeId, name: modeId === 'classic' ? '快速战场' : '合作防线', visibility: 'public', system: true })
     if (connection.room !== room) room.join(connection)
   }

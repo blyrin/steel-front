@@ -13,6 +13,12 @@ export const CFG = {
     classic: {
       // 每支队伍的人数，包含玩家所在队伍的玩家。
       teamSize: 20,
+      botFill: { allies: true, axis: true },
+      enabled: { weapon: true, secondary: true, grenade: true, item: true },
+      magazineCount: 10,
+      mapSupplies: true,
+      damageMultiplier: 1,
+      maxHealth: 100,
       // 任一队伍达到该击杀数后结束比赛。
       killTarget: 150,
       // Bot 阵亡后的复活等待时间。

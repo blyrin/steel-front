@@ -180,8 +180,8 @@ export function useCarriedItem(actor, item, weapon) {
     if (actor.health >= actor.maxHealth) return false
     actor.health = Math.min(actor.maxHealth, actor.health + item.amount)
   } else {
-    if (actor.reserveAmmo >= weapon.reserveAmmo) return false
-    actor.reserveAmmo = weapon.reserveAmmo
+    if (actor.reserveAmmo >= (actor.reserveAmmoLimit ?? weapon.reserveAmmo)) return false
+    actor.reserveAmmo = actor.reserveAmmoLimit ?? weapon.reserveAmmo
   }
   actor.itemUses--
   return true

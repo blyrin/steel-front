@@ -616,6 +616,17 @@ export function createAiEngine() {
     return actor.kind === 'zombie' ? config.modes.zombie.enemy : config.bot
   }
 
+  function healthThreshold(actor, value) {
+    return value * actor.maxHealth / config.player.maxHealth
+  }
+
+  function combatRange(actor) {
+    if (actor.weaponEnabled && actor.magazine + actor.reserveAmmo > 0) return config.weapons[actor.weaponId].effectiveRange
+    if (actor.secondaryEnabled && actor.secondaryCount > 0 && config.secondaries[actor.secondaryId].kind === 'rpg') return 42
+    if (actor.secondaryEnabled && actor.secondaryCount > 0 && config.secondaries[actor.secondaryId].kind === 'c4') return 16
+    return config.weapon.meleeRange
+  }
+
   function targetGroundY(target) {
     return target.kind === 'player' ? target.y - target.currentHeight : target.y
   }
@@ -662,8 +673,7 @@ export function createAiEngine() {
 
   function targetScore(actor, target, distance) {
     const botConfig = config.bot
-    const weapon = config.weapons[actor.weaponId]
-    const idealRange = Math.max(8, weapon.effectiveRange * botConfig.idealRangeMultiplier)
+    const idealRange = Math.max(8, combatRange(actor) * botConfig.idealRangeMultiplier)
     let score = (botConfig.viewDistance - distance) * 0.16
     score -= Math.abs(distance - idealRange) * 0.14
     if (target.targetId === actor.id) score += 28
@@ -1049,17 +1059,22 @@ export function createAiEngine() {
   function findResupply(actor) {
     if (actor.aiTime < actor.nextSupplyAt) return null
     const botConfig = config.bot
-    if (actor.health <= botConfig.resupplyHealthThreshold) {
+    if (actor.health <= healthThreshold(actor, botConfig.resupplyHealthThreshold)) {
       const station = nearestStation(actor, medicalStations)
       if (station) return { station, kind: 'medical' }
     }
     const weapon = config.weapons[actor.weaponId]
     const grenade = config.grenades[actor.grenadeId]
     const item = config.items[actor.itemId]
+    const secondary = config.secondaries[actor.secondaryId]
+    const maxAmmo = actor.weaponEnabled ? weapon.magazineSize + actor.reserveAmmoLimit : 0
     const totalAmmo = actor.magazine + actor.reserveAmmo
-    const maxAmmo = weapon.magazineSize + weapon.reserveAmmo
-    const needsEquipment = actor.grenadeCount < grenade.count || actor.itemUses < item.uses
-    if (totalAmmo / maxAmmo <= botConfig.resupplyAmmoRatio || needsEquipment) {
+    const needsAmmo = actor.reserveAmmoLimit > 0 && maxAmmo > 0 && totalAmmo / maxAmmo <= botConfig.resupplyAmmoRatio
+    const needsEquipment =
+      (actor.grenadeEnabled && actor.grenadeCount < grenade.count) ||
+      (actor.itemEnabled && actor.itemUses < item.uses) ||
+      (actor.secondaryEnabled && actor.secondaryCount < secondary.count)
+    if (needsAmmo || needsEquipment) {
       const station = nearestStation(actor, ammoStations)
       if (station) return { station, kind: 'ammo' }
     }
@@ -1240,7 +1255,29 @@ export function createAiEngine() {
     )
   }
 
+  function tryBotMelee(actor) {
+    const target = getTarget(actor.targetId)
+    const weapon = config.weapons[actor.weaponId]
+    if (
+      !weapon.bayonet || actor.meleeCooldown > 0 || actor.weaponShotTimer > 0 ||
+      !target?.alive || !actor.targetVisible || distance2D(actor, target) > config.weapon.meleeRange
+    ) return false
+    actor.meleeCooldown = config.weapon.meleeDelay
+    actor.reloading = false
+    actor.reloadTimer = 0
+    actor.weaponShotTimer = 0.45
+    actor.burstShotsRemaining = 0
+    actor.fireOpportunityTimer = Math.max(actor.fireOpportunityTimer, 0.25)
+    events.push({ type: 'melee', actorId: actor.id, targetId: target.id })
+    return true
+  }
+
   function updateBotFire(actor) {
+    if (!actor.weaponEnabled) {
+      actor.burstShotsRemaining = 0
+      return
+    }
+    if (actor.weaponShotTimer > 0) return
     const target = getTarget(actor.targetId)
     if (!target?.alive || !actor.targetVisible || actor.reactionTimer > 0 || actor.reloading) {
       actor.burstShotsRemaining = 0
@@ -1248,6 +1285,11 @@ export function createAiEngine() {
     }
     const weapon = config.weapons[actor.weaponId]
     const distance = Math.hypot(target.x - actor.x, target.z - actor.z)
+    if (weapon.bayonet && distance <= config.weapon.meleeRange * 1.6) {
+      actor.burstShotsRemaining = 0
+      actor.fireOpportunityTimer = Math.max(actor.fireOpportunityTimer, 0.15)
+      return
+    }
     if (distance > weapon.effectiveRange * 1.3) {
       actor.burstShotsRemaining = 0
       actor.fireOpportunityTimer = Math.max(actor.fireOpportunityTimer, 0.25)
@@ -1342,7 +1384,10 @@ export function createAiEngine() {
   }
 
   function tryThrowGrenade(actor, dt, smokeClouds, needsCover) {
-    if (actor.grenadeCount <= 0 || actor.grenadeCooldown > 0 || actor.reloading) return
+    if (
+      !actor.grenadeEnabled || actor.grenadeCount <= 0 || actor.grenadeCooldown > 0 ||
+      actor.reloading || actor.weaponShotTimer > 0
+    ) return
     const target = getTarget(actor.targetId)
     if (!target?.alive || !actor.targetVisible) return
     const grenade = config.grenades[actor.grenadeId]
@@ -1353,7 +1398,7 @@ export function createAiEngine() {
     if (grenade.kind === 'smoke') {
       if (
         !needsCover &&
-        actor.health > config.grenade.aiSmokeHealthThreshold &&
+        actor.health > healthThreshold(actor, config.grenade.aiSmokeHealthThreshold) &&
         actor.suppression < config.grenade.aiSmokeSuppressionThreshold
       )
         return
@@ -1396,9 +1441,82 @@ export function createAiEngine() {
     const direction = solveThrowDirection(origin, targetPoint, grenade)
     if (!direction) return
     actor.grenadeCount--
+    actor.burstShotsRemaining = 0
+    actor.weaponShotTimer = 0.65
     events.push({ type: 'throw-grenade', actorId: actor.id, direction })
     actor.grenadeCooldown =
       config.grenade.aiCooldownMin + Math.random() * config.grenade.aiCooldownRange
+  }
+
+  function solveRocketDirection(actor, target, speed) {
+    const distance = distance2D(actor, target)
+    const leadTime = clamp((distance / speed) * (0.16 + actor.botSkill * 0.22), 0, 0.4)
+    const point = predictedTargetPoint(target, leadTime)
+    const origin = { x: actor.x, y: actor.y + 1.3, z: actor.z }
+    const dx = point.x - origin.x
+    const dy = point.y - origin.y
+    const dz = point.z - origin.z
+    const length = Math.hypot(dx, dy, dz)
+    if (length < 1e-6) return null
+    return { x: dx / length, y: dy / length, z: dz / length }
+  }
+
+  function tryUseSecondary(actor, dt) {
+    if (!actor.secondaryEnabled || actor.secondaryCooldown > 0 || actor.reloading || actor.weaponShotTimer > 0) return
+    const secondary = config.secondaries[actor.secondaryId]
+    if (secondary.kind === 'c4' && actor.c4Armed) {
+      if (actor.aiTime >= actor.c4DetonateAt) {
+        actor.c4Armed = false
+        actor.secondaryCooldown = 1.5
+        events.push({ type: 'detonate-secondary', actorId: actor.id })
+      }
+      return
+    }
+    if (actor.secondaryCount <= 0) return
+    const target = getTarget(actor.targetId)
+    if (!target?.alive || !actor.targetVisible) return
+
+    const distance = distance2D(actor, target)
+    if (secondary.kind === 'rpg') {
+      if (!actor.rpgLoaded) {
+        if (actor.secondaryCount > 0 && actor.secondaryReloadTimer <= 0) actor.secondaryReloadTimer = config.weapon.rpgReloadDuration
+        return
+      }
+      if (distance < 12 || distance > 58) return
+      const point = predictedTargetPoint(target, clamp(distance / secondary.rocketSpeed, 0.12, 0.4))
+      if (friendlyNearPoint(actor, point, config.grenade.aiFriendlyFireRadius)) return
+      const chance = 0.28 + actor.botSkill * 0.24
+      if (Math.random() >= 1 - Math.exp(-chance * dt)) return
+      const direction = solveRocketDirection(actor, target, secondary.rocketSpeed)
+      if (!direction) return
+      actor.secondaryCount--
+      actor.rpgLoaded = false
+      actor.burstShotsRemaining = 0
+      actor.secondaryCooldown = 1.2
+      actor.weaponShotTimer = 0.8
+      if (actor.secondaryCount > 0) actor.secondaryReloadTimer = config.weapon.rpgReloadDuration
+      events.push({ type: 'secondary', actorId: actor.id, direction })
+      return
+    }
+
+    if (secondary.kind !== 'c4' || distance < 5 || distance > 28) return
+    const point = predictedTargetPoint(target, 0.3)
+    if (friendlyNearPoint(actor, point, config.grenade.aiFriendlyFireRadius)) return
+    const chance = 0.36 + actor.botSkill * 0.22
+    if (Math.random() >= 1 - Math.exp(-chance * dt)) return
+    const direction = solveThrowDirection(
+      { x: actor.x, y: actor.y + 1.3, z: actor.z },
+      point,
+      { ...secondary, fuse: 120 },
+    )
+    if (!direction) return
+    actor.secondaryCount--
+    actor.c4Armed = true
+    actor.burstShotsRemaining = 0
+    actor.c4DetonateAt = actor.aiTime + distance / secondary.throwSpeed + 0.35
+    actor.secondaryCooldown = 0.8
+    actor.weaponShotTimer = 0.65
+    events.push({ type: 'secondary', actorId: actor.id, direction })
   }
 
   function updateBotResupply(actor) {
@@ -1415,12 +1533,14 @@ export function createAiEngine() {
       actor.health = actor.maxHealth
       emitHealthEvent(actor, 'resupply', { kind: 'medical' })
     } else {
-      const weapon = config.weapons[actor.weaponId]
       const grenade = config.grenades[actor.grenadeId]
       const item = config.items[actor.itemId]
-      actor.reserveAmmo = weapon.reserveAmmo
-      actor.grenadeCount = grenade.count
-      actor.itemUses = item.uses
+      actor.reserveAmmo = actor.weaponEnabled ? actor.reserveAmmoLimit : 0
+      actor.grenadeCount = actor.grenadeEnabled ? grenade.count : 0
+      actor.itemUses = actor.itemEnabled ? item.uses : 0
+      actor.secondaryCount = actor.secondaryEnabled ? config.secondaries[actor.secondaryId].count : 0
+      actor.rpgLoaded = actor.secondaryEnabled && actor.secondaryCount > 0
+      actor.secondaryReloadTimer = 0
       events.push({ type: 'resupply', actorId: actor.id, kind: 'ammo' })
     }
     actor.nextSupplyAt = actor.aiTime + config.supply.cooldown
@@ -1445,11 +1565,11 @@ export function createAiEngine() {
     const underPressure = refreshPressure(actor, dt)
     const inCoverState = actor.stateName === 'seek_cover' || actor.stateName === 'hold_cover'
     const enterCover =
-      actor.health < botConfig.lowHealthThreshold ||
+      actor.health < healthThreshold(actor, botConfig.lowHealthThreshold) ||
       actor.suppression > botConfig.coverEnterSuppression ||
       underPressure
     const stayCover =
-      actor.health < botConfig.lowHealthThreshold + botConfig.coverExitHealthBias ||
+      actor.health < healthThreshold(actor, botConfig.lowHealthThreshold + botConfig.coverExitHealthBias) ||
       actor.suppression > botConfig.coverExitSuppression ||
       underPressure
     const needsCover = inCoverState ? stayCover : enterCover
@@ -1460,6 +1580,7 @@ export function createAiEngine() {
       actor.grenadeDecisionTimer = GRENADE_DECISION_INTERVAL
       actor.grenadeDecisionElapsed = 0
     }
+    tryUseSecondary(actor, dt)
 
     actor.coverSearchTimer -= dt
     if (
@@ -1590,18 +1711,25 @@ export function createAiEngine() {
         }
         const weapon = config.weapons[actor.weaponId]
         const distance = distance2D(actor, targetPosition)
+        const rifleUsable = actor.weaponEnabled && actor.magazine + actor.reserveAmmo > 0
+        const effectiveRange = combatRange(actor)
         const desiredRange = clamp(
-          weapon.effectiveRange * botConfig.idealRangeMultiplier,
+          effectiveRange * botConfig.idealRangeMultiplier,
           12,
           botConfig.engageFarDistance - 2
         )
-        const closeRange = clamp(
-          weapon.effectiveRange * 0.22,
-          botConfig.engageCloseDistance * 0.55,
-          botConfig.engageCloseDistance
-        )
+        const closeRange = rifleUsable
+          ? clamp(
+              weapon.effectiveRange * 0.22,
+              botConfig.engageCloseDistance * 0.55,
+              botConfig.engageCloseDistance
+            )
+          : config.weapon.meleeRange
+        const meleeApproachRange = weapon.bayonet ? config.weapon.meleeRange * 1.6 : 0
         if (distance > Math.min(botConfig.engageFarDistance, desiredRange + 10)) {
           moveToward(actor, targetPosition, botConfig.engageFarSpeed)
+        } else if (distance > config.weapon.meleeRange && distance <= meleeApproachRange) {
+          moveToward(actor, targetPosition, botConfig.engageCloseSpeed)
         } else if (distance < closeRange) {
           moveWithDirection(
             actor,
@@ -1624,6 +1752,7 @@ export function createAiEngine() {
           moveWithDirection(actor, { x: moveX, z: moveZ }, botConfig.engageStrafeSpeed)
         }
         if (
+          actor.weaponEnabled &&
           actor.magazine / weapon.magazineSize <= botConfig.tacticalReloadThreshold &&
           actor.reserveAmmo > 0 &&
           actor.suppression < 0.25 &&
@@ -1638,7 +1767,7 @@ export function createAiEngine() {
   }
 
   function startReload(actor, empty = actor.magazine === 0) {
-    if (actor.reloading) return
+    if (!actor.weaponEnabled || actor.reloading) return
     actor.reloading = true
     actor.reloadTimer = 0
     const weapon = config.weapons[actor.weaponId]
@@ -1651,6 +1780,12 @@ export function createAiEngine() {
     actor.stateTimer += dt
     actor.fireOpportunityTimer -= dt
     actor.weaponShotTimer -= dt
+    actor.secondaryCooldown = Math.max(0, actor.secondaryCooldown - dt)
+    actor.meleeCooldown = Math.max(0, actor.meleeCooldown - dt)
+    if (actor.secondaryReloadTimer > 0) {
+      actor.secondaryReloadTimer = Math.max(0, actor.secondaryReloadTimer - dt)
+      if (!actor.secondaryReloadTimer && !actor.rpgLoaded && actor.secondaryCount > 0) actor.rpgLoaded = true
+    }
     actor.grenadeCooldown = Math.max(0, actor.grenadeCooldown - dt)
     actor.navigationTimer = Math.max(0, actor.navigationTimer - dt)
     actor.navigationCheckTimer = Math.max(0, actor.navigationCheckTimer - dt)
@@ -1659,7 +1794,8 @@ export function createAiEngine() {
     if (actor.reactionTimer > 0) actor.reactionTimer = Math.max(0, actor.reactionTimer - dt)
 
     if (
-      actor.health < botConfig.lowHealthThreshold &&
+      actor.health < healthThreshold(actor, botConfig.lowHealthThreshold) &&
+      actor.itemEnabled &&
       actor.itemUses > 0 &&
       config.items[actor.itemId].kind === 'heal'
     ) {
@@ -1668,9 +1804,9 @@ export function createAiEngine() {
       emitHealthEvent(actor, 'use-item')
     }
 
-    if (actor.magazine === 0 && actor.reserveAmmo === 0 && !actor.reloading) {
-      if (actor.itemUses > 0 && config.items[actor.itemId].kind === 'ammo') {
-        actor.reserveAmmo = config.weapons[actor.weaponId].reserveAmmo
+    if (actor.weaponEnabled && actor.reserveAmmoLimit > 0 && actor.magazine === 0 && actor.reserveAmmo === 0 && !actor.reloading) {
+      if (actor.itemEnabled && actor.itemUses > 0 && actor.reserveAmmoLimit > 0 && config.items[actor.itemId].kind === 'ammo') {
+        actor.reserveAmmo = actor.reserveAmmoLimit
         actor.itemUses--
         events.push({ type: 'use-item', actorId: actor.id, kind: 'ammo', itemUses: actor.itemUses })
       } else if (actor.stateName !== 'resupply') {
@@ -1678,17 +1814,19 @@ export function createAiEngine() {
         if (supply) {
           actor.resupplyStation = supply.station
           actor.resupplyKind = supply.kind
+          setState(actor, 'resupply')
         }
-        setState(actor, 'resupply')
       }
     }
 
     if (actor.stateName !== 'resupply') updateBotPerception(actor, dt, smokeClouds)
+    const meleeStarted = tryBotMelee(actor)
     updateBotMovement(actor, dt, smokeClouds)
+    if (!meleeStarted) tryBotMelee(actor)
     updateBotFire(actor)
 
     const weapon = config.weapons[actor.weaponId]
-    if (actor.magazine === 0 && actor.reserveAmmo > 0 && !actor.reloading) startReload(actor, true)
+    if (actor.weaponEnabled && actor.magazine === 0 && actor.reserveAmmo > 0 && !actor.reloading) startReload(actor, true)
     if (actor.reloading) {
       actor.reloadTimer += dt
       if (actor.reloadTimer > actor.reloadDuration) {
@@ -1856,6 +1994,12 @@ export function createAiEngine() {
       reloading: false,
       fireOpportunityTimer: 0.25 + Math.random() * 0.8,
       weaponShotTimer: 0,
+      secondaryCooldown: 0,
+      secondaryReloadTimer: 0,
+      rpgLoaded: data.rpgLoaded ?? true,
+      c4Armed: false,
+      c4DetonateAt: 0,
+      meleeCooldown: 0,
       burstShotsRemaining: 0,
       grenadeCooldown:
         config.grenade.aiCooldownMin + Math.random() * config.grenade.aiCooldownRange,
@@ -1919,6 +2063,8 @@ export function createAiEngine() {
       reloading: actor.reloading,
       magazine: actor.magazine,
       reserveAmmo: actor.reserveAmmo,
+      secondaryCount: actor.secondaryCount,
+      rpgLoaded: actor.rpgLoaded,
       grenadeCount: actor.grenadeCount,
       itemUses: actor.itemUses,
     }

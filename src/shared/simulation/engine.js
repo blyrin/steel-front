@@ -49,7 +49,7 @@ function distance2D(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z)
 }
 
-function makeLoadout(loadout = CFG.loadout) {
+function makeLoadout(loadout = CFG.loadout, classicConfig = null) {
   const selected = {
     weapon: loadout.weapon ?? CFG.loadout.defaultWeapon,
     secondary: loadout.secondary ?? CFG.loadout.defaultSecondary,
@@ -57,13 +57,25 @@ function makeLoadout(loadout = CFG.loadout) {
     item: loadout.item ?? CFG.loadout.defaultItem,
   }
   const weapon = CFG.weapons[selected.weapon]
+  const magazineCount = classicConfig?.magazineCount
+  const weaponEnabled = classicConfig?.enabled.weapon ?? true
+  const secondaryEnabled = classicConfig?.enabled.secondary ?? true
+  const grenadeEnabled = classicConfig?.enabled.grenade ?? true
+  const itemEnabled = classicConfig?.enabled.item ?? true
+  const ammo = magazineCount == null || magazineCount > 0 ? weapon.magazineSize : 0
+  const reserveAmmoLimit = magazineCount == null ? weapon.reserveAmmo : Math.max(0, magazineCount - 1) * weapon.magazineSize
   return {
     ...selected,
-    ammo: weapon.magazineSize,
-    reserveAmmo: weapon.reserveAmmo,
-    secondaryCount: CFG.secondaries[selected.secondary].count,
-    grenadeCount: CFG.grenades[selected.grenade].count,
-    itemUses: CFG.items[selected.item].uses,
+    ammo: weaponEnabled ? ammo : 0,
+    reserveAmmo: weaponEnabled ? reserveAmmoLimit : 0,
+    reserveAmmoLimit: weaponEnabled ? reserveAmmoLimit : 0,
+    weaponEnabled,
+    secondaryCount: secondaryEnabled ? CFG.secondaries[selected.secondary].count : 0,
+    secondaryEnabled,
+    grenadeCount: grenadeEnabled ? CFG.grenades[selected.grenade].count : 0,
+    grenadeEnabled,
+    itemUses: itemEnabled ? CFG.items[selected.item].uses : 0,
+    itemEnabled,
   }
 }
 
@@ -71,14 +83,15 @@ function randomBotLoadout() {
   const pick = values => values[Math.floor(Math.random() * values.length)]
   return {
     weapon: pick(Object.keys(CFG.weapons)),
-    secondary: CFG.loadout.defaultSecondary,
+    secondary: pick(Object.keys(CFG.secondaries)),
     grenade: pick(Object.keys(CFG.grenades)),
     item: pick(Object.keys(CFG.items)),
   }
 }
 
 function createActor(definition) {
-  const loadout = makeLoadout(definition.loadout)
+  const loadout = makeLoadout(definition.loadout, definition.classicConfig)
+  const maxHealth = definition.maxHealth ?? (definition.kind === 'zombie' ? CFG.modes.zombie.enemy.maxHealth : CFG.player.maxHealth)
   return {
     id: definition.id,
     userId: definition.userId ?? null,
@@ -103,8 +116,8 @@ function createActor(definition) {
     aiming: false,
     currentHeight: CFG.player.standHeight,
     radius: definition.kind === 'zombie' ? CFG.modes.zombie.enemy.radius : CFG.player.radius,
-    maxHealth: definition.kind === 'zombie' ? CFG.modes.zombie.enemy.maxHealth : CFG.player.maxHealth,
-    health: definition.kind === 'zombie' ? CFG.modes.zombie.enemy.maxHealth : CFG.player.maxHealth,
+    maxHealth,
+    health: maxHealth,
     kills: 0,
     deaths: 0,
     headshots: 0,
@@ -126,7 +139,7 @@ function createActor(definition) {
     diedAt: 0,
     targetId: null,
     plantedCharges: [],
-    rpgLoaded: true,
+    rpgLoaded: loadout.secondaryEnabled && loadout.secondaryCount > 0,
     rpgReloadAt: 0,
     autoRpgReloadAt: 0,
     activeSlot: 1,
@@ -154,8 +167,22 @@ function resetActorActions(actor) {
   actor.viewRecoilRoll = 0
 }
 
-export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
-  const map = createMapDefinition(modeId, CFG, seed)
+export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic = null } = {}) {
+  const classicConfig = modeId === 'classic' ? {
+    teamSize: { allies: classic?.teamSize?.allies ?? CFG.modes.classic.teamSize, axis: classic?.teamSize?.axis ?? CFG.modes.classic.teamSize },
+    botFill: { allies: classic?.botFill?.allies ?? CFG.modes.classic.botFill.allies, axis: classic?.botFill?.axis ?? CFG.modes.classic.botFill.axis },
+    enabled: {
+      weapon: classic?.enabled?.weapon ?? CFG.modes.classic.enabled.weapon,
+      secondary: classic?.enabled?.secondary ?? CFG.modes.classic.enabled.secondary,
+      grenade: classic?.enabled?.grenade ?? CFG.modes.classic.enabled.grenade,
+      item: classic?.enabled?.item ?? CFG.modes.classic.enabled.item,
+    },
+    magazineCount: classic?.magazineCount ?? CFG.modes.classic.magazineCount,
+    mapSupplies: classic?.mapSupplies ?? CFG.modes.classic.mapSupplies,
+    damageMultiplier: classic?.damageMultiplier ?? CFG.modes.classic.damageMultiplier,
+    maxHealth: classic?.maxHealth ?? CFG.modes.classic.maxHealth,
+  } : null
+  const map = createMapDefinition(modeId, CFG, seed, classicConfig)
   const actors = new Map()
   const projectiles = new Map()
   const smokeClouds = []
@@ -177,8 +204,12 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       id: actor.id, kind: actor.kind, team: actor.team,
       x: actor.x, y: actor.y, z: actor.z, vx: actor.vx, vz: actor.vz, yaw: actor.yaw,
       alive: actor.alive, health: actor.health, maxHealth: actor.maxHealth, radius: actor.radius,
-      weaponId: actor.weapon, grenadeId: actor.grenade, itemId: actor.item,
-      magazine: actor.ammo, reserveAmmo: actor.reserveAmmo, grenadeCount: actor.grenadeCount,
+      weaponId: actor.weapon, secondaryId: actor.secondary, grenadeId: actor.grenade, itemId: actor.item,
+      magazine: actor.ammo, reserveAmmo: actor.reserveAmmo, reserveAmmoLimit: actor.reserveAmmoLimit,
+      secondaryCount: actor.secondaryCount, rpgLoaded: actor.rpgLoaded,
+      weaponEnabled: actor.weaponEnabled, secondaryEnabled: actor.secondaryEnabled,
+      grenadeEnabled: actor.grenadeEnabled, itemEnabled: actor.itemEnabled,
+      grenadeCount: actor.grenadeCount,
       itemUses: actor.itemUses, skill: actor.botSkill,
     }
   }
@@ -229,6 +260,8 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       controller: kind === 'zombie' ? 'zombie' : 'bot',
       team,
       loadout: kind === 'zombie' ? CFG.loadout : randomBotLoadout(),
+      classicConfig: modeId === 'classic' ? classicConfig : null,
+      maxHealth: modeId === 'classic' ? classicConfig.maxHealth : undefined,
       ...position,
     })
     actors.set(actor.id, actor)
@@ -241,7 +274,8 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
   function initializeBots() {
     if (modeId === 'classic') {
       for (const team of ['allies', 'axis']) {
-        for (let i = 0; i < CFG.modes.classic.teamSize; i++) addBot(team)
+        if (!classicConfig.botFill[team]) continue
+        for (let i = 0; i < classicConfig.teamSize[team]; i++) addBot(team)
       }
     } else {
       for (let i = 0; i < CFG.modes.zombie.alliedBotCount + 1; i++) addBot('allies')
@@ -260,7 +294,10 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     if (actors.has(id)) return actors.get(id)
     removeOneBot(team)
     const position = randomSpawn(team)
-    const actor = createActor({ id, userId, name, kind: 'player', controller: 'human', team, loadout, ...position })
+    const actor = createActor({
+      id, userId, name, kind: 'player', controller: 'human', team,
+      loadout, classicConfig, maxHealth: classicConfig?.maxHealth, ...position,
+    })
     actors.set(id, actor)
     emit('actor_added', { actor: actorDefinition(actor) })
     return actor
@@ -271,7 +308,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     if (!actor || actor.controller !== 'human') return
     actors.delete(id)
     emit('actor_removed', { actorId: id })
-    if (!outcome) addBot(actor.team)
+    if (!outcome && (modeId !== 'classic' || classicConfig.botFill[actor.team])) addBot(actor.team)
   }
 
   function setConnected(id, connected) {
@@ -297,7 +334,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     if (!actor || actor.alive || outcome) return false
     const point = spawns(actor.team).find(item => item.id === spawnId)
     if (!point) return false
-    Object.assign(actor, makeLoadout(loadout))
+    Object.assign(actor, makeLoadout(loadout, classicConfig))
     actor.x = point.x
     actor.z = point.z
     actor.y = groundHeightAt(map, point.x, point.z) + CFG.player.standHeight
@@ -397,7 +434,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     if (!trace.target) return
     const falloff = clamp((trace.distance - weapon.effectiveRange) / (CFG.combat.bulletRange - weapon.effectiveRange), 0, 1)
     const base = trace.headshot ? weapon.headDamage : weapon.bodyDamage
-    damage(trace.target, base * (1 + (weapon.minDamageMultiplier - 1) * falloff), actor, 'weapon', trace.headshot)
+    damage(trace.target, base * (1 + (weapon.minDamageMultiplier - 1) * falloff) * (modeId === 'classic' ? classicConfig.damageMultiplier : 1), actor, 'weapon', trace.headshot)
   }
 
   function tryFire(actor) {
@@ -488,7 +525,9 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       if (trace.target && trace.distance >= 0.15)
         damage(trace.target, CFG.weapon.meleeDamage, actor, 'melee')
     }
-    if (hasInputAction(inputActions, INPUT_ACTION.MELEE) && actor.activeSlot === 1 && weapon.bayonet && !actor.reloadAt && !actor.switchAt && !actor.meleeAt && timeMs - actor.lastMeleeAt >= CFG.weapon.meleeDelay * 1000) {
+    if (hasInputAction(inputActions, INPUT_ACTION.MELEE) && actor.activeSlot === 1 && weapon.bayonet && !actor.switchAt && !actor.meleeAt && timeMs - actor.lastMeleeAt >= CFG.weapon.meleeDelay * 1000) {
+      actor.reloadAt = 0
+      actor.autoReloadAt = 0
       actor.lastMeleeAt = timeMs
       actor.meleeAt = timeMs + actionDuration(actionDefs.melee) *
         actionMarker(actionDefs.melee, 'hit') * 1000
@@ -539,8 +578,10 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       }
       actor.health = actor.maxHealth
     } else if (!resupplyInventory(actor, {
-      weapon: CFG.weapons[actor.weapon], grenade: CFG.grenades[actor.grenade],
-      item: CFG.items[actor.item], secondary: CFG.secondaries[actor.secondary],
+      weapon: { ...CFG.weapons[actor.weapon], reserveAmmo: actor.weaponEnabled ? actor.reserveAmmoLimit : 0 },
+      grenade: { ...CFG.grenades[actor.grenade], count: actor.grenadeEnabled ? CFG.grenades[actor.grenade].count : 0 },
+      item: { ...CFG.items[actor.item], uses: actor.itemEnabled ? CFG.items[actor.item].uses : 0 },
+      secondary: { ...CFG.secondaries[actor.secondary], count: actor.secondaryEnabled ? CFG.secondaries[actor.secondary].count : 0 },
     })) {
       emit('supply_result', { actorId: actor.id, result: 'ammo_full' })
       return false
@@ -595,8 +636,10 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       x: actor.x + direction.x * 0.5, y: actor.y + direction.y * 0.5, z: actor.z + direction.z * 0.5,
       vx: direction.x * data.throwSpeed,
       vy: direction.y * data.throwSpeed + (data.rocket ? 0 : data.throwSpeed * CFG.grenade.throwLift),
-      vz: direction.z * data.throwSpeed, radius: data.radius, damage: data.damage, explodeAt: timeMs + data.fuse * 1000,
+      vz: direction.z * data.throwSpeed, radius: data.radius,
+      explodeAt: timeMs + data.fuse * 1000,
       collisionRadius: data.rocket ? 0.08 : data.sticky ? 0.11 : 0.09,
+      damage: data.damage * (modeId === 'classic' ? classicConfig.damageMultiplier : 1),
       rocket: !!data.rocket, sticky: !!data.sticky,
     }
     projectiles.set(projectile.id, projectile)
@@ -666,6 +709,40 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
     addWeaponBloom(actor, weapon, CFG.weapon, true)
   }
 
+  function fireAiSecondary(actor, direction) {
+    const secondary = CFG.secondaries[actor.secondary]
+    if (secondary.kind === 'rpg') {
+      spawnProjectile(actor, actor.secondary, {
+        ...secondary,
+        throwSpeed: secondary.rocketSpeed,
+        fuse: 4,
+        rocket: true,
+      }, direction)
+    } else {
+      spawnProjectile(actor, actor.secondary, { ...secondary, fuse: 120, sticky: true }, direction)
+    }
+  }
+
+  function fireAiMelee(actor, target) {
+    const origin = { x: actor.x, y: actor.y + 1.1, z: actor.z }
+    const targetY = target.y - (target.controller === 'human' ? target.currentHeight : 0) + CFG.bot.targetHeight
+    const aim = { x: target.x - origin.x, y: targetY - origin.y, z: target.z - origin.z }
+    const length = Math.hypot(aim.x, aim.y, aim.z)
+    if (length < 1e-6) return
+    const direction = { x: aim.x / length, y: aim.y / length, z: aim.z / length }
+    const trace = traceHitscan({
+      origin, direction, range: CFG.weapon.meleeRange, obstacles: map.obstacles,
+      targets: enemies(actor), getHitboxes: hitboxes,
+    })
+    emit('melee_hit', {
+      actorId: actor.id,
+      targetId: trace.target?.id ?? null,
+      hit: trace.target ? 'actor' : trace.obstacleHit ? 'obstacle' : null,
+      point: trace.point,
+    })
+    if (trace.target && trace.distance >= 0.15) damage(trace.target, CFG.weapon.meleeDamage, actor, 'melee')
+  }
+
   function updateSharedAi(dt) {
     const snapshot = ai.tick({
       dt, now: timeMs,
@@ -687,6 +764,8 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       actor.reloading = data.reloading
       actor.ammo = data.magazine
       actor.reserveAmmo = data.reserveAmmo
+      actor.secondaryCount = data.secondaryCount
+      actor.rpgLoaded = data.rpgLoaded
       actor.grenadeCount = data.grenadeCount
       actor.itemUses = data.itemUses
     }
@@ -696,6 +775,15 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       if (event.type === 'fire') {
         const target = actors.get(event.targetId)
         if (target?.alive) fireAiWeapon(actor, target)
+      } else if (event.type === 'secondary') {
+        fireAiSecondary(actor, event.direction)
+      } else if (event.type === 'detonate-secondary') {
+        for (const projectile of [...projectiles.values()]) {
+          if (projectile.ownerId === actor.id && projectile.sticky) explode(projectile)
+        }
+      } else if (event.type === 'melee') {
+        const target = actors.get(event.targetId)
+        if (target?.alive) fireAiMelee(actor, target)
       } else if (event.type === 'throw-grenade') spawnProjectile(actor, actor.grenade, CFG.grenades[actor.grenade], event.direction)
       else if (event.type === 'zombie-attack') {
         const target = actors.get(event.targetId)
@@ -730,8 +818,8 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0 } = {}) {
       }
       if (actor.kind === 'zombie') continue
       const position = randomSpawn(actor.team)
-      Object.assign(actor, position, makeLoadout(randomBotLoadout()))
-      actor.rpgLoaded = true
+      Object.assign(actor, position, makeLoadout(randomBotLoadout(), classicConfig))
+      actor.rpgLoaded = actor.secondaryEnabled && actor.secondaryCount > 0
       actor.alive = true
       actor.health = actor.maxHealth
       actor.respawnAt = 0

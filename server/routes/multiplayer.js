@@ -17,7 +17,7 @@ const loadout = z.object({
 })
 const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('quick_match'), modeId: z.enum(['classic', 'zombie']) }),
-  z.object({ type: z.literal('create_room'), modeId: z.enum(['classic', 'zombie']), name: z.string().trim().min(1).max(20).refine(value => !/[\p{Cc}\p{Cf}]/u.test(value)), visibility: z.enum(['public', 'private']) }),
+  z.object({ type: z.literal('create_room'), modeId: z.enum(['classic', 'zombie']), name: z.string().trim().min(1).max(20).refine(value => !/[\p{Cc}\p{Cf}]/u.test(value)), visibility: z.enum(['public', 'private']), classic: z.object({ teamSize: z.object({ allies: z.number().int().min(1).max(20), axis: z.number().int().min(1).max(20) }), botFill: z.object({ allies: z.boolean(), axis: z.boolean() }), enabled: z.object({ weapon: z.boolean(), secondary: z.boolean(), grenade: z.boolean(), item: z.boolean() }), magazineCount: z.number().int().min(0).max(20), mapSupplies: z.boolean(), damageMultiplier: z.number().finite().min(0.1).max(3), maxHealth: z.number().int().min(1).max(300) }).optional() }),
   z.object({ type: z.literal('join_room'), roomId: z.string().uuid().optional(), invite: z.string().regex(/^[2-9A-HJ-NP-Z]{6}$/).optional() }).refine(value => value.roomId || value.invite),
   z.object({ type: z.literal('change_team'), team: z.enum(['allies', 'axis']) }),
   z.object({ type: z.literal('leave_room') }),
