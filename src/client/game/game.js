@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import {
+  CFG as SIM_CFG,
   applyMapDefinition,
   calculateWeaponSpread,
   createActionEngine,
@@ -21,6 +22,21 @@ import { createZombieMap } from '../world/zombie.js'
 import { createClassicMap } from '../world/classic.js'
 
 const MULTI_KILL_TITLES = ['', '', '双杀', '三杀', '四杀', '五杀', '势不可挡', '无人能挡']
+
+function getKillWeapon(event, compact = false) {
+  if (event.attackType === 'melee') return event.weaponId === 'zombie_claw' ? '利爪' : '刺刀'
+  const definition = SIM_CFG.weapons[event.weaponId] || SIM_CFG.secondaries[event.weaponId] || SIM_CFG.grenades[event.weaponId]
+  const name = definition?.name || (event.attackType === 'grenade' ? '爆炸物' : '未知武器')
+  if (!compact) return name
+  return {
+    'M1 加兰德': '加兰德',
+    'M1897 霰弹枪': '霰弹枪',
+    'M1A1 汤姆逊': '汤姆逊',
+    'M1918 BAR': 'BAR',
+    'MK II 破片手雷': '破片手雷',
+    'M18 烟雾弹': '烟雾弹',
+  }[name] || name
+}
 
 function getKillNotice(streak, headshot) {
   let kind = headshot ? 'head' : 'normal'
@@ -294,6 +310,16 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         actorDefinitions.set(event.actor.id, event.actor)
         continue
       }
+      if (event.type === 'respawned' || event.type === 'deployed') {
+        const definition = event.definition
+        if (definition) {
+          actorDefinitions.set(event.actorId, definition)
+          const view = views.get(event.actorId)
+          view?.resetActions()
+          view?.applyLoadout(definition)
+        }
+        continue
+      }
       if (event.type === 'actor_removed') {
         actorDefinitions.delete(event.actorId)
         const view = views.get(event.actorId)
@@ -358,32 +384,42 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         } else {
           const actor = snapshotActor(event.actorId)
           const view = views.get(event.actorId)
+          view?.playAction('fire')
           const muzzle = view?.rifleMuzzle?.getWorldPosition(new THREE.Vector3()) ?? (actor ? vector(actor) : null)
           if (muzzle) {
             effects.spawnMuzzleFlash(muzzle, direction)
             audio.botShot(muzzle, event.weaponId)
           }
         }
-      } else if (event.type === 'reload_started' && event.actorId === player.id) {
-        actions.play(actionDefs.reload, {
-          empty: event.empty,
-          reloadDuration: player.weaponData.reloadDuration,
-          emptyReloadDuration: player.weaponData.emptyReloadDuration,
-        })
-      } else if (event.type === 'rpg_reload_started' && event.actorId === player.id) {
-        actions.play(actionDefs.rpgReload)
+      } else if (event.type === 'reload_started') {
+        if (event.actorId === player.id) {
+          actions.play(actionDefs.reload, {
+            empty: event.empty,
+            reloadDuration: player.weaponData.reloadDuration,
+            emptyReloadDuration: player.weaponData.emptyReloadDuration,
+          })
+        } else {
+          views.get(event.actorId)?.playAction('reload', { empty: event.empty })
+        }
+      } else if (event.type === 'rpg_reload_started') {
+        if (event.actorId === player.id) actions.play(actionDefs.rpgReload)
+        else views.get(event.actorId)?.playAction('rpgReload')
       } else if (event.type === 'weapon_switch' && event.actorId === player.id) {
         const action = actions.get('weaponSwitch')
         if (!action || action.params.toSlot !== event.slot) {
           actions.play(actionDefs.weaponSwitch, { fromSlot: player.activeSlot, toSlot: event.slot })
         }
-      } else if (event.type === 'melee' && event.actorId === player.id) {
-        actions.play(actionDefs.melee)
-        audio.stabSwing()
-        player.viewRecoilPitch -= 0.008
-        player.viewRecoilYaw *= 0.5
-        player.viewRecoilRoll *= 0.4
-        player.addShake(0.1)
+      } else if (event.type === 'melee') {
+        if (event.actorId === player.id) {
+          actions.play(actionDefs.melee)
+          audio.stabSwing()
+          player.viewRecoilPitch -= 0.008
+          player.viewRecoilYaw *= 0.5
+          player.viewRecoilRoll *= 0.4
+          player.addShake(0.1)
+        } else {
+          views.get(event.actorId)?.playAction('melee')
+        }
       } else if (event.type === 'melee_hit' && event.actorId === player.id) {
         const point = vector(event.point)
         if (event.hit === 'actor') {
@@ -400,6 +436,14 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         }
       } else if (event.type === 'projectile_added') {
         const projectile = event.projectile
+        const view = views.get(projectile.ownerId)
+        if (view) {
+          if (projectile.rocket || projectile.sticky) {
+            view.playAction('secondary', { kind: projectile.rocket ? 'rpg' : 'c4' })
+          } else {
+            view.playAction('grenade', { kind: CFG.grenades[projectile.kind].kind })
+          }
+        }
         const origin = vector(projectile)
         const velocity = new THREE.Vector3(projectile.vx, projectile.vy, projectile.vz)
         if (projectile.rocket) {
@@ -428,6 +472,8 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         } else {
           projectiles.set(projectile.id, effects.spawnThrownGrenade(origin, velocity, CFG.grenades[projectile.kind]))
         }
+      } else if (event.type === 'secondary_detonated') {
+        if (event.actorId !== player.id) views.get(event.actorId)?.playAction('detonate', { kind: 'c4' })
       } else if (event.type === 'projectile_removed') {
         const projectile = projectiles.get(event.projectileId)
         if (projectile) {
@@ -469,15 +515,18 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
             type: mine ? 'player' : 'enemy',
             killer: actorName(event.attackerId),
             victim: actorName(event.victimId),
+            killerTeam: event.killerTeam,
+            victimTeam: event.victimTeam,
+            weapon: getKillWeapon(event, true),
           }, CFG.hud.killFeedItemDuration)
         }
         if (mine) {
           const notice = getKillNotice(event.killStreak, event.headshot)
-          ui.showKillNotice(notice.title, `已击杀 ${actorName(event.victimId)}`, CFG.hud.killNotifyCleanupDelay)
+          ui.showKillNotice(notice.title, `已击杀 ${actorName(event.victimId)} · ${getKillWeapon(event)}`, CFG.hud.killNotifyCleanupDelay)
           audio.killConfirm(notice.kind)
         }
         if (event.victimId === player.id) {
-          ui.showDeath(event.attackerId ? actorName(event.attackerId) : '-')
+          ui.showDeath({ name: event.attackerId ? actorName(event.attackerId) : '-', weapon: getKillWeapon(event) })
         }
         if (event.victimId === player.id) {
           player.alive = false
@@ -514,8 +563,12 @@ export function createGame({ session, ui, state, deploy, getPlayerId }) {
         if (state.paused) togglePause()
         ui.hideDeath()
         deployment.showScreen()
-      } else if (event.type === 'item_used' && event.actorId === player.id) {
-        ui.showAction(CFG.items[event.itemId].kind === 'heal' ? '已使用急救包' : '已补充携行弹药', CFG.hud.actionMessageDuration)
+      } else if (event.type === 'item_used') {
+        if (event.actorId === player.id) {
+          ui.showAction(CFG.items[event.itemId].kind === 'heal' ? '已使用急救包' : '已补充携行弹药', CFG.hud.actionMessageDuration)
+        } else {
+          views.get(event.actorId)?.playAction('item', { kind: CFG.items[event.itemId].kind })
+        }
       } else if (event.type === 'resupplied' && event.actorId === player.id) {
         ui.showAction('补给完成', CFG.hud.actionMessageDuration)
       } else if (event.type === 'supply_result' && event.actorId === player.id) {

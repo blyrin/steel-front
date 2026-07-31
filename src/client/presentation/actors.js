@@ -53,6 +53,26 @@ const BOT_GEOMETRY = {
   rifleStock: new THREE.BoxGeometry(0.055, 0.07, 0.28),
   rifleMag: new THREE.BoxGeometry(0.06, 0.18, 0.11),
   rifleGrip: new THREE.BoxGeometry(0.07, 0.18, 0.08),
+  bayonetMount: new THREE.BoxGeometry(0.07, 0.05, 0.08),
+  bayonetBlade: new THREE.BoxGeometry(0.025, 0.014, 0.34),
+  bayonetTip: new THREE.ConeGeometry(0.016, 0.07, 4),
+  bayonetGuard: new THREE.BoxGeometry(0.09, 0.016, 0.018),
+  c4Body: new THREE.BoxGeometry(0.2, 0.1, 0.14),
+  c4Band: new THREE.BoxGeometry(0.21, 0.018, 0.05),
+  rpgTube: new THREE.CylinderGeometry(0.082, 0.088, 0.72, 10),
+  rpgNozzle: new THREE.CylinderGeometry(0.11, 0.078, 0.14, 10),
+  rpgGrip: new THREE.BoxGeometry(0.07, 0.16, 0.08),
+  rpgRocketMotor: new THREE.CylinderGeometry(0.052, 0.056, 0.2, 8),
+  rpgRocketBody: new THREE.CylinderGeometry(0.063, 0.07, 0.16, 8),
+  rpgRocketHead: new THREE.ConeGeometry(0.07, 0.14, 8),
+  grenadeBody: new THREE.SphereGeometry(0.09, 8, 6),
+  grenadeCap: new THREE.CylinderGeometry(0.045, 0.045, 0.026, 8),
+  grenadePin: new THREE.TorusGeometry(0.018, 0.004, 5, 8, Math.PI * 1.5),
+  pouchBody: new THREE.BoxGeometry(0.17, 0.14, 0.11),
+  pouchFlap: new THREE.BoxGeometry(0.18, 0.035, 0.12),
+  medkitBody: new THREE.BoxGeometry(0.2, 0.14, 0.14),
+  medkitCross: new THREE.BoxGeometry(0.035, 0.01, 0.09),
+  medkitCrossBar: new THREE.BoxGeometry(0.09, 0.01, 0.035),
 }
 
 class Bot {
@@ -69,8 +89,14 @@ class Bot {
     this.targetVisible = false
     this.reloading = false
     this.weaponData = services.weaponData
+    this.secondaryData = services.secondaryData
+    this.grenadeData = services.grenadeData
+    this.itemData = services.itemData
     this.kills = 0
     this.deaths = 0
+    this.actionName = null
+    this.actionTime = 0
+    this.actionDuration = 0
     this.buildModel()
     this.scene.add(this.group)
   }
@@ -184,8 +210,25 @@ class Bot {
     this.rifleMuzzle = new THREE.Object3D()
     this.rifle.add(this.rifleMuzzle)
     this.rifle.position.set(0.22, 0.46, -0.38)
+    this.bayonet = new THREE.Group()
+    this.bayonet.add(new THREE.Mesh(BOT_GEOMETRY.bayonetMount, this.matLib.metalDark))
+    const bayonetBlade = new THREE.Mesh(BOT_GEOMETRY.bayonetBlade, this.matLib.blade)
+    bayonetBlade.position.set(0, -0.012, -0.19)
+    this.bayonet.add(bayonetBlade)
+    const bayonetTip = new THREE.Mesh(BOT_GEOMETRY.bayonetTip, this.matLib.blade)
+    bayonetTip.rotation.x = -Math.PI / 2
+    bayonetTip.position.set(0, -0.012, -0.4)
+    this.bayonet.add(bayonetTip)
+    const bayonetGuard = new THREE.Mesh(BOT_GEOMETRY.bayonetGuard, this.matLib.metalDark)
+    bayonetGuard.position.set(0, -0.01, -0.035)
+    this.bayonet.add(bayonetGuard)
+    this.rifle.add(this.bayonet)
     this.configureRifleModel()
     this.body.add(this.rifle)
+
+    this.heldEquipment = new THREE.Group()
+    this.body.add(this.heldEquipment)
+    this.createEquipmentModels()
 
     this.matLib.addOutline(this.group, 1.045)
     this.legPhase = Math.random() * Math.PI * 2
@@ -269,6 +312,144 @@ class Bot {
     this.rifleClip.scale.set(0.8, 0.16, 0.72)
     this.rifleClip.visible = false
     this.rifleMuzzle.position.set(0, 0.02, muzzleZ)
+    this.bayonetBaseZ = muzzleZ
+    this.bayonet.position.set(0, 0.02, this.bayonetBaseZ)
+    this.bayonet.visible = !!this.weaponData.bayonet
+  }
+
+  createEquipmentModels() {
+    const prop = (geometry, material, parent) => {
+      const mesh = new THREE.Mesh(geometry, material)
+      parent.add(mesh)
+      return mesh
+    }
+    const dark = this.matLib.metalDark
+    const brass = this.matLib.brass
+
+    const c4 = new THREE.Group()
+    prop(BOT_GEOMETRY.c4Body, dark, c4)
+    const c4Band = prop(BOT_GEOMETRY.c4Band, brass, c4)
+    c4Band.position.y = 0.055
+    const c4Light = prop(
+      new THREE.SphereGeometry(0.014, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff3b30 }),
+      c4,
+    )
+    c4Light.position.set(0.06, 0.062, -0.04)
+    this.secondaryModels = { c4 }
+
+    const rpg = new THREE.Group()
+    const rpgTube = prop(BOT_GEOMETRY.rpgTube, this.matLib.blued, rpg)
+    rpgTube.rotation.x = Math.PI / 2
+    rpgTube.position.set(0, 0, -0.12)
+    const rpgNozzle = prop(BOT_GEOMETRY.rpgNozzle, dark, rpg)
+    rpgNozzle.rotation.x = Math.PI / 2
+    rpgNozzle.position.z = 0.3
+    const rpgGrip = prop(BOT_GEOMETRY.rpgGrip, this.matLib.wood, rpg)
+    rpgGrip.position.set(0, -0.13, 0.02)
+    rpgGrip.rotation.x = 0.22
+    const rpgRocket = new THREE.Group()
+    const rpgMotor = prop(BOT_GEOMETRY.rpgRocketMotor, dark, rpgRocket)
+    rpgMotor.rotation.x = Math.PI / 2
+    rpgMotor.position.z = 0.1
+    const rpgBody = prop(BOT_GEOMETRY.rpgRocketBody, this.matLib.blued, rpgRocket)
+    rpgBody.rotation.x = Math.PI / 2
+    rpgBody.position.z = -0.04
+    const rpgHead = prop(BOT_GEOMETRY.rpgRocketHead, dark, rpgRocket)
+    rpgHead.rotation.x = -Math.PI / 2
+    rpgHead.position.z = -0.17
+    rpgRocket.position.set(0, 0, -0.52)
+    rpg.add(rpgRocket)
+    this.rpgRocket = rpgRocket
+    this.secondaryModels.rpg = rpg
+
+    const grenade = new THREE.Group()
+    this.grenadeMaterial = new THREE.MeshLambertMaterial({ color: this.grenadeData.color })
+    this.grenadeBody = prop(BOT_GEOMETRY.grenadeBody, this.grenadeMaterial, grenade)
+    const grenadeCap = prop(BOT_GEOMETRY.grenadeCap, dark, grenade)
+    grenadeCap.position.y = 0.098
+    const grenadePin = prop(BOT_GEOMETRY.grenadePin, brass, grenade)
+    grenadePin.rotation.x = Math.PI / 2
+    grenadePin.position.set(0.045, 0.105, 0)
+    this.grenadeModel = grenade
+
+    const item = new THREE.Group()
+    const medkit = new THREE.Group()
+    prop(BOT_GEOMETRY.medkitBody, dark, medkit)
+    const medkitCross = prop(BOT_GEOMETRY.medkitCross, this.matLib.allyAccent, medkit)
+    medkitCross.position.set(0, 0.076, -0.001)
+    const medkitCrossBar = prop(BOT_GEOMETRY.medkitCrossBar, this.matLib.allyAccent, medkit)
+    medkitCrossBar.position.set(0, 0.076, -0.001)
+    medkit.add(medkitCrossBar)
+    const pouch = new THREE.Group()
+    const pouchBody = prop(BOT_GEOMETRY.pouchBody, this.matLib.axisUniform, pouch)
+    pouchBody.position.y = -0.01
+    const pouchFlap = prop(BOT_GEOMETRY.pouchFlap, brass, pouch)
+    pouchFlap.position.y = 0.077
+    item.add(medkit, pouch)
+    this.itemModels = { medkit, ammo: pouch }
+    this.heldEquipment.add(c4, rpg, grenade, item)
+    this.itemModel = item
+    this.configureEquipmentModels()
+  }
+
+  configureEquipmentModels() {
+    this.secondaryModels.c4.visible = this.secondaryData.kind === 'c4'
+    this.secondaryModels.rpg.visible = this.secondaryData.kind === 'rpg'
+    this.grenadeMaterial.color.setHex(this.grenadeData.color)
+    this.itemModels.medkit.visible = this.itemData.kind === 'heal'
+    this.itemModels.ammo.visible = this.itemData.kind === 'ammo'
+    this.heldEquipment.visible = false
+  }
+
+  playAction(name, data = {}) {
+    if (this.actionName === 'melee' && this.actionTime < this.actionDuration && name !== 'melee') return
+    const defaultDuration = name === 'melee'
+      ? this.config.weapon.meleeAnimationDuration
+      : name === 'reload'
+        ? (data.empty ? this.weaponData.emptyReloadDuration : this.weaponData.reloadDuration)
+        : name === 'rpgReload'
+          ? this.config.weapon.rpgReloadDuration
+          : name === 'secondary'
+            ? (data.kind === 'rpg' ? 0.9 : 0.72)
+            : name === 'grenade' ? 0.78 : name === 'item' ? 0.9 : name === 'detonate' ? 0.38 : 0.18
+    this.actionName = name
+    this.actionTime = 0
+    this.actionDuration = data.duration ?? defaultDuration
+    if (name === 'reload') this.reloading = true
+    if (name === 'secondary' || name === 'grenade' || name === 'item' || name === 'rpgReload' || name === 'detonate') {
+      this.heldEquipment.visible = true
+    }
+  }
+
+  resetActions() {
+    this.actionName = null
+    this.actionTime = 0
+    this.actionDuration = 0
+    this.reloading = false
+    this.rifle.visible = true
+    this.rifle.position.set(0.22, 0.46, -0.38)
+    this.rifle.rotation.set(0, 0, 0)
+    this.heldEquipment.visible = false
+    this.heldEquipment.position.set(0, 0, 0)
+    this.heldEquipment.rotation.set(0, 0, 0)
+    this.bayonet.position.z = this.bayonetBaseZ
+    this.bayonet.rotation.set(0, 0, 0)
+    this.rpgRocket.visible = true
+  }
+
+  applyLoadout(definition) {
+    const weapon = this.config.weapons[definition.weapon]
+    const weaponChanged = this.weaponData !== weapon
+    const equipmentChanged = this.secondaryData !== this.config.secondaries[definition.secondary] ||
+      this.grenadeData !== this.config.grenades[definition.grenade] ||
+      this.itemData !== this.config.items[definition.item]
+    this.weaponData = weapon
+    this.secondaryData = this.config.secondaries[definition.secondary]
+    this.grenadeData = this.config.grenades[definition.grenade]
+    this.itemData = this.config.items[definition.item]
+    if (weaponChanged) this.configureRifleModel()
+    if (equipmentChanged) this.configureEquipmentModels()
   }
 
   updateModelAnimation(dt) {
@@ -281,6 +462,8 @@ class Bot {
       this.group.position.y = this.position.y + 0.04 + (1 - eased) * 0.06
       return
     }
+
+    if (this.actionName) this.actionTime = Math.min(this.actionDuration, this.actionTime + dt)
 
     const cam = this.camera.position
     const distSq =
@@ -297,6 +480,10 @@ class Bot {
         this.body.position.y = 0.78
         this.body.rotation.x = 0
         this.body.rotation.z = 0
+        this.rifle.visible = true
+        this.heldEquipment.visible = false
+        this.bayonet.position.z = this.bayonetBaseZ
+        this.bayonet.rotation.set(0, 0, 0)
         this.rifle.position.set(0.22, 0.46, -0.38)
         this.rifle.rotation.set(0, 0, 0)
       }
@@ -349,6 +536,33 @@ class Bot {
     this.aimPose += (aimTarget - this.aimPose) * (1 - Math.exp(-7 * dt))
     const reloadTarget = this.reloading ? 1 : 0
     this.reloadPose += (reloadTarget - this.reloadPose) * (1 - Math.exp(-9 * dt))
+    const actionName = this.actionName
+    const actionProgress = actionName && this.actionDuration > 0
+      ? this.actionTime / this.actionDuration : 0
+    const firePose = actionName === 'fire' ? Math.sin(actionProgress * Math.PI) : 0
+    const meleePose = actionName === 'melee'
+      ? actionProgress < 0.3
+        ? actionProgress / 0.3
+        : actionProgress < 0.52 ? 1 : 1 - (actionProgress - 0.52) / 0.48
+      : 0
+    const equipmentAction = actionName === 'secondary' || actionName === 'grenade' ||
+      actionName === 'item' || actionName === 'rpgReload' || actionName === 'detonate'
+    const equipmentPose = equipmentAction
+      ? actionProgress < 0.22
+        ? actionProgress / 0.22
+        : actionProgress < 0.68 ? 1 : 1 - (actionProgress - 0.68) / 0.32
+      : 0
+    this.rifle.visible = !equipmentAction
+    this.heldEquipment.visible = equipmentAction
+    this.secondaryModels.c4.visible = equipmentAction &&
+      (actionName === 'secondary' || actionName === 'detonate') && this.secondaryData.kind === 'c4'
+    this.secondaryModels.rpg.visible = equipmentAction &&
+      (actionName === 'secondary' || actionName === 'rpgReload') && this.secondaryData.kind === 'rpg'
+    this.grenadeModel.visible = equipmentAction && actionName === 'grenade'
+    this.itemModel.visible = equipmentAction && actionName === 'item'
+    if (this.secondaryModels.rpg.visible && actionName === 'secondary' && actionProgress > 0.36)
+      this.rpgRocket.visible = false
+    else if (this.secondaryModels.rpg.visible) this.rpgRocket.visible = true
     const modelId = this.weaponData.modelId
     if (modelId === 'garand') {
       this.rifleClip.visible = this.reloading && this.reloadPose > 0.12
@@ -380,10 +594,21 @@ class Bot {
 
     const carryLeftX = -stride * 0.22 * (1 - holdPose)
     const carryRightX = 1.05 + stride * 0.08 * (1 - holdPose)
-    const leftArmX = THREE.MathUtils.lerp(carryLeftX, 1.15, this.aimPose)
-    const rightArmX = THREE.MathUtils.lerp(carryRightX, 1.15, this.aimPose)
-    const leftArmZ = THREE.MathUtils.lerp(0, 0.5, this.aimPose)
-    const rightArmZ = -0.16
+    let leftArmX = THREE.MathUtils.lerp(carryLeftX, 1.15, this.aimPose)
+    let rightArmX = THREE.MathUtils.lerp(carryRightX, 1.15, this.aimPose)
+    let leftArmZ = THREE.MathUtils.lerp(0, 0.5, this.aimPose)
+    let rightArmZ = -0.16
+    if (meleePose > 0) {
+      leftArmX = THREE.MathUtils.lerp(leftArmX, 1.48, meleePose)
+      rightArmX = THREE.MathUtils.lerp(rightArmX, 1.38, meleePose)
+      leftArmZ = THREE.MathUtils.lerp(leftArmZ, 0.58, meleePose)
+      rightArmZ = THREE.MathUtils.lerp(rightArmZ, -0.04, meleePose)
+    } else if (equipmentPose > 0) {
+      leftArmX = THREE.MathUtils.lerp(leftArmX, 1.42, equipmentPose)
+      rightArmX = THREE.MathUtils.lerp(rightArmX, 1.38, equipmentPose)
+      leftArmZ = THREE.MathUtils.lerp(leftArmZ, 0.34, equipmentPose)
+      rightArmZ = THREE.MathUtils.lerp(rightArmZ, -0.22, equipmentPose)
+    }
     let reloadLeftX = 0.2
     let reloadRightX = 0.38
     let reloadLeftZ = 0.78
@@ -468,32 +693,65 @@ class Bot {
         THREE.MathUtils.lerp(carryRifleX, aimRifleX, this.aimPose),
         reloadRifleX,
         this.reloadPose,
-      ),
+      ) - meleePose * 0.12,
       THREE.MathUtils.lerp(
         THREE.MathUtils.lerp(carryRifleY, aimRifleY, this.aimPose),
         reloadRifleY,
         this.reloadPose,
-      ),
+      ) + meleePose * 0.06,
       THREE.MathUtils.lerp(
         THREE.MathUtils.lerp(carryRifleZ, aimRifleZ, this.aimPose),
         reloadRifleZ,
         this.reloadPose,
-      ),
+      ) - meleePose * 0.28 + firePose * 0.025,
     )
     const rifleEase = 1 - Math.exp(-13 * dt)
     this.rifle.position.lerp(this._rifleTarget, rifleEase)
     const riflePitchTarget =
       THREE.MathUtils.lerp(-0.18, targetPitch + 0.02, this.aimPose) +
-      this.reloadPose * reloadPitchOffset
+      this.reloadPose * reloadPitchOffset +
+      meleePose * 0.52 + firePose * 0.07
     const rifleYawTarget =
       THREE.MathUtils.lerp(0.08, 0.015, this.aimPose) +
-      this.reloadPose * reloadYawOffset
+      this.reloadPose * reloadYawOffset -
+      meleePose * 0.08
     const rifleRollTarget =
       THREE.MathUtils.lerp(0.06, 0.015, this.aimPose) +
-      this.reloadPose * reloadRollOffset
+      this.reloadPose * reloadRollOffset -
+      meleePose * 0.08 + firePose * 0.025
     this.rifle.rotation.x += (riflePitchTarget - this.rifle.rotation.x) * rifleEase
     this.rifle.rotation.y += (rifleYawTarget - this.rifle.rotation.y) * rifleEase
     this.rifle.rotation.z += (rifleRollTarget - this.rifle.rotation.z) * rifleEase
+
+    if (meleePose > 0) {
+      this.bayonet.position.z = this.bayonetBaseZ - meleePose * 0.035
+      this.bayonet.rotation.x = -meleePose * 0.12
+    } else {
+      this.bayonet.position.z = this.bayonetBaseZ
+      this.bayonet.rotation.set(0, 0, 0)
+    }
+    if (equipmentAction) {
+      this.heldEquipment.position.set(
+        -0.1 - equipmentPose * 0.05,
+        0.2 + equipmentPose * 0.28,
+        -0.16 - equipmentPose * 0.25,
+      )
+      this.heldEquipment.rotation.set(
+        -0.28 + equipmentPose * 0.12,
+        equipmentAction && actionName === 'grenade' ? 0.18 : 0,
+        0.08,
+      )
+    } else {
+      this.heldEquipment.position.set(0, 0, 0)
+      this.heldEquipment.rotation.set(0, 0, 0)
+    }
+    if (this.actionName && this.actionTime >= this.actionDuration) {
+      this.actionName = null
+      this.actionTime = 0
+      this.actionDuration = 0
+      this.heldEquipment.visible = false
+      this.rifle.visible = true
+    }
 
     const headEase = 1 - Math.exp(-9 * dt)
     const headPitchTarget = targetPitch * this.aimPose * 0.3 - bodyPitchTarget * 0.35
@@ -717,7 +975,13 @@ export function createRemoteActorView(actor, services) {
   const position = new THREE.Vector3(actor.x, y, actor.z)
   const view = actor.kind === 'zombie'
     ? new Zombie(position, common)
-    : new Bot(actor.team, position, { ...common, weaponData: services.config.weapons[actor.weapon] })
+    : new Bot(actor.team, position, {
+      ...common,
+      weaponData: services.config.weapons[actor.weapon],
+      secondaryData: services.config.secondaries[actor.secondary],
+      grenadeData: services.config.grenades[actor.grenade],
+      itemData: services.config.items[actor.item],
+    })
   view.id = actor.id
   view.actorKind = actor.kind
   view.name = actor.name
@@ -736,9 +1000,9 @@ export function applyRemoteActorSnapshot(view, actor) {
   }
   view.health = actor.health
   view.maxHealth = actor.maxHealth
-  if (actor.kind !== 'zombie' && view.weaponData !== view.config.weapons[actor.weapon]) {
-    view.weaponData = view.config.weapons[actor.weapon]
-    view.configureRifleModel()
+  if (actor.kind !== 'zombie') {
+    if (!wasAlive && actor.alive) view.resetActions()
+    view.applyLoadout(actor)
   }
   view.kills = actor.kills
   view.deaths = actor.deaths

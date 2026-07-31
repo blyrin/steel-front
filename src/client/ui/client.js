@@ -1099,10 +1099,20 @@ function createCanvasUi({ state, deploy, config }) {
     killFeed.slice(-6).reverse().forEach((item, index) => {
       const y = (touchMode ? 66 : 24) + index * 17
       ctx.fillStyle = 'rgba(18,24,27,.72)'
-      ctx.fillRect(16, y - 7, 188, 14)
-      ctx.fillStyle = item.type === 'player' ? COLORS.gold : COLORS.axis
+      ctx.fillRect(16, y - 7, 250, 14)
+      ctx.fillStyle = item.killerTeam === 'allies' ? COLORS.ally : COLORS.axis
       ctx.fillRect(16, y - 7, 2, 14)
-      text(`${item.killer}  >  ${item.victim}`, 23, y, 8, item.type === 'player' ? COLORS.gold : COLORS.text)
+      const killer = item.killer || '未知'
+      const weapon = `[${item.weapon || '未知武器'}]`
+      const victim = item.victim || '未知'
+      text(killer, 23, y, 7, item.killerTeam === 'allies' ? COLORS.ally : COLORS.axis)
+      const killerWidth = ctx.measureText(killer).width
+      text(weapon, 29 + killerWidth, y, 7, COLORS.muted)
+      const weaponWidth = ctx.measureText(weapon).width
+      text('> ', 35 + killerWidth + weaponWidth, y, 7, COLORS.muted)
+      const arrowWidth = ctx.measureText('> ').width
+      text(victim, 35 + killerWidth + weaponWidth + arrowWidth, y, 7,
+        item.victimTeam === 'allies' ? COLORS.ally : COLORS.axis)
     })
   }
 
@@ -1181,7 +1191,8 @@ function createCanvasUi({ state, deploy, config }) {
     ctx.fillRect(0, 0, width, height)
     text('阵 亡', width / 2, height * 0.42, 29, COLORS.axis, 'center', 800)
     text('击杀者', width / 2, height * 0.5, 8, COLORS.muted, 'center', 700)
-    text(deathText, width / 2, height * 0.55, 16, COLORS.text, 'center', 800)
+    text(deathText?.name || '-', width / 2, height * 0.55, 16, COLORS.text, 'center', 800)
+    text(deathText?.weapon || '未知武器', width / 2, height * 0.6, 9, COLORS.gold, 'center', 700)
   }
 
   function drawDeployment() {

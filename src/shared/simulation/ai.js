@@ -1479,7 +1479,10 @@ export function createAiEngine() {
     const distance = distance2D(actor, target)
     if (secondary.kind === 'rpg') {
       if (!actor.rpgLoaded) {
-        if (actor.secondaryCount > 0 && actor.secondaryReloadTimer <= 0) actor.secondaryReloadTimer = config.weapon.rpgReloadDuration
+        if (actor.secondaryCount > 0 && actor.secondaryReloadTimer <= 0) {
+          actor.secondaryReloadTimer = config.weapon.rpgReloadDuration
+          events.push({ type: 'rpg-reload', actorId: actor.id })
+        }
         return
       }
       if (distance < 12 || distance > 58) return

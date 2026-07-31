@@ -12,9 +12,9 @@ export const CFG = {
   // 鼠标、触摸摇杆和陀螺仪输入参数。
   input: {
     // 触摸滑动位移转换为视角输入的倍率。
-    touchLookScale: 5,
+    touchLookScale: 10,
     // 陀螺仪姿态变化转换为视角输入的倍率。
-    gyroLookScale: 500,
+    gyroLookScale: 800,
     // 陀螺仪输入死区。
     gyroDeadzone: 0.0015,
     // 陀螺仪输入平滑倍率。

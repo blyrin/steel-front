@@ -344,7 +344,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
     actor.deployed = true
     actor.respawnAt = 0
     resetActorActions(actor)
-    emit('deployed', { actorId: actor.id, x: actor.x, y: actor.y, z: actor.z })
+    emit('deployed', { actorId: actor.id, x: actor.x, y: actor.y, z: actor.z, definition: actorDefinition(actor) })
     if (modeId === 'zombie' && modeState.phase === 'waiting') startIntermission()
     return true
   }
@@ -387,7 +387,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
     return [...actors.values()].filter(target => target.alive && target.team !== actor.team)
   }
 
-  function damage(target, amount, attacker, attackType, headshot = false) {
+  function damage(target, amount, attacker, attackType, weaponId = null, headshot = false) {
     if (!target.alive || amount <= 0) return
     target.health = Math.max(0, target.health - amount)
     if (target.controller !== 'human') ai.damageActor({ id: target.id, amount, attackerId: attacker?.id ?? null, attackType })
@@ -415,7 +415,8 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
     resetActorActions(target)
     if (target.kind === 'zombie') modeState.waveDefeated++
     emit('elimination', {
-      victimId: target.id, attackerId: attacker?.id ?? null, attackType, headshot,
+      victimId: target.id, attackerId: attacker?.id ?? null, attackType, weaponId,
+      killerTeam: attacker?.team ?? null, victimTeam: target.team, headshot,
       killStreak: attacker?.killStreak ?? 0,
     })
     checkOutcome()
@@ -434,7 +435,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
     if (!trace.target) return
     const falloff = clamp((trace.distance - weapon.effectiveRange) / (CFG.combat.bulletRange - weapon.effectiveRange), 0, 1)
     const base = trace.headshot ? weapon.headDamage : weapon.bodyDamage
-    damage(trace.target, base * (1 + (weapon.minDamageMultiplier - 1) * falloff) * (modeId === 'classic' ? classicConfig.damageMultiplier : 1), actor, 'weapon', trace.headshot)
+    damage(trace.target, base * (1 + (weapon.minDamageMultiplier - 1) * falloff) * (modeId === 'classic' ? classicConfig.damageMultiplier : 1), actor, 'weapon', actor.weapon, trace.headshot)
   }
 
   function tryFire(actor) {
@@ -523,7 +524,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
         point: trace.point,
       })
       if (trace.target && trace.distance >= 0.15)
-        damage(trace.target, CFG.weapon.meleeDamage, actor, 'melee')
+        damage(trace.target, CFG.weapon.meleeDamage, actor, 'melee', actor.kind === 'zombie' ? 'zombie_claw' : actor.weapon)
     }
     if (hasInputAction(inputActions, INPUT_ACTION.MELEE) && actor.activeSlot === 1 && weapon.bayonet && !actor.switchAt && !actor.meleeAt && timeMs - actor.lastMeleeAt >= CFG.weapon.meleeDelay * 1000) {
       actor.reloadAt = 0
@@ -661,7 +662,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
       if (!target.alive || target.team === projectile.team) continue
       const distance = Math.hypot(target.x - projectile.x, target.y - projectile.y, target.z - projectile.z)
       const amount = explosionDamage(projectile.damage, distance, projectile.radius)
-      if (amount > 0) damage(target, amount, owner, 'grenade')
+      if (amount > 0) damage(target, amount, owner, 'grenade', projectile.kind)
     }
   }
 
@@ -740,7 +741,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
       hit: trace.target ? 'actor' : trace.obstacleHit ? 'obstacle' : null,
       point: trace.point,
     })
-    if (trace.target && trace.distance >= 0.15) damage(trace.target, CFG.weapon.meleeDamage, actor, 'melee')
+    if (trace.target && trace.distance >= 0.15) damage(trace.target, CFG.weapon.meleeDamage, actor, 'melee', actor.kind === 'zombie' ? 'zombie_claw' : actor.weapon)
   }
 
   function updateSharedAi(dt) {
@@ -778,16 +779,20 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
       } else if (event.type === 'secondary') {
         fireAiSecondary(actor, event.direction)
       } else if (event.type === 'detonate-secondary') {
+        emit('secondary_detonated', { actorId: actor.id })
         for (const projectile of [...projectiles.values()]) {
           if (projectile.ownerId === actor.id && projectile.sticky) explode(projectile)
         }
       } else if (event.type === 'melee') {
+        emit('melee', { actorId: actor.id, targetId: event.targetId })
         const target = actors.get(event.targetId)
         if (target?.alive) fireAiMelee(actor, target)
+      } else if (event.type === 'rpg-reload') {
+        emit('rpg_reload_started', { actorId: actor.id })
       } else if (event.type === 'throw-grenade') spawnProjectile(actor, actor.grenade, CFG.grenades[actor.grenade], event.direction)
       else if (event.type === 'zombie-attack') {
         const target = actors.get(event.targetId)
-        if (target?.alive) { emit('zombie_attack', { actorId: actor.id, targetId: target.id }); damage(target, CFG.modes.zombie.enemy.attackDamage, actor, 'melee') }
+        if (target?.alive) { emit('zombie_attack', { actorId: actor.id, targetId: target.id }); damage(target, CFG.modes.zombie.enemy.attackDamage, actor, 'melee', 'zombie_claw') }
       } else if (event.type === 'fortress-attack') {
         modeState.fortressHealth = Math.max(0, modeState.fortressHealth - event.damage)
         emit('fortress_hit', { actorId: actor.id, health: modeState.fortressHealth })
@@ -801,9 +806,11 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
       } else if (event.type === 'use-item') {
         actor.health = event.health ?? actor.health
         actor.itemUses = event.itemUses
+        emit('item_used', { actorId: actor.id, itemId: actor.item, kind: event.kind })
       } else if (event.type === 'resupply') {
         actor.health = event.health ?? actor.health
         actor.itemUses = event.itemUses ?? actor.itemUses
+        emit('resupplied', { actorId: actor.id, kind: event.kind })
       }
     }
   }
@@ -825,7 +832,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
       actor.respawnAt = 0
       resetActorActions(actor)
       ai.respawnActor(aiActor(actor))
-      emit('respawned', { actorId: actor.id, ...position })
+      emit('respawned', { actorId: actor.id, ...position, definition: actorDefinition(actor) })
     }
   }
 
@@ -931,6 +938,7 @@ export function createAuthoritativeSimulation({ modeId, seed, now = 0, classic =
     return {
       id: actor.id, name: actor.name, kind: actor.kind,
       controller: actor.controller, team: actor.team, weapon: actor.weapon,
+      secondary: actor.secondary, grenade: actor.grenade, item: actor.item,
       maxHealth: actor.maxHealth,
     }
   }
